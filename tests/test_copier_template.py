@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -553,12 +554,15 @@ def test_license_answer_reaches_pyproject_and_the_license_file(
     """Measured 2026-09-07: Apache-2.0 in pyproject with an MIT LICENSE beside it."""
     out = render(tmp_path / "apache", license="Apache-2.0", owner="someone")
     assert 'license = "Apache-2.0"' in (out / "pyproject.toml").read_text(encoding="utf-8")
+    year = time.strftime("%Y")  # the template takes it from copier's strftime filter, same clock
     apache = (out / "LICENSE").read_text(encoding="utf-8")
     assert apache.lstrip().startswith("Apache License"), apache[:80]
-    assert "Copyright 2026 someone" in apache
+    assert f"Copyright {year} someone" in apache
     mit = (rendered / "LICENSE").read_text(encoding="utf-8")
     assert mit.startswith("MIT License"), mit[:80]
-    assert "Copyright (c) 2026 the probe authors" in mit, "no owner: the project's authors hold it"
+    assert f"Copyright (c) {year} the probe authors" in mit, (
+        "no owner: the project's authors hold it"
+    )
     assert "coolbress" not in apache + mit
 
 
