@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+*.egg-info/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Real values are never committed; only .env.example is.
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# Claude Code's personal settings. Only .claude/settings.json is committed:
+# Claude Code adds this file to the global git excludes of one machine, which
+# protects that machine and not the repository.
+.claude/settings.local.json

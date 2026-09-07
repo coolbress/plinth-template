@@ -1,0 +1,49 @@
+name: Task
+description: One thing to build. The acceptance criteria are what a check or a reviewer can confirm.
+labels: ["task"]
+# The shape the planning flow produces (a spec cut into tickets): parent, what,
+# acceptance criteria, what stays out, what blocks it. Decisions made while the
+# task is open go into the body under "## Decisions", dated; the outcome under
+# "## Outcome". The body is the record; comments are conversation.
+body:
+  - type: input
+    id: parent
+    attributes:
+      label: Parent
+      description: The spec or map this comes from, as `#N`. Leave empty for a standalone task.
+    validations:
+      required: false
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What to build
+      description: One paragraph, present tense, what exists when this is done.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: One line each, as a checklist. Each line is something a check, a test or a reviewer can confirm.
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: not-building
+    attributes:
+      label: Not building
+      description: What this task deliberately leaves out, so nobody adds it back in review.
+    validations:
+      required: false
+
+  - type: input
+    id: blocked-by
+    attributes:
+      label: Blocked by
+      description: Tasks that must close first, as `#N, #N`.
+    validations:
+      required: false

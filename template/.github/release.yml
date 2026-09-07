@@ -1,0 +1,26 @@
+# Categories of the generated release notes. GitHub groups by label only, never
+# by title; the label comes from the pull request title's type (label.yml).
+#
+# This orders the index at the bottom of a release note. The "why" at the top
+# is still written by a person: what a consumer has to do is not in the log.
+changelog:
+  exclude:
+    labels: [ignore-for-release]
+  categories:
+    - title: Changes a caller must act on
+      labels: [breaking]
+    - title: Features
+      labels: [feat]
+    - title: Fixes
+      labels: [fix]
+    - title: Documentation
+      labels: [docs]
+    - title: CI, build, dependencies
+      labels: [ci, build]
+    - title: Refactoring, performance, tests
+      labels: [refactor, perf, test, style]
+    - title: Chores
+      labels: [chore, revert]
+    # Without a catch-all, an unlabelled pull request silently drops out of the notes.
+    - title: Other
+      labels: ["*"]

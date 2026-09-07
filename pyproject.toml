@@ -1,0 +1,56 @@
+# The template's own project. What an instance receives is template/pyproject.toml.jinja.
+#
+# Why the root is a Python project too: this repository's checks come from the
+# same reusable workflow the instances call (`ci / lint`, `typecheck`, `test`,
+# `build`, ...), and that workflow expects a Python project. The package's one
+# job is to render the template and look at the result: reading copier.yml
+# and rendering it are two different sentences.
+[project]
+name = "template-render"
+version = "1.0.0"
+description = "Renders plinth-template and checks the result"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "coolbress" }]
+dependencies = ["copier>=9.0"]
+
+[project.urls]
+Homepage = "https://github.com/coolbress/plinth-template"
+Issues = "https://github.com/coolbress/plinth-template/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+# template/ is not Python before rendering: file names carry `{{ }}` and
+# `.jinja` files are not Python. The linters do not go in.
+exclude = ["template"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "S", "A", "C4", "PT", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+exclude = ["^template/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config"]
+filterwarnings = ["error"]

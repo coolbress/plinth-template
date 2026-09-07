@@ -1,0 +1,27 @@
+# Dependency updates. A person cannot check versions weekly; without this, the
+# pins age in silence.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    # Grouped: one pull request per group, not one per package. Security
+    # updates bypass grouping and schedule and open at once.
+    groups:
+      dev-tools:
+        dependency-type: "development"
+      runtime-minor:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+
+  # Actions and reusable workflows are pinned to commit SHAs; Dependabot
+  # raises the SHA and the version comment beside it.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]

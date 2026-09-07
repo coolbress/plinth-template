@@ -1,0 +1,8 @@
+# Line endings are normalised to LF inside the repository. `.editorconfig`
+# asks the editor; this line is enforced by git from the committed file alone.
+* text=auto eol=lf
+
+# The lockfile is written by a machine. `linguist-generated` folds it in
+# GitHub diffs so review reads the changed line of pyproject.toml, not the
+# hundreds of lines of uv.lock. It still counts in the file list.
+uv.lock linguist-generated

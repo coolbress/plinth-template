@@ -1,0 +1,37 @@
+# {{ project_name }}: the container image of a service archetype.
+#
+# Base images are pinned by digest, not tag: a tag can move, a digest cannot,
+# the same reason Actions are pinned to commit SHAs. Dependabot's `docker`
+# ecosystem raises the digests.
+
+# ── build stage ───────────────────────────────────────────────────────────
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS build
+
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+# Dependencies before source: a source-only change reuses this layer.
+COPY pyproject.toml uv.lock ./
+# --locked: fails when the lockfile disagrees with pyproject, so the image
+# never silently carries other versions. --no-dev: no tests or linters inside.
+RUN uv sync --locked --no-install-project --no-dev
+
+COPY src/ ./src/
+COPY README.md ./
+RUN uv sync --locked --no-dev
+
+# ── run stage ─────────────────────────────────────────────────────────────
+FROM python:3.12-slim@sha256:09f7da3bc104798d0afb40bc08d23ab2da20a76130cec1f2ef170848f5d85217
+
+# Not root: a container escape reaches less.
+RUN useradd --create-home --uid 10001 app
+WORKDIR /app
+
+COPY --from=build --chown=app:app /app/.venv /app/.venv
+COPY --from=build --chown=app:app /app/src /app/src
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
+
+USER app
+
+# The entry point is this package's __main__.py. No framework is chosen here.
+CMD ["python", "-m", "{{ package_name }}"]

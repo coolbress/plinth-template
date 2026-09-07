@@ -1,0 +1,38 @@
+name: Feature request
+description: Something that does not work today and you want it to.
+labels: ["enhancement"]
+# Field order follows the census: proposed-solution · alternatives-considered · additional-context.
+# This form collects the idea. Acceptance criteria are written later, in the ticket.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you blocked on
+      description: Describe the **problem**, not the solution. How did you handle it the last time?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How you would like it to work
+      description: If you have a way in mind. Optional — the field above matters more.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: |
+        **Include things that already exist.** Why the existing option is not enough
+        is the case for this request.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+    validations:
+      required: false

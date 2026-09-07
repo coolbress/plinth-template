@@ -1,0 +1,116 @@
+# copier configuration.
+#
+# Why copier and not a GitHub template repository: `gh repo create --template`
+# is a point-in-time copy with no link back. copier leaves `.copier-answers.yml`
+# in the instance, so `copier update` can merge later template changes.
+#
+# The root of this repository is the template's own project (its CI, its
+# tests); only `template/` is rendered into an instance. Name substitution is
+# jinja, decided before any file is written: a name that cannot become a
+# Python package is refused by the validator below before anything exists.
+
+_min_copier_version: "9.0.0"
+
+# `CLAUDE.md` is a symbolic link to `AGENTS.md`. Without this copier follows
+# the link and writes a copy, and the two drift apart.
+_preserve_symlinks: true
+
+# Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
+# the template's own CI are never candidates, so nothing here needs excluding.
+_subdirectory: template
+
+_exclude:
+  - .venv
+  - dist
+  - .mypy_cache
+  - .pytest_cache
+  - .ruff_cache
+  - __pycache__
+  # Conditional on the archetype. The files are not deleted after rendering;
+  # they are never written, so no stub is left behind. The checker in plinth
+  # (`scripts/floor-check.py`) names the same two archetypes; its test reads
+  # this file over the network, so keep the condition on one line.
+  - "{% if archetype not in ['backend', 'data-ml'] %}.env.example{% endif %}"
+  # A container image is four files together: the image, the build-context
+  # exclusions, the entry point the image runs, and nothing else. The image
+  # alone is a stub.
+  - "{% if archetype not in ['backend', 'data-ml'] %}Dockerfile{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml'] %}.dockerignore{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml'] %}src/{{ package_name }}/__main__.py{% endif %}"
+
+project_name:
+  type: str
+  help: Repository name (GitHub rules). Example my-app
+  # A repository name and a Python package name follow different rules: GitHub
+  # allows `.` and a leading digit, Python does not. The package name is
+  # derived from the repository name below; when that derivation cannot be a
+  # Python identifier, stop here, before writing a single file.
+  validator: >-
+    {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
+    {%- if not project_name -%}
+    The name is empty.
+    {%- elif not (pkg | regex_search('^[a-z_][a-z0-9_]*$')) -%}
+    No Python package name can be made from '{{ project_name }}': '{{ pkg }}'
+    {% if pkg[:1] is match('[0-9]') %}starts with a digit{% else %}contains a character an identifier cannot{% endif %}.
+    Choose another repository name.
+    {%- elif pkg in [
+      'and','as','assert','async','await','break','class','continue','def','del','elif','else',
+      'except','finally','for','from','global','if','import','in','is','lambda','nonlocal','not',
+      'or','pass','raise','return','try','while','with','yield'
+    ] -%}
+    The package name '{{ pkg }}' derived from '{{ project_name }}' is a Python keyword;
+    it cannot be imported. Choose another repository name.
+    {%- endif -%}
+
+# Derived, never asked. Its default still reaches the render context.
+# One derivation in one place: an earlier generation had the rule in a shell
+# script as well, and the two disagreed between macOS and Linux.
+package_name:
+  type: str
+  when: false
+  default: "{{ project_name | regex_replace('[-. ]', '_') | lower }}"
+
+# The GitHub account or organization the repository lives under. Rendered
+# into pyproject's author and URLs. `/plinth:new-project` passes it; a person
+# running copier by hand is asked. Empty means unknown: no author, no URLs.
+owner:
+  type: str
+  help: GitHub owner of the repository (user or organization). Example my-org
+  default: ""
+
+license:
+  type: str
+  help: SPDX license identifier
+  default: MIT
+  choices:
+    MIT: MIT
+    Apache-2.0: Apache-2.0
+
+# This generator produces a Python package (pyproject, hatchling, uv.lock,
+# src/<package>/, plinth's python-ci). The choices are only what it can
+# actually build: a web front end or a mobile app would come out as a plain
+# Python package, so they are not offered.
+#
+# The yes/no axes (published, cloud, handles user data) are not asked here:
+# they change later and are not a kind of project.
+archetype:
+  type: str
+  help: |
+    What kind of project this is. The conditional files depend on it
+    (`.env.example` and a container image belong to a running service).
+    When unsure, choose the narrowest.
+  default: cli
+  choices:
+    CLI: cli
+    Library: library
+    Backend or API service: backend
+    Data or ML: data-ml
+
+# The commit of coolbress/plinth whose reusable workflows the instance calls,
+# the one this template release was tested with. Never asked. It is the only
+# pin the template carries; the instance's Dependabot raises it afterwards,
+# and `copier update` brings a newer template's value.
+plinth_sha:
+  type: str
+  when: false
+  default: "13e50828bee97ad629b387b5938a3bc8cb762343"

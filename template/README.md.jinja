@@ -1,0 +1,40 @@
+# {{ project_name }}
+
+> One line saying what this is.
+
+## Getting started
+
+```bash
+git clone <this repository>
+cd {{ project_name }}
+uv sync --locked   # 1. dependencies, the same command CI runs; the lockfile is used as is
+uv run pytest      # 2. tests
+```
+
+## Developing
+
+```bash
+uv run ruff check . && uv run ruff format .   # lint and format
+uv run mypy .                                  # types
+uv run pytest                                  # tests
+uv build                                       # build
+```
+
+CI runs each of these as a separate check, plus a secret scan and CodeQL.
+Pass them locally first. The list of required checks is the repository's
+ruleset, so it is not repeated here.
+
+{% if archetype in ['backend', 'data-ml'] %}## Configuration
+
+Copy [`.env.example`](.env.example) to `.env` and fill in the values.
+**`.env` is never committed.**
+
+{% endif %}## Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md), in particular the test policy. `main` is
+protected; a change lands as a pull request with green checks.
+
+## About this repository
+
+Created from [`coolbress/plinth-template`](https://github.com/coolbress/plinth-template).
+The CI checks come from [`coolbress/plinth`](https://github.com/coolbress/plinth).

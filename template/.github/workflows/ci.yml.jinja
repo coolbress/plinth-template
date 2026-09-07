@@ -1,0 +1,66 @@
+name: CI
+#
+# Keep the caller job named `ci`. Check names are `{caller job} / {job}`, and
+# the ruleset requires `ci / lint`, `ci / test` and the rest by name; a renamed
+# job never reports again and the repository locks.
+#
+# The CI logic lives in coolbress/plinth, pinned to a commit SHA: a tag can
+# move, a commit cannot. Dependabot raises the SHA. What each check does:
+# https://github.com/coolbress/plinth/blob/main/.github/workflows/python-ci.yml
+
+on:
+  push:
+    branches: [main]
+  # No `branches:` filter on pull requests: a filter skips stacked pull
+  # requests (base is another branch), and the diff-size limit pushes towards
+  # stacking. Each piece is checked against its own base.
+  pull_request:
+
+{% raw -%}
+# A new push to a pull request cancels the previous run; main is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+{%- endraw %}
+
+# The caller's permissions are the ceiling for the reusable workflow.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: coolbress/plinth/.github/workflows/python-ci.yml@{{ plinth_sha }}
+    with:
+      # pyproject declares `requires-python = ">=3.12"`; testing one version
+      # claims support that was never exercised. Not a matrix: a matrix would
+      # rename the check to `ci / test (3.13)` and the ruleset requires `ci / test`.
+      extra-python-versions: "3.13"
+
+# Optional: a review signal from a third party on every ready pull request,
+# reported as the check `third-party / review`. Off by default: it needs a
+# reviewer account (the default is the Codex code reviewer, a ChatGPT
+# subscription). It is a separate workflow because it listens to review events
+# and must not be cancelled by a new push. To turn it on, put the lines below,
+# uncommented, in `.github/workflows/third-party.yml`; the how-to:
+# https://github.com/coolbress/plinth/blob/main/docs/how-to/configure-the-third-party-reviewer.md
+#
+#   name: third-party
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, ready_for_review]
+#     pull_request_review:
+#       types: [submitted]
+#   permissions:
+#     contents: read
+#     pull-requests: write
+{% raw -%}
+#   concurrency:
+#     group: third-party-${{ github.event.pull_request.number }}
+#     cancel-in-progress: false
+{%- endraw %}
+#   jobs:
+#     third-party:
+#       uses: coolbress/plinth/.github/workflows/pr-review.yml@{{ plinth_sha }}
+#       with:
+#         reviewer-logins: "chatgpt-codex-connector[bot]"   # whose signal counts
+#         ask-comment: "@codex review"                       # posted to summon it; empty never summons

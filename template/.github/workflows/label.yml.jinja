@@ -1,0 +1,18 @@
+# Labels this repository's pull requests by type. The logic is in plinth's
+# reusable pr-label.yml, not here.
+#
+# The job is deliberately not named `ci`: this is not a check and is in no
+# ruleset, so it must not report under a `ci / *` name.
+name: PR label
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write   # only to add the label
+
+jobs:
+  label:
+    uses: coolbress/plinth/.github/workflows/pr-label.yml@{{ plinth_sha }}

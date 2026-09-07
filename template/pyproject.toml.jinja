@@ -1,0 +1,61 @@
+[project]
+name = "{{ package_name }}"
+version = "0.1.0"
+description = "One line saying what this is"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "{{ license }}"
+license-files = ["LICENSE"]
+{%- if owner %}
+authors = [{ name = "{{ owner }}" }]
+{%- endif %}
+dependencies = []
+{%- if owner %}
+
+# Distribution metadata. Read by `pip show`, GitHub and the dependency graph
+# even when the package is never uploaded.
+[project.urls]
+Homepage = "https://github.com/{{ owner }}/{{ project_name }}"
+Issues = "https://github.com/{{ owner }}/{{ project_name }}/issues"
+{%- endif %}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+# Linter and formatter. The configuration is committed; CI runs `ruff check`
+# and `ruff format --check` as `ci / lint`.
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "S", "A", "C4", "PT", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is the normal form in tests
+"tests/**" = ["S101"]
+
+# Type checking, `ci / typecheck`.
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+
+# Tests, `ci / test`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# No silent failures: an unregistered `@pytest.mark.foo` is a no-op even when
+# it is a typo, and a misspelt key in this section is ignored. Both are made
+# errors.
+addopts = ["--strict-markers", "--strict-config"]
+# Warnings are errors. A third-party warning that blocks gets one narrow
+# ignore here, with its reason.
+filterwarnings = ["error"]

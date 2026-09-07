@@ -1,0 +1,37 @@
+name: CI
+#
+# The template's own CI. What an instance receives is
+# template/.github/workflows/ci.yml.jinja; GitHub runs only the root
+# `.github/workflows/`, which is why the two are separate files.
+#
+# Keep the caller job named `ci`. Check names are `{caller job} / {job}`, and
+# the ruleset requires `ci / lint`, `ci / test` and the rest by name; a renamed
+# job never reports and the repository locks.
+#
+# The CI logic lives in coolbress/plinth, pinned to a commit SHA (tags move).
+# The comment beside the SHA is the version it pointed at; Dependabot raises
+# both.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to a pull request cancels the previous run; main is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The caller's permissions are the ceiling for the reusable workflow.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: coolbress/plinth/.github/workflows/python-ci.yml@13e50828bee97ad629b387b5938a3bc8cb762343 # 2026-09-07, before the first release
+    with:
+      # The default exclusions are `*.md` and `*.lock`; this repository also
+      # has README.md.jinja and uv.lock.jinja, and `.jinja` is a rendering
+      # instruction, not a new kind of file. Measured once without this line:
+      # renaming uv.lock to uv.lock.jinja counted as 418 added lines.
+      diff-size-exclude: "*.md *.md.jinja *.lock *.lock.jinja *lock.json *lock.yaml *lock.yml LICENSE"

@@ -1,0 +1,14 @@
+# What must not enter the image. Not the same purpose as .gitignore: that one
+# is what is not committed, this one is what is not shipped.
+.git
+.github
+.venv
+.env
+.env.*
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+dist/
+tests/
