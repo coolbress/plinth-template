@@ -38,7 +38,11 @@ cd /tmp/probe && uv sync --locked && uv run pytest
    what changed and why, how it was verified, and, when AI wrote or assisted,
    the `Assisted-by:` trailer as the last line. Delete the template's comment
    lines; GitHub keeps HTML comments in the squash message.
-4. Merge when green. Squash is the only merge method and the branch is deleted
+4. Before merging, read the description against the final diff: what changed
+   and why, what was verified and what was not, as of the last commit. A
+   review fix that changed the scope changes the description too, because
+   the description is what lands on `main`.
+5. Merge when green. Squash is the only merge method and the branch is deleted
    on merge.
 
 ## Cut a release

@@ -371,6 +371,7 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "irreversible or reaching others, recoverable with one command, or hypothetical",
         "Assisted-by:",
         "Do not invent types",
+        "a description that no longer matches the diff",
     ):
         assert must in text, f"AGENTS.md no longer says: {must}"
     assert "when planning" not in text.lower(), "the planning block moved out of AGENTS.md"
@@ -391,6 +392,7 @@ def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) 
     text = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "squash commit" in text
     assert "Assisted-by:" in text
+    assert "read the description against the final diff" in text
     for t in ("feat", "fix", "docs", "refactor", "revert"):
         assert f"`{t}`" in text, f"{t} is not in the type list"
 
@@ -545,9 +547,19 @@ def test_repository_name_becomes_a_python_package_name(tmp_path: Path) -> None:
     )
 
 
-def test_license_answer_reaches_pyproject(tmp_path: Path) -> None:
-    out = render(tmp_path / "apache", license="Apache-2.0")
+def test_license_answer_reaches_pyproject_and_the_license_file(
+    tmp_path: Path, rendered: Path
+) -> None:
+    """Measured 2026-09-07: Apache-2.0 in pyproject with an MIT LICENSE beside it."""
+    out = render(tmp_path / "apache", license="Apache-2.0", owner="someone")
     assert 'license = "Apache-2.0"' in (out / "pyproject.toml").read_text(encoding="utf-8")
+    apache = (out / "LICENSE").read_text(encoding="utf-8")
+    assert apache.lstrip().startswith("Apache License"), apache[:80]
+    assert "Copyright 2026 someone" in apache
+    mit = (rendered / "LICENSE").read_text(encoding="utf-8")
+    assert mit.startswith("MIT License"), mit[:80]
+    assert "Copyright (c) 2026 the probe authors" in mit, "no owner: the project's authors hold it"
+    assert "coolbress" not in apache + mit
 
 
 def test_lockfile_carries_the_package_name(tmp_path: Path) -> None:
