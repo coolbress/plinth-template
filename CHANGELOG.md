@@ -7,8 +7,7 @@ means `copier update` on an instance needs hands.
 ## [Unreleased]
 
 ### Added
-- The template, rebuilt in English from the archived `coolbress/project-template`
-  (v2.18.0): instances call `coolbress/plinth`'s reusable CI at a pinned commit,
+- The template: instances call `coolbress/plinth`'s reusable CI at a pinned commit,
   Dependabot raises the pin, `.claude/settings.json` suggests the plinth
   marketplace, allows the check commands without a prompt and denies what the
   checks cannot undo, the `non-engineer` output style ships off by default, and

@@ -5,8 +5,6 @@ The copier template a new Python repository starts from when
 repository that passes plinth's checks on its first pull request: the CI
 call, the document set, the issue forms, Dependabot, the Claude Code settings.
 
-Rebuilt from `coolbress/project-template@a142547` (archived), in English.
-
 ## Use
 
 Normally `/plinth:new-project <owner>/<name>` renders it for you, creates the

@@ -426,8 +426,9 @@ def test_the_entry_point_logs_json(backend: Path) -> None:
 # ── language ──────────────────────────────────────────────────────────────
 
 #: Words that must not appear anywhere in this repository: Korean text (product
-#: text is English), the codenames of experiment repositories, and paths into
-#: the archived Korean evidence repository. Same list as plinth's docs gate.
+#: text is English), the codenames of experiment repositories, paths into an
+#: archived Korean evidence repository, and the archived repositories this
+#: template stands apart from. Same list as plinth's docs gate.
 FORBIDDEN = (
     r"[ㄱ-힝]",
     r"goppi",
@@ -436,12 +437,10 @@ FORBIDDEN = (
     r"codex-native",
     r"divcal",
     r"direction/[0-9]{2}",
+    r"coolbress/workflows",
+    r"coolbress/project-template",
+    r"coolbress/standards",
 )
-
-#: The archived repositories. The root README and CHANGELOG name the source
-#: this template was rebuilt from, as the provenance line; nothing an instance
-#: receives may point at them.
-ARCHIVED = (r"coolbress/workflows", r"coolbress/project-template", r"coolbress/standards")
 
 
 def _tracked_text() -> dict[str, str]:
@@ -490,11 +489,6 @@ def test_no_internal_vocabulary_in_the_template() -> None:
     assert texts, "no tracked text at all"
     assert not _hits(forbidden, texts), (
         f"internal vocabulary in public text: {_hits(forbidden, texts)}"
-    )
-    archived = re.compile("|".join(ARCHIVED))
-    shipped = {rel: body for rel, body in texts.items() if rel.startswith("template/")}
-    assert not _hits(archived, shipped), (
-        f"an instance would name an archived repository: {_hits(archived, shipped)}"
     )
 
 
