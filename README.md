@@ -26,7 +26,7 @@ before any file is written.
 - `.github/workflows/ci.yml` calling plinth's reusable `python-ci.yml` at a
   commit SHA, and Dependabot to raise that SHA; a commented, optional
   `third-party / review` block.
-- README, LICENSE, CONTRIBUTING, CHANGELOG, SECURITY, `AGENTS.md` with the
+- README, LICENSE (MIT or Apache-2.0, as chosen), CONTRIBUTING, CHANGELOG, SECURITY, `AGENTS.md` with the
   `CLAUDE.md` symlink, issue forms (bug, feature, task), a pull request
   template, and the three `docs/agents` files the mattpocock skills read.
 - `.claude/settings.json`: the plinth marketplace suggested, the commands the
@@ -63,7 +63,9 @@ it was tested with, and its release notes name it.
 | PATCH | text, comments, a fix that keeps behaviour |
 
 An instance catches up with `uvx copier update` (its `.copier-answers.yml`
-remembers where it came from).
+remembers where it came from). The update is a merge, not a copy: where the
+instance and the template changed the same lines, copier leaves conflict
+markers to resolve by hand, so read the diff before committing.
 
 ## Checks
 
