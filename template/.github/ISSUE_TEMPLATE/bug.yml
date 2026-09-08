@@ -9,7 +9,9 @@ body:
     id: what-happened
     attributes:
       label: What happened
-      description: What you observed. Put guesses about the cause under *Anything else*.
+      description: |
+        What you observed, and what it stops you doing. Put guesses about the
+        cause under *Anything else*.
     validations:
       required: true
 
@@ -54,6 +56,16 @@ body:
     id: context
     attributes:
       label: Anything else
-      description: The most common field in the census — if we don't ask, it doesn't get written.
+      description: |
+        The most common field in the census — if we don't ask, it doesn't get
+        written. How often it happens and whether there is a way around it
+        belong here: that is what decides whether this gets picked up.
     validations:
       required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        Decisions taken while this is open go in the body, dated, and so does
+        the outcome when it closes. The body is the record; comments are
+        conversation.

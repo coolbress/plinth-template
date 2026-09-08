@@ -8,7 +8,9 @@ body:
     id: problem
     attributes:
       label: What are you blocked on
-      description: Describe the **problem**, not the solution. How did you handle it the last time?
+      description: |
+        Describe the **problem**, not the solution. How did you handle it the
+        last time, and what did that cost? That is the case for doing this.
     validations:
       required: true
 
@@ -16,7 +18,10 @@ body:
     id: proposal
     attributes:
       label: How you would like it to work
-      description: If you have a way in mind. Optional — the field above matters more.
+      description: |
+        If you have a way in mind. Optional — the field above matters more.
+        What would you be able to do that you cannot today? That sentence is
+        what the acceptance criteria get written from.
     validations:
       required: false
 
@@ -36,3 +41,11 @@ body:
       label: Anything else
     validations:
       required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        Decisions taken while this is open go in the body, dated, and so does
+        the outcome when it closes — completed, cancelled, superseded, or moved
+        to a follow-up are four different endings. The body is the record;
+        comments are conversation.

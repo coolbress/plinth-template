@@ -5,6 +5,23 @@ and write them with the `gh` CLI. (This file is what `setup-matt-pocock-skills`
 would create; it is pre-filled, so do not run that skill unless you change
 trackers. Original: mattpocock/skills, MIT.)
 
+## Before you write anything
+
+Read the repository you are writing into: its `AGENTS.md`, its `CONTRIBUTING.md`,
+and the issue and pull-request templates that actually apply. "Actually apply"
+includes your owner account's `owner/.github` defaults, which GitHub uses when
+the repository has none of its own — and a local `.github/ISSUE_TEMPLATE`
+holding any template or a `config.yml` replaces that shared set entirely, per
+folder, never per file.
+
+Writing through `gh` or the API does not exempt you from the template. It only
+means nothing renders it for you, so you read it and follow it yourself.
+
+**This file describes your repository's conventions.** They came from the
+template, and they are yours to change — a team that settles on a different
+shape edits this file and the forms together, and is not in violation of
+anything. Writing into someone else's repository, use theirs.
+
 ## Three kinds of issue
 
 The forms are in `.github/ISSUE_TEMPLATE`. The CLI does not render a form, so
@@ -21,6 +38,30 @@ The body is the record and stays canonical; comments are conversation, and
 a decision made in a comment is moved into the body. Add one triage label
 from [triage-labels.md](triage-labels.md): `needs-triage` by default,
 `ready-for-agent` when the issue is fully specified.
+
+## What a record has to carry
+
+Whatever the format, these survive:
+
+- **An issue**: the problem, why it is worth solving, what done looks like, the
+  decisions taken and their reasons, and the outcome on closing.
+- **A pull request**: the final change, why this approach, the evidence and its
+  limits, and the related issue.
+
+When a discussion or a review changes the conclusion, update the body. Keep the
+earlier reasoning and the reason it was corrected; a record that shows only the
+final answer cannot be argued with.
+
+Distinguish **completed** from **cancelled**, **superseded**, and **moved to a
+follow-up** — closing is not one state. Distinguish an automated check from an
+agent review from a person's own use of the thing from something not run at all.
+
+A filled-in section is not value and an edited file is not completion. Judge by
+what the record says happened, not by whether the headings are all present.
+
+Fields, labels and syntax that automation depends on are followed exactly:
+`Closes` auto-closes, a label drives triage queries, and a form's field id is
+read by tooling. Precision there is not style.
 
 ## Conventions
 
