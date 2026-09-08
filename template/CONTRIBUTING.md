@@ -30,14 +30,50 @@ one narrow ignore in `pyproject.toml`, with its reason.
    `ci / pr-title`; the eleven types are `feat` `fix` `docs` `style` `refactor`
    `perf` `test` `build` `ci` `chore` `revert`. Do not invent a type; extra
    meaning goes in the scope (`docs(research):`, `fix(security):`).
-5. The description becomes the body of the squash commit, so write it as one:
-   what changed and why, how it was verified, and, when AI wrote or assisted,
-   the `Assisted-by:` trailer as the last line. Delete the template's comment
-   lines: GitHub keeps HTML comments in the squash message.
+5. The description becomes the body of the squash commit, so write it as one,
+   in this shape:
+
+   ```text
+   ## What and why
+
+   The problem, what actually changed, the result, and why this approach.
+
+   ## How it was verified
+
+   What was run and what it showed; important unverified items and follow-ups.
+
+   Closes #N
+
+   Assisted-by: <agent>:<model>
+   ```
+
+   The issue link goes after the verification section, directly above the
+   attribution. `Closes #N` only when the pull request completes that issue;
+   partial work links with `Part of #N`, related work with `Related to #N`.
+   `Closes` drives GitHub's auto-close, so the wrong verb closes an unfinished
+   issue. With no issue to link, omit the line. Existing attribution is
+   preserved: several trailers form one contiguous block at the end.
+
+   This is your repository's convention, not a rule imposed from outside — if
+   your team settles on a different shape, change this file and the templates
+   together. Check the template that actually applies before you write: a local
+   `.github/PULL_REQUEST_TEMPLATE.md`, or your owner account's `.github`
+   defaults when there is none. `gh pr create --body`/`--body-file` bypasses it,
+   so read it yourself. Delete its comment lines — GitHub keeps HTML comments in
+   the squash message.
 6. Before merging, read the description against the final diff: what changed
    and why, what was verified and what was not, as of the last commit. A
    review fix that changed the scope changes the description too, because
    the description is what lands on `main`.
+
+   Say what was actually run, and name what was not. A review run in the same
+   session that wrote the change is not an independent review. When you change
+   behaviour, verify the boundaries and partial failures of the inputs and
+   states it touches, record which paths you exercised and which you did not,
+   and do not widen the result of a few cases into a guarantee about all of
+   them. Put user-facing explanation and history where it belongs — `README.md`,
+   `CHANGELOG.md`, or the page that covers it; not every change needs a README
+   edit.
 7. Merge when every required check is green. Squash is the only merge method;
    the commit is the pull request title and description, and the branch is
    deleted on merge.

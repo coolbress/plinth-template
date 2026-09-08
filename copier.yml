@@ -37,6 +37,21 @@ _exclude:
   - "{% if archetype not in ['backend', 'data-ml'] %}Dockerfile{% endif %}"
   - "{% if archetype not in ['backend', 'data-ml'] %}.dockerignore{% endif %}"
   - "{% if archetype not in ['backend', 'data-ml'] %}src/{{ package_name }}/__main__.py{% endif %}"
+  # The owner's shared community-health files, when they publish them. GitHub
+  # applies `owner/.github`'s copy to a repository that has none of its own, so
+  # writing ours would silently replace the owner's convention. The door answers
+  # these two; a person rendering by hand keeps the defaults and gets ours.
+  #
+  # Two answers, not one: GitHub decides the pull-request template per file and
+  # the issue templates per folder. A single local form -- or just a
+  # `config.yml` -- stops the whole shared folder being inherited, and the two
+  # sets are never merged, so the folder is all or nothing.
+  # `| string | lower == 'true'`, not a bare truth test: the door supplies these
+  # through `copier --data`, which does not coerce to the declared type, and a
+  # bare `{% if %}` on the string "false" is true. Measured, 2026-09-08.
+  # The issue folder needs `/**`: a bare directory name matches nothing here.
+  - "{% if owner_has_pr_template | string | lower == 'true' %}.github/PULL_REQUEST_TEMPLATE.md{% endif %}"
+  - "{% if owner_has_issue_forms | string | lower == 'true' %}.github/ISSUE_TEMPLATE/**{% endif %}"
 
 project_name:
   type: str
@@ -114,3 +129,21 @@ plinth_sha:
   type: str
   when: false
   default: "13e50828bee97ad629b387b5938a3bc8cb762343"
+
+# Does the owner already publish these in their `.github` repository? The door
+# looks, and passes the answer in; it never renders and then deletes, because a
+# file that was written and removed leaves a stub in the history.
+#
+# Default false on both: a person rendering by hand, with no way to look, gets
+# the template's own copies rather than a repository with no forms at all. A
+# lookup that failed is not an answer -- the door stops and asks rather than
+# passing a guess.
+owner_has_pr_template:
+  type: bool
+  when: false
+  default: false
+
+owner_has_issue_forms:
+  type: bool
+  when: false
+  default: false

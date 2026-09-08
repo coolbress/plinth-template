@@ -18,7 +18,9 @@ body:
     id: what
     attributes:
       label: What to build
-      description: One paragraph, present tense, what exists when this is done.
+      description: |
+        One paragraph, present tense, what exists when this is done — and, if it
+        is not obvious from the parent, why it is worth doing.
     validations:
       required: true
 
@@ -26,7 +28,9 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: One line each, as a checklist. Each line is something a check, a test or a reviewer can confirm.
+      description: |
+        One line each, as a checklist. Each line is something a check, a test or
+        a reviewer can confirm — a filled-in section is not one of those.
       value: |
         - [ ]
     validations:
@@ -47,3 +51,12 @@ body:
       description: Tasks that must close first, as `#N, #N`.
     validations:
       required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        Decisions taken while this is open go in the body under `## Decisions`,
+        dated, and the ending under `## Outcome`: completed, cancelled,
+        superseded, or moved to a follow-up are four different endings and the
+        record should say which. The body is the record; comments are
+        conversation.
