@@ -6,6 +6,34 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-08
+
+The record-writing rules, and the door can stop overwriting an owner's own
+conventions.
+
+### Added
+- `owner_has_pr_template` and `owner_has_issue_forms`: two `when: false`
+  answers `/plinth:new-project` supplies, so an owner who already publishes a
+  pull-request template or issue forms in their `.github` repository keeps
+  them. The files are never written rather than written and deleted. Two
+  answers and not one, because GitHub decides the pull-request template per
+  file and the issue templates per folder: a single local form, or just a
+  `config.yml`, stops the whole shared folder being inherited.
+
+### Changed
+- `CONTRIBUTING.md`, `docs/agents/issue-tracker.md` and `AGENTS.md` carry the
+  record-writing rules: the pull-request shape (`## What and why`, `## How it
+  was verified`, the issue link, the attribution trailer), `Closes` versus
+  `Part of` versus `Related to` and why the verb matters, that a review run in
+  the session that wrote the change is not independent, that a behaviour change
+  is verified at its boundaries and partial failures with the exercised and
+  unexercised paths recorded, and what a record has to carry whatever its
+  shape. Each says the convention is the instance's own and theirs to change.
+- The pull-request template and the `bug`, `feature` and `task` forms match
+  `coolbress/.github`'s. No new field and no new required input: the forms end
+  with a display-only note that decisions and the ending belong in the body.
+  `blank_issues_enabled: true` is unchanged.
+
 ## [1.0.0] - 2026-09-07
 
 The first release: the tag `/plinth:new-project` renders.
