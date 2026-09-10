@@ -46,6 +46,8 @@
       "Read(./.env.production)",
       "Bash(. *.env*)",
       "Bash(source *.env*)",
+      "Bash(cat *.env)",
+      "Bash(grep *.env)",
       "Read(~/.config/gh/**)"
     ]
   },
