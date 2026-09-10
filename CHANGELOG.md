@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-10
+
+The agent settings also stop a sourced `.env`, and the documents say what the
+deny reaches and what only the sandbox does.
+
 ### Fixed
 - `.claude/settings.json` also denies `. ./.env` and `source .env`
   (`Bash(. *.env*)`, `Bash(source *.env*)`). Measured on Claude Code 2.1.267
