@@ -31,8 +31,11 @@ before any file is written.
   template, and the three `docs/agents` files the mattpocock skills read.
 - `.claude/settings.json`: the plinth marketplace suggested, the commands the
   checks need allowed without a prompt, force push, `rm -rf`, `.env` and the
-  `gh` token denied, and the same `.env` rules for the sandbox. The sandbox
-  itself is a user setting and is not turned on here.
+  `gh` token denied, and the same `.env` rules for the sandbox. The deny
+  covers the Read tool and the shell's readers (`cat`, `head`, `tail`, `sed`,
+  `grep`, `<`, `.`, `source`); a `$(cat .env)`, a `bash -c` or a script that
+  opens the file is stopped only by the sandbox, which is a user setting and
+  is not turned on here.
 - `.claude/output-styles/non-engineer.md`, not applied by default; select it
   under `/config` → Output style.
 - For `backend` and `data-ml`: a `Dockerfile` pinned by digest, `.dockerignore`,
