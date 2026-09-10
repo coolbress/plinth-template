@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+- `.claude/settings.json` also denies `. ./.env` and `source .env`
+  (`Bash(. *.env*)`, `Bash(source *.env*)`). Measured on Claude Code 2.1.267
+  with the sandbox off: `Read(./.env)` already stops `cat`, `head`, `tail`,
+  `sed`, `grep` and `<` in Bash, alone or in a pipe, `&&` or `;` chain, but a
+  sourced `.env` ran, and a line that was not `KEY=VALUE` printed its value
+  in the shell's error (plinth #128). The two rules stop every sourcing shape
+  tried, `set -a; . ./.env; set +a` included, and leave `.venv/bin/activate`
+  alone. Not covered by any deny rule, and now said in README and AGENTS.md:
+  `$(cat .env)`, `bash -c "cat .env"`, an interpreter opening the file; the
+  sandbox's `denyRead`, already written, stops those when the sandbox is on.
+
 ## [1.1.0] - 2026-09-08
 
 The record-writing rules, and the door can stop overwriting an owner's own

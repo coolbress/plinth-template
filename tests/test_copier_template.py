@@ -254,6 +254,23 @@ def test_settings_deny_what_the_checks_cannot_undo(rendered: Path) -> None:
         assert any(d.startswith(prefixes) for d in deny), f"nothing denies {what}: {deny}"
 
 
+def test_settings_deny_sourcing_env_but_not_the_venv(rendered: Path) -> None:
+    """Measured 2026-09-10 (Claude Code 2.1.267, sandbox off): `Read(./.env)`
+    also stops `cat`, `head`, `tail`, `sed`, `grep` and `<` on `.env` in Bash,
+    but `. ./.env` and `source .env` run, and a malformed line prints its value
+    in the shell's error. A `*` in a Bash rule matches any text, so fnmatch
+    stands in for the harness here; `.venv/bin/activate` must stay sourceable."""
+    from fnmatch import fnmatchcase
+
+    permissions = _settings(rendered)["permissions"]
+    assert isinstance(permissions, dict)
+    bash = [d[len("Bash(") : -1] for d in permissions["deny"] if d.startswith("Bash(")]
+    for cmd in (". ./.env", "source .env", ". .env", "source ./.env.production"):
+        assert any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is not denied: {bash}"
+    for cmd in (". .venv/bin/activate", "source .venv/bin/activate", "cat .env.example"):
+        assert not any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is denied: {bash}"
+
+
 def test_settings_allow_the_checks_without_a_prompt(rendered: Path) -> None:
     """The point of the allow list: the commands AGENTS.md tells the agent to run
     never prompt, so the prompts that remain mean something."""

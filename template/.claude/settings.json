@@ -44,6 +44,8 @@
       "Read(./.env.test)",
       "Read(./.env.staging)",
       "Read(./.env.production)",
+      "Bash(. *.env*)",
+      "Bash(source *.env*)",
       "Read(~/.config/gh/**)"
     ]
   },
