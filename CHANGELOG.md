@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-10
+
+The agent settings also stop a `cat` or `grep` of `.env` inside `$(...)` or a
+subshell, where the Read deny does not look.
+
 ### Fixed
 - `.claude/settings.json` also denies `Bash(cat *.env)` and `Bash(grep *.env)`.
   The Read deny's Bash check sees only a top-level command: measured on Claude
