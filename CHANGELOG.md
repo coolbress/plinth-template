@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+- `.claude/settings.json` also denies `Bash(cat *.env)` and `Bash(grep *.env)`.
+  The Read deny's Bash check sees only a top-level command: measured on Claude
+  Code 2.1.267, `echo "$(cat .env)"`, `x=$(cat .env)`, `export $(cat .env |
+  xargs)`, `(cat .env)` and `{ cat .env; }` ran with `Read(./.env)` denied in
+  every spelling (anthropics/claude-code#89055). A Bash rule reaches those:
+  with the two rules every one of them and `env $(grep -v "^#" .env | xargs)`
+  is refused, while `cat .env.example`, `grep KEY .env.example` and
+  `grep -rn "os.environ" .` still run. Still open, and said in README and
+  AGENTS.md: `bash -c "cat .env"`, another reader inside `$(...)`
+  (`x=$(head -1 .env)` returned the value), `grep -r SECRET .`, an
+  interpreter (plinth #136).
+
 ## [1.2.0] - 2026-09-10
 
 The agent settings also stop a sourced `.env`, and the documents say what the

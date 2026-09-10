@@ -258,16 +258,32 @@ def test_settings_deny_sourcing_env_but_not_the_venv(rendered: Path) -> None:
     """Measured 2026-09-10 (Claude Code 2.1.267, sandbox off): `Read(./.env)`
     also stops `cat`, `head`, `tail`, `sed`, `grep` and `<` on `.env` in Bash,
     but `. ./.env` and `source .env` run, and a malformed line prints its value
-    in the shell's error. A `*` in a Bash rule matches any text, so fnmatch
-    stands in for the harness here; `.venv/bin/activate` must stay sourceable."""
+    in the shell's error; and the Read deny sees only a top-level command, so
+    `$(cat .env)` and `(cat .env)` run too, where a Bash rule reaches (plinth
+    #136). A `*` in a Bash rule matches any text, so fnmatch stands in for the
+    harness here; `.venv/bin/activate` must stay sourceable and `.env.example`
+    readable."""
     from fnmatch import fnmatchcase
 
     permissions = _settings(rendered)["permissions"]
     assert isinstance(permissions, dict)
     bash = [d[len("Bash(") : -1] for d in permissions["deny"] if d.startswith("Bash(")]
-    for cmd in (". ./.env", "source .env", ". .env", "source ./.env.production"):
+    for cmd in (
+        ". ./.env",
+        "source .env",
+        ". .env",
+        "source ./.env.production",
+        "cat .env",
+        "grep KEY .env",
+    ):
         assert any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is not denied: {bash}"
-    for cmd in (". .venv/bin/activate", "source .venv/bin/activate", "cat .env.example"):
+    for cmd in (
+        ". .venv/bin/activate",
+        "source .venv/bin/activate",
+        "cat .env.example",
+        "grep KEY .env.example",
+        'grep -rn "os.environ" .',
+    ):
         assert not any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is denied: {bash}"
 
 
