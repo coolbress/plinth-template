@@ -128,7 +128,7 @@ archetype:
 plinth_sha:
   type: str
   when: false
-  default: "13e50828bee97ad629b387b5938a3bc8cb762343"
+  default: "98e8e56f1d06221d598e15afeda5c0f1892c5bea"
 
 # Does the owner already publish these in their `.github` repository? The door
 # looks, and passes the answer in; it never renders and then deletes, because a

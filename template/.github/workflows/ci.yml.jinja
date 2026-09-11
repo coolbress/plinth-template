@@ -35,6 +35,40 @@ jobs:
       # claims support that was never exercised. Not a matrix: a matrix would
       # rename the check to `ci / test (3.13)` and the ruleset requires `ci / test`.
       extra-python-versions: "3.13"
+    # A called workflow cannot widen what its caller grants. `ci / floor-check`
+    # reads the repository's labels, and labels belong to issues: without this
+    # the label check reads an API error and reports `not verified` (plinth
+    # #102). Scoped to this job, not raised for the file.
+    permissions:
+      contents: read
+      issues: read
+{%- if archetype in ['backend', 'data-ml'] %}
+
+  # The container image, checked the one way that tells it from a stub: build
+  # it, run it, read what it says. A plain job here and not one in
+  # python-ci.yml, which serves every archetype, so a cli or library instance
+  # never carries it. A plain job's check name is its id, `image`; the `ci /`
+  # names belong to the reusable workflow's jobs. The ruleset
+  # `/plinth:new-project` applies requires `image` for this archetype, and a
+  # Dependabot base-image bump that builds but cannot start stops here
+  # (plinth #127).
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # nothing here pushes
+      - run: docker build -t image-under-test .
+      # No framework is chosen yet, so the entry point has no port: the one
+      # request is a run to completion, answered by its first log line. When a
+      # server arrives, start the container with `-d -p` and `curl` it here.
+      - name: Run the image and read its first log line
+        run: |
+          set -euo pipefail
+          out="$(docker run --rm image-under-test)"
+          printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+{%- endif %}
 
 # Optional: a review signal from a third party on every ready pull request,
 # reported as the check `third-party / review`. Off by default: it needs a

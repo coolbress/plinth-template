@@ -2,6 +2,9 @@
 
 Changes land through pull requests only. `main` is protected by a ruleset
 that requires the checks below; nobody pushes to it directly, the owner included.
+The ruleset stops the everyday agent, not the administrator: the owner, or
+anyone holding administration, can change it, which is why the agent never
+holds administration (`AGENTS.md`).
 
 ## Run the checks
 

@@ -172,6 +172,68 @@ def test_ci_calls_plinth_at_the_pinned_sha(rendered: Path) -> None:
     assert "coolbress/workflows" not in ci + label, "still calling the archived CI repository"
 
 
+def _ci(out: Path) -> str:
+    return (out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+
+def _job(ci: str, name: str) -> str:
+    """The lines of one job: from `  name:` to the next line indented two spaces or less."""
+    body = ("\n" + ci.split("\njobs:\n", 1)[1]).split(f"\n  {name}:\n", 1)
+    assert len(body) == 2, f"no job {name}"
+    return re.split(r"\n(?=\S|  \S)", body[1], maxsplit=1)[0]
+
+
+def test_ci_grants_issues_read_to_the_call(rendered: Path) -> None:
+    """A called workflow cannot widen what its caller grants: without this the
+    label check in `ci / floor-check` reads an API error and reports `not
+    verified` in every instance (plinth #102). On the job, not the file."""
+    ci = _ci(rendered)
+    granted = re.search(r"^    permissions:\n((?:      \S.*\n)+)", _job(ci, "ci"), re.M)
+    assert granted, "the ci job grants nothing: the label check never runs"
+    assert sorted(ln.strip() for ln in granted.group(1).splitlines()) == [
+        "contents: read",
+        "issues: read",
+    ], granted.group(1)
+    file_level = re.findall(r"^permissions:\n((?:  \S.*\n)+)", ci, re.M)
+    assert file_level == ["  contents: read\n"], f"raised for the file: {file_level}"
+
+
+def test_service_archetype_ci_carries_the_image_check(backend: Path, rendered: Path) -> None:
+    """Build, run, read back. A Dependabot base-image bump that builds and cannot
+    start was green on every required check (plinth #120); this is the check
+    that goes red. A cli instance has no image and carries no such job."""
+    job = _job(_ci(backend), "image")
+    assert "docker build" in job
+    assert "docker run" in job
+    assert '\'"message": "started"\'' in job, "the run is not read back; a dying container passes"
+    assert re.search(r"^\s+persist-credentials: false", job, re.M)
+    cli = _ci(rendered)
+    assert not re.search(r"^  image:\n", cli, re.M), "a cli instance carries the image check"
+    assert "docker" not in cli
+
+
+def test_service_archetype_dependabot_leaves_the_python_minor_alone(backend: Path) -> None:
+    """`python:3.12-slim` -> `3.14-slim` moved the run stage alone (plinth #120).
+    A minor is a decision; digests and patches still rise."""
+    dep = (backend / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    docker = dep.split('package-ecosystem: "docker"', 1)[1]
+    assert "ignore:" in docker, "docker updates are not constrained"
+    for kind in ("version-update:semver-major", "version-update:semver-minor"):
+        assert kind in docker, f"{kind} is not ignored"
+    assert "version-update:semver-patch" not in docker, "patches are blocked too"
+
+
+def test_the_documents_say_who_can_move_the_wall(rendered: Path) -> None:
+    """The rule the agent reads, and the limit the explanation states (plinth #129)."""
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    rule = [ln for ln in agents.splitlines() if "Never ask for administration" in ln]
+    assert len(rule) == 1, "the administration rule is not one line of AGENTS.md"
+    assert "with-admin-token.sh" in rule[0]
+    assert "Settings" in rule[0]
+    contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "not the administrator" in contributing
+
+
 def test_ci_keeps_the_caller_job_named_ci(rendered: Path) -> None:
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert re.search(r"^jobs:\n  ci:\n", ci, re.M), (
@@ -406,6 +468,7 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "Assisted-by:",
         "Do not invent types",
         "a description that no longer matches the diff",
+        "Never ask for administration",
     ):
         assert must in text, f"AGENTS.md no longer says: {must}"
     assert "when planning" not in text.lower(), "the planning block moved out of AGENTS.md"

@@ -36,4 +36,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Digests and patches only. A Python minor moves the build stage, the run
+    # stage, `.python-version` and mypy's target together: that is a decision,
+    # not an update. Measured (plinth #120): `python:3.12-slim` to `3.14-slim`
+    # was green on every required check and could not start, because the
+    # virtualenv copied from the 3.12 build stage pointed at an interpreter the
+    # run image did not have.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 {%- endif %}

@@ -28,7 +28,12 @@ permissions:
 
 jobs:
   ci:
-    uses: coolbress/plinth/.github/workflows/python-ci.yml@13e50828bee97ad629b387b5938a3bc8cb762343 # 2026-09-07, before the first release
+    uses: coolbress/plinth/.github/workflows/python-ci.yml@98e8e56f1d06221d598e15afeda5c0f1892c5bea # 2026-09-11, after v0.5.4 (#141)
+    # A called workflow cannot widen what its caller grants: the label check
+    # in `ci / floor-check` needs `issues: read`, scoped to this job.
+    permissions:
+      contents: read
+      issues: read
     with:
       # The default exclusions are `*.md` and `*.lock`; this repository also
       # has README.md.jinja and uv.lock.jinja, and `.jinja` is a rendering

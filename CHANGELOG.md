@@ -6,6 +6,36 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A backend or data-ml instance's `ci.yml` carries an `image` job: build the
+  Dockerfile, run the image, read its first log line. A plain job, not one in
+  python-ci.yml, so a cli or library instance never carries it; the check name
+  is `image`, and `/plinth:new-project` requires it in the ruleset for these
+  archetypes (plinth #127). The entry point has no port yet, so the one
+  request is a run to completion; a server replaces that line with a `curl`.
+- `AGENTS.md`: never ask for administration on the everyday token; a ruleset,
+  required-check or code-scanning change is a person's, typed through plinth's
+  `scripts/with-admin-token.sh` or made in Settings. `CONTRIBUTING.md` states
+  the limit: the wall stops the everyday agent, not the administrator
+  (plinth #129).
+
+### Changed
+- `plinth_sha` is `98e8e56` (plinth after v0.5.4). The pinned python-ci.yml
+  now carries the label check (plinth #100) and counts what a run could not
+  verify (plinth #124); `13e5082` predated both, so granting `issues: read`
+  against it would have changed nothing.
+
+### Fixed
+- `ci.yml` grants `issues: read` to its python-ci.yml call, on the job. A
+  called workflow cannot widen what its caller grants, so `ci / floor-check`'s
+  label check read an API error and reported `not verified` in every instance
+  (plinth #102).
+- Dependabot's docker updates ignore major and minor: a Python minor bump moves
+  the build stage, `.python-version` and mypy together. `python:3.12-slim` to
+  `3.14-slim` was green on every required check and could not start, the
+  virtualenv copied from the 3.12 build stage pointing at an interpreter the
+  run image lacked (plinth #120). Digests and patches still rise.
+
 ## [1.3.0] - 2026-09-10
 
 The agent settings also stop a `cat` or `grep` of `.env` inside `$(...)` or a
