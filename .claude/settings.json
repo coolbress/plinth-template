@@ -7,6 +7,10 @@
       "Bash(gh auth token*)",
       "Read(./.env)",
       "Read(./.env.*)",
+      "Bash(. *.env*)",
+      "Bash(source *.env*)",
+      "Bash(cat *.env)",
+      "Bash(grep *.env)",
       "Read(~/.config/gh/**)"
     ]
   }
