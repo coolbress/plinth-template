@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-11
+
+A service instance gets an image check, the label check finally runs in an
+instance's CI, and the agent file says a ruleset change is a person's.
+
 ### Added
 - A backend or data-ml instance's `ci.yml` carries an `image` job: build the
   Dockerfile, run the image, read its first log line. A plain job, not one in
