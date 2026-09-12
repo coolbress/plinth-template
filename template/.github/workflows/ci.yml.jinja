@@ -62,7 +62,11 @@ jobs:
       - run: docker build -t image-under-test .
       # No framework is chosen yet, so the entry point has no port: the one
       # request is a run to completion, answered by its first log line. When a
-      # server arrives, start the container with `-d -p` and `curl` it here.
+      # server arrives, start the container with `-d -p`, `curl` it, and read
+      # the log the same way: `out="$(docker logs image-under-test)"`, then the
+      # `printf` line as it is. Never `docker logs … | head`: under `pipefail`,
+      # `head` closing the pipe first kills `docker logs` with SIGPIPE, and a
+      # healthy container fails the check with exit 141 (plinth #151).
       - name: Run the image and read its first log line
         run: |
           set -euo pipefail

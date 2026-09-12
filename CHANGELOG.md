@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+- The `image` job's comment shows a server instance how to read the container
+  log: capture `docker logs` into a variable, then pipe from the variable. An
+  instance that rewrote the step as `docker logs … | head -1` failed on some
+  runs with exit 141, `head` closing the pipe before `docker logs` finished
+  and `pipefail` counting the SIGPIPE, with the container healthy
+  (plinth #151). The template's own line already captured before piping; the
+  test now refuses a live docker process on a pipe and requires the capture
+  form in the comment.
+
 ## [1.4.0] - 2026-09-11
 
 A service instance gets an image check, the label check finally runs in an
