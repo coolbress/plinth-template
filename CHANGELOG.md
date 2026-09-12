@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-13
+
+The `image` job's comment tells a server instance to capture `docker logs`
+before piping, so a closed pipe cannot fail a healthy container.
+
 ### Fixed
 - The `image` job's comment shows a server instance how to read the container
   log: capture `docker logs` into a variable, then pipe from the variable. An
