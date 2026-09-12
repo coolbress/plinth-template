@@ -206,6 +206,14 @@ def test_service_archetype_ci_carries_the_image_check(backend: Path, rendered: P
     assert "docker build" in job
     assert "docker run" in job
     assert '\'"message": "started"\'' in job, "the run is not read back; a dying container passes"
+    # A live docker process piped into `head` dies on SIGPIPE when `head` closes
+    # first, and under pipefail a healthy container reads as exit 141 (plinth
+    # #151). The output is captured, then piped; the comment that tells a
+    # server instance how to rewrite the step says so with the `docker logs` form.
+    piped = re.search(r"^\s+[^#\n]*docker (run|logs)[^\n]*\|", job, re.M)
+    assert not piped, f"a live docker process is piped: {piped.group(0).strip()}"
+    capture = 'out="$(docker logs image-under-test)"'
+    assert capture in job, "the server rewrite is not shown in the capture form"
     assert re.search(r"^\s+persist-credentials: false", job, re.M)
     cli = _ci(rendered)
     assert not re.search(r"^  image:\n", cli, re.M), "a cli instance carries the image check"
