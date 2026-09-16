@@ -14,7 +14,7 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "coolbress" }]
-dependencies = ["copier>=9.0"]
+dependencies = ["copier>=9.18.2"]
 
 [project.urls]
 Homepage = "https://github.com/coolbress/plinth-template"
