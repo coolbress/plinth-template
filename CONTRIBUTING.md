@@ -30,7 +30,16 @@ cd /tmp/probe && uv sync --locked && uv run pytest
 
 ## Land a change
 
-1. Branch from `main`: `git switch -c <type>/<slug>`.
+1. Branch from `origin/main`, always naming the base. Unless the checkout is
+   yours alone — no command tells you whether another session is in it — make
+   the branch in its own worktree: `git fetch origin`, then
+   `git worktree add --no-track -b <type>/<slug> .claude/worktrees/<slug> origin/main`.
+   In a checkout that is yours alone, `git switch -c <type>/<slug> --no-track
+   origin/main` does the same in place. Without the base either command starts
+   the branch at whatever `HEAD` is, which carries another task's commits into
+   yours. `--no-track` leaves the branch with no upstream: tracking
+   `origin/main`, a bare `git push` refuses and the fix git prints first is
+   `git push origin HEAD:main` — a push to `main`, not to your branch.
 2. Commit with a Conventional Commits title, `type(scope): summary`, one of the
    eleven standard types. A commit made with AI carries the trailer
    `Assisted-by: <agent>:<model>`.

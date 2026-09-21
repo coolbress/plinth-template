@@ -6,6 +6,46 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-09-21
+
+Branch instructions name their base, the agent file says what to do about a
+checkout another session may be using, and a worktree made under `.claude/`
+is ignored.
+
+### Added
+- `AGENTS.md` opens `## Always` with the shared-checkout rule: before editing,
+  inspect the branch, working-tree changes, worktree list and commits ahead of
+  the intended base (`git fetch origin`, then `git status -sb`,
+  `git worktree list`, `git log --oneline origin/main..HEAD`). Those show the
+  state of the checkout, not who else is using it: no command shows another
+  session, so a clean checkout on `main` is not proof that it is yours alone.
+  When it is not, or when it holds unrelated or unexplained work, leave it
+  untouched and work in a uniquely named worktree branched from an explicitly
+  verified base; never switch, reset, rebase or stash another task's checkout
+  (plinth #218).
+- `.gitignore` ignores `.claude/worktrees/`, which Claude Code's documentation
+  asks for and which the rule now names as the worktree's path. Without the
+  line, `git add .` after `git worktree add .claude/worktrees/x -b wt-x`
+  stages the worktree as a `160000` gitlink, which git warns about and a
+  reader who does not open the diff commits: a clone will not contain it and
+  will not know how to get it. With the line, nothing of the worktree is
+  staged.
+
+### Changed
+- Every branch instruction names its base, and a worktree is the default
+  wherever the checkout may not be yours alone: `git fetch origin`, then
+  `git worktree add --no-track -b <type>/<slug> .claude/worktrees/<slug> origin/main`,
+  or `git switch -c <type>/<slug> --no-track origin/main` in a checkout that
+  is. `git switch -c <type>/<slug>` alone starts the branch at whatever `HEAD`
+  is; run from another task's scratch commit it carries that commit into the
+  new branch, which is the incident behind plinth #218. `--no-track` leaves
+  the new branch with no upstream: tracking `origin/main`, a bare `git push`
+  refuses, and the fix git prints first is `git push origin HEAD:main` — a
+  push to `main`, not to the branch. Naming the base does not stop uncommitted
+  changes riding along — git carries compatible ones onto the new branch and
+  prints only `M file` — which is why the rule above is a separate guard and
+  not the same one said twice.
+
 ## [1.4.1] - 2026-09-13
 
 The `image` job's comment tells a server instance to capture `docker logs`

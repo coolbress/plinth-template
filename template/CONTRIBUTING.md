@@ -27,7 +27,16 @@ one narrow ignore in `pyproject.toml`, with its reason.
 
 1. For anything bigger than a typo, open an issue first, with acceptance criteria
    a check or a reviewer can confirm. A typo goes straight to a pull request.
-2. Branch from `main`: `git switch -c <type>/<slug>`.
+2. Branch from `origin/main`, always naming the base. Unless the checkout is
+   yours alone — no command tells you whether another session is in it — make
+   the branch in its own worktree: `git fetch origin`, then
+   `git worktree add --no-track -b <type>/<slug> .claude/worktrees/<slug> origin/main`.
+   In a checkout that is yours alone, `git switch -c <type>/<slug> --no-track
+   origin/main` does the same in place. Without the base either command starts
+   the branch at whatever `HEAD` is, which carries another task's commits into
+   yours. `--no-track` leaves the branch with no upstream: tracking
+   `origin/main`, a bare `git push` refuses and the fix git prints first is
+   `git push origin HEAD:main` — a push to `main`, not to your branch.
 3. Commit. A commit made with AI carries the trailer `Assisted-by: <agent>:<model>`.
 4. Open a pull request. Its title is `type(scope): summary`, checked by
    `ci / pr-title`; the eleven types are `feat` `fix` `docs` `style` `refactor`
