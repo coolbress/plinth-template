@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -732,6 +733,61 @@ def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str)
         assert done.returncode == 0, (
             f"{' '.join(step)} failed in the generated project\n{done.stdout}\n{done.stderr}"
         )
+
+
+def _speaking(language: str) -> dict[str, str]:
+    """A child environment whose git speaks `language`.
+
+    Setting `LANGUAGE` alone is not enough, and the reason is the bug's other
+    half: gettext ignores `LANGUAGE` when the locale is `C`, and `LC_ALL`
+    outranks `LANG`. Both have to go, and `LANG` has to name a real locale,
+    before `LANGUAGE` is read at all.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in ("LC_ALL", "LC_MESSAGES")}
+    env["LANG"] = "en_US.UTF-8"
+    env["LANGUAGE"] = language
+    return env
+
+
+def _git_ls_files_stderr(cwd: Path, language: str) -> str:
+    """What git says in `language` when `git ls-files` runs outside a repository."""
+    done = subprocess.run(
+        ["git", "ls-files"],  # noqa: S607
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_speaking(language),
+    )
+    return done.stderr
+
+
+def test_tree_hygiene_skips_outside_a_repository_in_git_s_own_language(rendered: Path) -> None:
+    """A fresh render is not a repository, and git says so in whatever language
+    it speaks. The instance's `tracked()` pins that one message to `LC_ALL=C`
+    instead of hoping for English: before it did, `LANGUAGE=fr` turned the
+    narrow skip into three failures and took this file's own render check down
+    with them (#19)."""
+    translated = [
+        language
+        for language in ("fr", "ko", "de")
+        if "not a git repository" not in _git_ls_files_stderr(rendered, language).lower()
+    ]
+    assert translated, (
+        "this git prints its messages in English for fr, ko and de, so the case this "
+        "test needs cannot be built here and the skip's locale handling goes unchecked"
+    )
+    for language in translated:
+        done = subprocess.run(
+            [sys.executable, "-m", "pytest", "-q", "tests/test_tree_hygiene.py"],
+            cwd=rendered,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=_speaking(language),
+        )
+        assert done.returncode == 0, f"LANGUAGE={language}\n{done.stdout}\n{done.stderr}"
+        assert "3 skipped" in done.stdout, f"LANGUAGE={language}: {done.stdout}"
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
