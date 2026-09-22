@@ -790,6 +790,103 @@ def test_tree_hygiene_skips_outside_a_repository_in_git_s_own_language(rendered:
         assert "3 skipped" in done.stdout, f"LANGUAGE={language}: {done.stdout}"
 
 
+def _git(cwd: Path, *args: str) -> None:
+    subprocess.run(  # noqa: S603
+        ["git", "-c", "user.name=t", "-c", "user.email=t@e", *args],  # noqa: S607
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_a_raised_plinth_sha_survives_an_update_that_passes_it(tmp_path: Path) -> None:
+    """Dependabot raises the `uses:` pins; an update must not take them back.
+
+    `plinth_sha` was `when: false` once. copier neither wrote such an answer to
+    `.copier-answers.yml` nor let `--data` override it, so every update
+    re-rendered the pin from this template's default: a conflict in each
+    workflow file where Dependabot had raised it, and a silent move back where
+    it had not (#22). This walks the whole round trip against two throwaway
+    tags whose defaults differ, because one tag cannot show it.
+    """
+    import copier
+
+    old_sha = "98e8e56f1d06221d598e15afeda5c0f1892c5bea"
+    # Hex with letters, as a commit is: an all-digit string comes back from the
+    # YAML dumper quoted, and the assertions below read the file as text.
+    new_sha = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+    raised = "0f1e2d3c4b5a0f1e2d3c4b5a0f1e2d3c4b5a0f1e"
+
+    tpl = tmp_path / "tpl"
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    config = tpl / "copier.yml"
+    assert f'default: "{old_sha}"' in config.read_text(encoding="utf-8"), (
+        "the template's plinth_sha default moved; update old_sha here"
+    )
+    _git(tpl, "init", "-q", "-b", "main", ".")
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-qm", "before")
+    _git(tpl, "tag", "-a", "-m", "before", "v9.0.0")
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(old_sha, new_sha), encoding="utf-8"
+    )
+    _git(tpl, "commit", "-qam", "a release with a different pin")
+    _git(tpl, "tag", "-a", "-m", "after", "v9.1.0")
+
+    proj = tmp_path / "proj"
+    copier.run_copy(
+        str(tpl),
+        str(proj),
+        data={"project_name": "probe", "license": "MIT", "archetype": "cli", "owner": "someone"},
+        defaults=True,
+        quiet=True,
+        unsafe=False,
+        vcs_ref="v9.0.0",
+    )
+    answers = proj / ".copier-answers.yml"
+    assert f"plinth_sha: {old_sha}" in answers.read_text(encoding="utf-8"), (
+        "the render did not record plinth_sha; it is computed again"
+    )
+
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    ci = proj / ".github/workflows/ci.yml"
+    ci.write_text(ci.read_text(encoding="utf-8").replace(old_sha, raised), encoding="utf-8")
+    _git(proj, "commit", "-qam", "as Dependabot would")
+
+    copier.run_update(
+        str(proj),
+        data={"plinth_sha": raised},
+        defaults=True,
+        overwrite=True,
+        quiet=True,
+        unsafe=False,
+        vcs_ref="v9.1.0",
+    )
+
+    unmerged = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"],  # noqa: S607
+        cwd=proj,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert not unmerged, f"the update conflicted in {unmerged}"
+    assert raised in ci.read_text(encoding="utf-8"), "the update took the raised pin back"
+    assert new_sha not in ci.read_text(encoding="utf-8"), "the template's own pin was written in"
+    assert f"plinth_sha: {raised}" in answers.read_text(encoding="utf-8"), (
+        "the passed pin was not recorded"
+    )
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_generated_project_passes_the_floor_check(tmp_path: Path) -> None:
     """plinth's `ci / floor-check` runs `scripts/floor-check.py` at the pinned

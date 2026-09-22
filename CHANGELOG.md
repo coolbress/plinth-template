@@ -6,6 +6,25 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-22
+
+`plinth_sha` is a recorded answer, so an update can be told to keep the pin
+the repository already has.
+
+### Changed
+- `plinth_sha` is asked and written into `.copier-answers.yml` instead of
+  being computed on every render. While it was `when: false`, copier neither
+  recorded it nor let `--data` override it, so each `copier update`
+  re-rendered the `uses:` pins from this template's own default: a conflict in
+  every workflow file of an instance whose Dependabot had raised them — which
+  is every instance, given time — and a silent move back to the template's
+  value where it had not. Measured on copier 9.18.2: with the answer recorded,
+  `copier update --data plinth_sha=<the pin the repository has now>` keeps the
+  pin, records it, applies the template's real workflow changes and conflicts
+  nowhere. A render still takes this file's value by default, so nothing
+  changes for a new project; the by-hand render in `CONTRIBUTING.md` now asks
+  one more question, and Enter answers it (#22).
+
 ## [1.4.3] - 2026-09-22
 
 An instance's tree-hygiene tests skip a fresh render whatever language git

@@ -28,6 +28,11 @@ uvx copier copy --vcs-ref HEAD . /tmp/probe   # HEAD: the working tree, not the 
 cd /tmp/probe && uv sync --locked && uv run pytest
 ```
 
+It asks for `plinth_sha` along with the rest; Enter takes the commit this
+template is tested with. It is a recorded answer rather than a computed one so
+that `copier update` on an instance can be given the pin that instance has
+now, instead of re-rendering this file's default over it (#22).
+
 ## Land a change
 
 1. Branch from `origin/main`, always naming the base. Unless the checkout is
