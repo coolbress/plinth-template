@@ -6,6 +6,26 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-09-22
+
+An instance's tree-hygiene tests skip a fresh render whatever language git
+speaks, instead of failing on three of them.
+
+### Fixed
+- `tests/test_tree_hygiene.py` asks git for its file list with `LC_ALL=C`, so
+  the narrow "not a git repository" skip meets the message it was written
+  against. git translates that message, and gettext prefers `LANGUAGE` over
+  the locale, so where git speaks another language the skip missed and all
+  three tree-hygiene tests failed with `git ls-files failed: …` instead. That
+  is the state of the by-hand render check `CONTRIBUTING.md` documents, which
+  runs pytest in a directory that is not a repository yet, and of this
+  template's own render test (#19). The skip still reads the message rather
+  than the exit status: 128 is git's general fatal status, and a broken
+  `GIT_DIR` inside a real work tree returns it too, so keying on the number
+  would widen the skip. The template's test suite now builds the translated
+  case itself — `LANGUAGE` with `LC_ALL` and `LC_MESSAGES` removed and `LANG`
+  naming a real locale — and fails if it cannot.
+
 ## [1.4.2] - 2026-09-21
 
 Branch instructions name their base, the agent file says what to do about a
