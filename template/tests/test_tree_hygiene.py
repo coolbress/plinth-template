@@ -10,6 +10,7 @@ the problem is when it is committed.
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 import pytest
@@ -34,12 +35,20 @@ def tracked() -> list[str]:
         capture_output=True,
         text=True,
         check=False,
+        # git translates its messages, so the skip below reads whatever
+        # language the machine's git speaks. `LC_ALL=C` pins the message to
+        # the English wording the skip matches, and it also beats `LANGUAGE`,
+        # which otherwise wins over the locale for gettext.
+        env={**os.environ, "LC_ALL": "C"},
     )
     if done.returncode != 0:
         # Narrow skip: the template's own tests run pytest in a freshly
         # rendered directory that is not a git repository yet. Only that case
         # skips; any other failure is raised, because a check that turns green
-        # for no reason is worse than none.
+        # for no reason is worse than none. The message is matched rather than
+        # the exit status, because 128 is git's general fatal status: a broken
+        # `GIT_DIR` inside a real work tree gives 128 too, and skipping there
+        # would be the green-for-no-reason this guards against.
         if "not a git repository" in done.stderr.lower():
             pytest.skip("not a git repository (a fresh render): nothing is tracked yet")
         raise AssertionError(f"`git ls-files` failed: {done.stderr.strip()}")

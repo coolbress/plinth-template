@@ -22,3 +22,6 @@ dist/
 # Claude Code adds this file to the global git excludes of one machine, which
 # protects that machine and not the repository.
 .claude/settings.local.json
+# A worktree under here is another checkout, not content: `git add .` would
+# otherwise stage it as a gitlink.
+.claude/worktrees/
