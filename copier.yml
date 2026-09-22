@@ -122,12 +122,22 @@ archetype:
     Data or ML: data-ml
 
 # The commit of coolbress/plinth whose reusable workflows the instance calls,
-# the one this template release was tested with. Never asked. It is the only
-# pin the template carries; the instance's Dependabot raises it afterwards,
-# and `copier update` brings a newer template's value.
+# the one this template release was tested with. It is the only pin the
+# template carries, and the instance's Dependabot raises it afterwards.
+#
+# Recorded, not computed, and that is the whole point of the question. While
+# it was `when: false` copier neither wrote it to the answers file nor let
+# `--data` override it, so every `copier update` re-rendered the pin from this
+# default: an instance whose Dependabot had raised it got a conflict in each
+# workflow file, and one whose Dependabot had not was moved back to this
+# value without a word. Asked, it is written into `.copier-answers.yml` and an
+# update that passes the instance's own pin keeps it (#22).
 plinth_sha:
   type: str
-  when: false
+  help: |
+    Commit of coolbress/plinth whose reusable workflows this project calls.
+    Press Enter for the one this template release was tested with; on an
+    update, pass the pin the repository has now.
   default: "98e8e56f1d06221d598e15afeda5c0f1892c5bea"
 
 # Does the owner already publish these in their `.github` repository? The door
