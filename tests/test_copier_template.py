@@ -497,6 +497,9 @@ def test_contributing_and_readme_list_every_check_agents_lists(rendered: Path) -
 def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) -> None:
     text = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "squash commit" in text
+    # The description is the commit only when the merge passes it: without a
+    # body GitHub's default squash message hard-wraps it at 72 columns.
+    assert 'gh pr merge <n> --squash --match-head-commit <sha> --body "$body"' in text
     assert "Assisted-by:" in text
     assert "read the description against the final diff" in text
     for t in ("feat", "fix", "docs", "refactor", "revert"):
