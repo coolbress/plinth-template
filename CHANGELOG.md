@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `CONTRIBUTING.md` (step 7) and this repository's own (step 5)
+  give the merge command that makes the squash commit the pull request
+  description: `gh pr merge --squash` with the description passed as `--body`.
+  Without it GitHub's default squash message is the description hard-wrapped
+  at 72 columns, so a description written at about 80 columns lands on `main`
+  with stray one-word lines. Both `AGENTS.md` files point at that step. Found
+  and measured in coolbress/plinth#250 (#24).
+
 ## [1.5.0] - 2026-09-22
 
 `plinth_sha` is a recorded answer, so an update can be told to keep the pin

@@ -40,7 +40,8 @@ uv build
   does `copier update` on an instance need hands? Then MAJOR.
 - Product text is English. A commit made with AI carries
   `Assisted-by: <agent>:<model>`, and so does the last line of the pull request
-  description, which becomes the squash commit.
+  description, which becomes the squash commit when merged as `CONTRIBUTING.md`
+  step 5 says.
 
 ## Never
 

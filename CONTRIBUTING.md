@@ -57,7 +57,20 @@ now, instead of re-rendering this file's default over it (#22).
    review fix that changed the scope changes the description too, because
    the description is what lands on `main`.
 5. Merge when green. Squash is the only merge method and the branch is deleted
-   on merge.
+   on merge. The description is the squash commit only when the merge passes
+   it: without a body, GitHub's default squash message is the description
+   hard-wrapped at 72 columns, and `gh pr merge --squash` takes that default.
+
+   ```bash
+   body="$(gh pr view <n> --json body --jq .body)" &&
+     gh pr merge <n> --squash --match-head-commit <sha> --body "$body"
+   ```
+
+   The `&&` stops the merge when the read fails, rather than merging with an
+   empty body, and no file is left in the checkout to be committed later.
+   `--match-head-commit` names the head the description was read against: a
+   commit pushed after it stops the merge. It pins the commits only; the
+   description is read when the command runs, so finish editing it first.
 
 ## Cut a release
 
