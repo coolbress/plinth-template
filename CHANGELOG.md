@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-24
+
+A generated repository's `CONTRIBUTING.md` gives the merge command that keeps
+a pull request's description as its squash commit, so a description does not
+land on `main` hard-wrapped at 72 columns.
+
 ### Changed
 - The generated `CONTRIBUTING.md` (step 7) and this repository's own (step 5)
   give the merge command that makes the squash commit the pull request
