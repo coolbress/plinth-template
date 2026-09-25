@@ -5,8 +5,10 @@ name: CI
 # job never reports again and the repository locks.
 #
 # The CI logic lives in coolbress/plinth, pinned to a commit SHA: a tag can
-# move, a commit cannot. Dependabot raises the SHA. What each check does:
-# https://github.com/coolbress/plinth/blob/main/.github/workflows/python-ci.yml
+# move, a commit cannot. Dependabot raises the SHA. What each check does, what
+# a red means and the fix:
+# https://github.com/coolbress/plinth/blob/main/docs/reference/required-checks.md
+# The implementation is python-ci.yml, in the same repository.
 
 on:
   push:

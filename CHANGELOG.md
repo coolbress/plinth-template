@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `ci.yml` points "what each check does" at plinth's Required
+  checks page, which gives each check, what a red means and the fix, and is
+  held to plinth's ruleset by a test there. Before, it pointed at
+  `python-ci.yml`, the workflow's source; the comment still names it as the
+  implementation (#27).
+
 ## [1.5.1] - 2026-09-24
 
 A generated repository's `CONTRIBUTING.md` gives the merge command that keeps
