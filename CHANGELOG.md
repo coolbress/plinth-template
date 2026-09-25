@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-25
+
+A generated repository's `ci.yml` points a reader who wants to know what a
+check does, or why it is red, at plinth's Required checks page.
+
 ### Changed
 - The generated `ci.yml` points "what each check does" at plinth's Required
   checks page, which gives each check, what a red means and the fix, and is
