@@ -504,6 +504,19 @@ def test_contributing_and_readme_list_every_check_agents_lists(rendered: Path) -
         assert not missing, f"{doc} does not list {missing}"
 
 
+def test_agents_md_says_who_merges_and_how(rendered: Path) -> None:
+    """A merge happens on the person's word for that pull request, with step 7's
+    command; a worktree is checked before it is removed (#31)."""
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Merge only when the person says so for that pull request" in agents
+    assert "a yes for one does not carry to the next" in agents
+    assert "standing instruction" in agents
+    assert "never plain `gh pr merge --squash`" in agents
+    assert "git status --porcelain --ignored" in agents
+    contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "an agent merges only on their word for that pull request" in contributing
+
+
 def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) -> None:
     text = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "squash commit" in text

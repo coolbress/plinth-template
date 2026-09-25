@@ -86,9 +86,10 @@ one narrow ignore in `pyproject.toml`, with its reason.
    them. Put user-facing explanation and history where it belongs — `README.md`,
    `CHANGELOG.md`, or the page that covers it; not every change needs a README
    edit.
-7. Merge when every required check is green. Squash is the only merge method;
-   the commit is the pull request title and description, and the branch is
-   deleted on merge. The description is the commit only when the merge passes
+7. Merge when every required check is green, on the word of the person the
+   change is for: an agent merges only on their word for that pull request.
+   Squash is the only merge method; the commit is the pull request title and
+   description, and the branch is deleted on merge. The description is the commit only when the merge passes
    it: without a body, GitHub's default squash message is the description
    hard-wrapped at 72 columns, and `gh pr merge --squash` takes that default.
 

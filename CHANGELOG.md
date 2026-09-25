@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `AGENTS.md` says who merges and how: only when the person says
+  so for that pull request, since a yes for one does not carry to the next and
+  "tidy up" is not a yes, unless the person gave a standing instruction for the
+  session, which the agent then names. It merges with `CONTRIBUTING.md` step
+  7's command, never plain `gh pr merge --squash`. Step 7 says the same. It
+  also says to run `git status --porcelain --ignored` in a worktree and ask
+  before removing it: `git worktree remove` deletes ignored files, such as a
+  local data file, without a word. In plinth's v1.0.0 release-candidate run
+  the agent merged without asking twice, once in a new session, used plain
+  `gh pr merge --squash` for the first pull request, and removed a worktree
+  unchecked (#31).
+
 ## [1.5.2] - 2026-09-25
 
 A generated repository's `ci.yml` points a reader who wants to know what a
