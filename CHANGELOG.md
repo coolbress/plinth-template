@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-09-25
+
+A generated repository's agent merges only when the person says so for that
+pull request, with the command that keeps the description as the commit, and
+checks a worktree before removing it.
+
 ### Changed
 - The generated `AGENTS.md` says who merges and how: only when the person says
   so for that pull request, since a yes for one does not carry to the next and
