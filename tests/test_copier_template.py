@@ -160,6 +160,16 @@ def _plinth_sha() -> str:
     return m.group(1)
 
 
+def test_ci_points_at_the_required_checks_page(rendered: Path) -> None:
+    """What each check does is plinth's Required checks page, held to its
+    ruleset by a test there (#27); python-ci.yml is the implementation."""
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    header = ci.split("\non:", 1)[0]
+    blob = "https://github.com/coolbress/plinth/blob/main"
+    assert f"{blob}/docs/reference/required-checks.md" in header
+    assert f"# {blob}/.github/workflows/python-ci.yml" not in header
+
+
 def test_ci_calls_plinth_at_the_pinned_sha(rendered: Path) -> None:
     """The instance's `uses:` must point at plinth at a full commit SHA, never a tag."""
     sha = _plinth_sha()
