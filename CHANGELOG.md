@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-09-26
+
+A generated repository's agent is told to answer in the language the person
+writes in, and that a close, fix or resolve word before an issue number
+anywhere in a pull request's description closes that issue.
+
 ### Changed
 - The generated `AGENTS.md` and the `non-engineer` output style say to answer
   the person in the language they write in, summaries included. Code,
