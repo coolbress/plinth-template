@@ -517,6 +517,20 @@ def test_agents_md_says_who_merges_and_how(rendered: Path) -> None:
     assert "an agent merges only on their word for that pull request" in contributing
 
 
+def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
+    """A tool's default AI lines are dropped, a person's trailers kept (#34):
+    an agent kept Claude Code's `Co-Authored-By` and generated-with line next
+    to `Assisted-by`, reading "existing attribution is preserved" as leave it."""
+    contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "the only line that marks AI" in contributing
+    assert "Existing attribution is preserved" not in contributing
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "a tool's default `Co-Authored-By` for the AI and its generated-with line" in agents
+    template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+    assert "Keep any\n" not in template
+    assert "generated-with line" in template
+
+
 def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) -> None:
     text = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "squash commit" in text
