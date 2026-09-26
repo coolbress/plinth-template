@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-09-26
+
+A generated repository marks AI with `Assisted-by` only, so a tool's default
+`Co-Authored-By` and generated-with line no longer reach `main`.
+
 ### Changed
 - The generated `CONTRIBUTING.md`, `AGENTS.md` and pull request template say
   that `Assisted-by` is the only line that marks AI: a tool's default
