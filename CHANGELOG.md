@@ -6,10 +6,27 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `AGENTS.md` and the `non-engineer` output style say to answer
+  the person in the language they write in, summaries included. Code,
+  commits, pull requests and documents follow the repository's own
+  convention. In plinth's first v1.0.0 release-candidate run the person wrote
+  in Korean, and the agent's closing summaries, shaped as the style's
+  **Insight** block, came back in English. The style is off by default, so
+  `AGENTS.md`, read every turn, carries the line too (#30).
+- The generated `CONTRIBUTING.md` step 5, `AGENTS.md` and pull request
+  template say that a close, fix or resolve word before `#N` anywhere in the
+  description closes that issue on merge, a sentence included. In plinth,
+  "the two fixes #65 decided" closed the v1.0.0 issue.
+- The 1.5.4 section's opening sentence said a tool's default lines "no longer
+  reach `main`"; it now says what the template tells the agent, as the 1.5.4
+  Release already does.
+
 ## [1.5.4] - 2026-09-26
 
-A generated repository marks AI with `Assisted-by` only, so a tool's default
-`Co-Authored-By` and generated-with line no longer reach `main`.
+A generated repository tells its agent that `Assisted-by` is the only line
+that marks AI, and to remove a tool's default `Co-Authored-By` and
+generated-with line. Whether an agent follows it is not yet observed.
 
 ### Changed
 - The generated `CONTRIBUTING.md`, `AGENTS.md` and pull request template say
