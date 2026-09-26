@@ -37,7 +37,10 @@ one narrow ignore in `pyproject.toml`, with its reason.
    yours. `--no-track` leaves the branch with no upstream: tracking
    `origin/main`, a bare `git push` refuses and the fix git prints first is
    `git push origin HEAD:main` — a push to `main`, not to your branch.
-3. Commit. A commit made with AI carries the trailer `Assisted-by: <agent>:<model>`.
+3. Commit. A commit made with AI carries the trailer `Assisted-by: <agent>:<model>`,
+   the only line that marks AI: remove a tool's default `Co-Authored-By` for the
+   AI and its generated-with line. A person who co-wrote the change keeps their
+   `Co-authored-by`.
 4. Open a pull request. Its title is `type(scope): summary`, checked by
    `ci / pr-title`; the eleven types are `feat` `fix` `docs` `style` `refactor`
    `perf` `test` `build` `ci` `chore` `revert`. Do not invent a type; extra
@@ -63,8 +66,9 @@ one narrow ignore in `pyproject.toml`, with its reason.
    attribution. `Closes #N` only when the pull request completes that issue;
    partial work links with `Part of #N`, related work with `Related to #N`.
    `Closes` drives GitHub's auto-close, so the wrong verb closes an unfinished
-   issue. With no issue to link, omit the line. Existing attribution is
-   preserved: several trailers form one contiguous block at the end.
+   issue. With no issue to link, omit the line. A person's trailers
+   (`Co-authored-by`, `Signed-off-by`) stay, in one contiguous block at the end
+   with `Assisted-by`; a tool's default AI lines do not (step 3).
 
    This is your repository's convention, not a rule imposed from outside — if
    your team settles on a different shape, change this file and the templates

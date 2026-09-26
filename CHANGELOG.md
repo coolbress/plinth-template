@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `CONTRIBUTING.md`, `AGENTS.md` and pull request template say
+  that `Assisted-by` is the only line that marks AI: a tool's default
+  `Co-Authored-By` for the AI and its generated-with line are removed, in
+  commits and in the description, while a person's trailers stay. Step 5's
+  "existing attribution is preserved" had read as keeping them; in plinth's
+  second release-candidate pass the agent kept both, and the generated-with
+  line reached `main` (#34).
+
 ## [1.5.3] - 2026-09-25
 
 A generated repository's agent merges only when the person says so for that

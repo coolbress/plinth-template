@@ -17,8 +17,10 @@ Then these two, in this order, at the end and with nothing after them:
                                 unfinished work.
 
   Assisted-by: <agent>:<model>  When AI wrote or assisted, e.g.
-                                `Assisted-by: Claude:claude-fable-5-1`. Keep any
-                                existing ones: several form one block at the end.
+                                `Assisted-by: Claude:claude-fable-5-1`. Keep a
+                                person's trailers with it in one block; remove a
+                                tool's default AI `Co-Authored-By` and
+                                generated-with line.
 
 This repository's CONTRIBUTING.md has the rest. Delete these comment lines —
 GitHub keeps them in the squash commit.
