@@ -14,7 +14,8 @@ Then these two, in this order, at the end and with nothing after them:
                                 otherwise; omit the line when there is none.
                                 From another repository: `owner/repo#N`.
                                 `Closes` auto-closes, so the wrong verb closes
-                                unfinished work.
+                                unfinished work. A close, fix or resolve word
+                                before #N anywhere above closes it too.
 
   Assisted-by: <agent>:<model>  When AI wrote or assisted, e.g.
                                 `Assisted-by: Claude:claude-fable-5-1`. Keep a

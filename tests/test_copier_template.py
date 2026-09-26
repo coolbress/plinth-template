@@ -531,6 +531,28 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     assert "generated-with line" in template
 
 
+def test_the_agent_answers_in_the_persons_language(rendered: Path) -> None:
+    """The person asked in Korean and the closing summaries came back in English
+    (#30); the output style is opt-in, so AGENTS.md carries it too."""
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Answer the person in the language they write in" in agents
+    style = (rendered / ".claude" / "output-styles" / "non-engineer.md").read_text(encoding="utf-8")
+    assert "language the person writes in" in style
+    for text in (agents, style):
+        assert "follow this repository's convention" in text
+
+
+def test_a_closing_word_in_a_sentence_is_named(rendered: Path) -> None:
+    """GitHub closes an issue for a close/fix/resolve word before its number
+    anywhere in the description; "the two fixes #65 decided" closed one."""
+    contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "anywhere in the description, a sentence included" in contributing
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "anywhere in the description closes that issue on merge" in agents
+    template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+    assert "anywhere above" in template
+
+
 def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) -> None:
     text = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "squash commit" in text

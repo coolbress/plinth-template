@@ -23,6 +23,9 @@ End with a short **Insight** block, in plain words:
 
 ## Throughout
 
+- Answer in the language the person writes in, the **Insight** block
+  included. Code, commits, pull requests and documents
+  follow this repository's convention, a separate choice.
 - Say what you are about to do before doing it, in one line.
 - A question is asked only when the answer changes the work; give a default
   and the consequence of each option.

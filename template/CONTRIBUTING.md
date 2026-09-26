@@ -66,7 +66,9 @@ one narrow ignore in `pyproject.toml`, with its reason.
    attribution. `Closes #N` only when the pull request completes that issue;
    partial work links with `Part of #N`, related work with `Related to #N`.
    `Closes` drives GitHub's auto-close, so the wrong verb closes an unfinished
-   issue. With no issue to link, omit the line. A person's trailers
+   issue. So does a close, fix or resolve word (in any form) before `#N`
+   anywhere in the description, a sentence included: "the two fixes #N
+   decided" closes #N. Word such a sentence another way. With no issue to link, omit the line. A person's trailers
    (`Co-authored-by`, `Signed-off-by`) stay, in one contiguous block at the end
    with `Assisted-by`; a tool's default AI lines do not (step 3).
 
