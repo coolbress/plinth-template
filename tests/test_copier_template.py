@@ -553,6 +553,14 @@ def test_a_closing_word_in_a_sentence_is_named(rendered: Path) -> None:
     assert "anywhere above" in template
 
 
+def test_agents_md_says_where_decisions_live(rendered: Path) -> None:
+    """Claude Code's automatic memory stays on one machine; a decision the next
+    person needs goes into the issue or pull request (the record is the handover)."""
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "automatic memory stays on this machine" in agents
+    assert "goes into the issue or pull request" in agents
+
+
 def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) -> None:
     text = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "squash commit" in text

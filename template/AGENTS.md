@@ -18,7 +18,7 @@ CI runs each of these as a separate check. Pass them locally, then open the pull
 - Starting something new: `/ask-matt`. Choosing a tool: `/plinth:arsenal`.
 - Adding to what exists: read the issue, then `/implement #N`.
 - Something is broken: read the failing check's log first, then `/mattpocock-skills:diagnosing-bugs`.
-- Coming back: issues, open pull requests, the current branch and uncommitted changes, before anything else.
+- Coming back: issues, open pull requests, the current branch and uncommitted changes, before anything else. Claude Code's automatic memory stays on this machine, so a decision, an unverified item or a next step the next person needs goes into the issue or pull request, not only into memory.
 
 ## Always
 
