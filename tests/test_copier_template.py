@@ -281,6 +281,10 @@ def test_third_party_review_is_offered_but_off(rendered: Path) -> None:
     assert "reviewer-logins:" in block
     assert "ask-comment:" in block
     assert "third-party.yml" in block, "the block does not say where it goes"
+    # pr-review.yml needs only read access without the summons secret; the
+    # example should not ask for more than the check uses.
+    assert "pull-requests: read" in block
+    assert "pull-requests: write" not in block
     live = [ln for ln in ci.splitlines() if not ln.lstrip().startswith("#")]
     assert not any("pr-review.yml" in ln for ln in live), "pr-review.yml is called for real"
     assert not (rendered / ".github" / "workflows" / "third-party.yml").exists()
@@ -885,7 +889,7 @@ def test_a_raised_plinth_sha_survives_an_update_that_passes_it(tmp_path: Path) -
     """
     import copier
 
-    old_sha = "98e8e56f1d06221d598e15afeda5c0f1892c5bea"
+    old_sha = _plinth_sha()  # the default as shipped; this test walks away from it
     # Hex with letters, as a commit is: an all-digit string comes back from the
     # YAML dumper quoted, and the assertions below read the file as text.
     new_sha = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
@@ -900,9 +904,7 @@ def test_a_raised_plinth_sha_survives_an_update_that_passes_it(tmp_path: Path) -
         ),
     )
     config = tpl / "copier.yml"
-    assert f'default: "{old_sha}"' in config.read_text(encoding="utf-8"), (
-        "the template's plinth_sha default moved; update old_sha here"
-    )
+    assert f'default: "{old_sha}"' in config.read_text(encoding="utf-8")
     _git(tpl, "init", "-q", "-b", "main", ".")
     _git(tpl, "add", "-A")
     _git(tpl, "commit", "-qm", "before")
