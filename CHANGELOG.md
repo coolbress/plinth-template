@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-09-27
+
+A generated repository's settings deny `gh repo delete`, which no required
+check can undo.
+
 ### Changed
 - The generated `.claude/settings.json` denies `gh repo delete`, and
   `AGENTS.md`'s list of what the settings deny names it. The login plinth's
