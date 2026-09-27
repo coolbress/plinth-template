@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `AGENTS.md` says where a decision lives. Claude Code's
+  automatic memory stays on the machine it ran on, so a decision, an
+  unverified item or a next step the next person needs goes into the issue or
+  pull request, not only into memory. The record in issues and pull requests
+  is what a new session, another machine or another engineer can read; since
+  2026 the agent also keeps its own memory by default, and nothing said which
+  one carries the handover.
+
 ## [1.5.5] - 2026-09-26
 
 A generated repository's agent is told to answer in the language the person
