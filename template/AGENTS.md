@@ -36,7 +36,7 @@ CI runs each of these as a separate check. Pass them locally, then open the pull
 - Simplify within the agreed behaviour, the required checks and this file's rules; the checks a ticket agreed on are not negotiable.
 - At four moments only (the start of a task, an important choice, a failure, the end or a resume) report in the five-item shape plinth's guidance defines (`/plinth:arsenal`), not every turn.
 - Answer the person in the language they write in, summaries and reports included. Code, commits, pull requests and documents follow this repository's convention, a separate choice.
-- What the required checks cannot undo, `.claude/settings.json` denies: force push, `rm -rf`, reading or sourcing `.env` and `gh`'s token. The deny stops the Read tool, `cat`, `head`, `tail`, `sed`, `grep`, `<`, `.` and `source`, and a `cat` or `grep` of `.env` inside `$(...)`, a subshell or a group; not `bash -c`, another reader inside `$(...)`, a search that does not name the file, or a script that opens it, which only the sandbox stops. A `.env` value is asked of the person, never loaded from the file.
+- What the required checks cannot undo, `.claude/settings.json` denies: force push, `rm -rf`, `gh repo delete`, reading or sourcing `.env` and `gh`'s token. The deny stops the Read tool, `cat`, `head`, `tail`, `sed`, `grep`, `<`, `.` and `source`, and a `cat` or `grep` of `.env` inside `$(...)`, a subshell or a group; not `bash -c`, another reader inside `$(...)`, a search that does not name the file, or a script that opens it, which only the sandbox stops. A `.env` value is asked of the person, never loaded from the file.
 
 ## Agent skills
 

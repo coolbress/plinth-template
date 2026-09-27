@@ -328,6 +328,9 @@ def test_settings_deny_what_the_checks_cannot_undo(rendered: Path) -> None:
         "force push": ("Bash(git push --force", "Bash(git push -f"),
         "rm -rf": ("Bash(rm -rf",),
         "gh auth token": ("Bash(gh auth token",),
+        # The login the tutorial recommends can delete any repository the
+        # person owns; no required check can bring one back.
+        "gh repo delete": ("Bash(gh repo delete",),
         ".env": ("Read(./.env)",),
         "gh config": ("Read(~/.config/gh",),
     }

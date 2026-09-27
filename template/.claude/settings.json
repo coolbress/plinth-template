@@ -37,6 +37,7 @@
       "Bash(git push -f:*)",
       "Bash(rm -rf:*)",
       "Bash(gh auth token*)",
+      "Bash(gh repo delete:*)",
       "Read(./.env)",
       "Read(./.env.local)",
       "Read(./.env.*.local)",

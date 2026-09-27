@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The generated `.claude/settings.json` denies `gh repo delete`, and
+  `AGENTS.md`'s list of what the settings deny names it. The login plinth's
+  tutorial recommends can delete any repository the person owns, and no
+  required check brings one back. The deny covers the command, not every
+  route to the same API (`gh api -X DELETE` is not matched); a ruleset edit
+  through `gh api` is not denied either, so `AGENTS.md`'s "never ask for
+  administration" still carries that. Found by plinth's pre-1.0 review.
+
 ## [1.5.6] - 2026-09-27
 
 A generated repository's agent is told that a decision the next person needs
