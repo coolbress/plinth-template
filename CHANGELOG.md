@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The `plinth_sha` default, the plinth commit a new repository's CI calls, moves
+  from `98e8e56` (2026-09-11, plinth 0.5.10's time) to `2673947`. That commit
+  carries plinth's pre-1.0 checker fixes: `floor-check` compares each required
+  check with the app its ruleset entry pins, reads every ruleset, and
+  `pr-review.yml` refuses inputs it cannot honour. With the old default, a repository created
+  by plinth 1.0 would have run the old checker until Dependabot raised the pin.
+  This repository's own CI moves to the same commit.
+- The commented third-party review example asks for `pull-requests: read`,
+  not `write`; the check needs no more without the summons secret.
+
 ## [1.5.7] - 2026-09-27
 
 A generated repository's settings deny `gh repo delete`, which no required
