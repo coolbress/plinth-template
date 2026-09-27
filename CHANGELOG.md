@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-09-27
+
+A generated repository's agent is told that a decision the next person needs
+goes into the issue or pull request, not only into Claude Code's machine-local
+memory.
+
 ### Changed
 - The generated `AGENTS.md` says where a decision lives. Claude Code's
   automatic memory stays on the machine it ran on, so a decision, an
