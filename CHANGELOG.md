@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-09-27
+
+A new repository's CI calls plinth at the commit that carries plinth's pre-1.0
+checker fixes, not at a commit from 2026-09-11.
+
 ### Changed
 - The `plinth_sha` default, the plinth commit a new repository's CI calls, moves
   from `98e8e56` (2026-09-11, plinth 0.5.10's time) to `2673947`. That commit
