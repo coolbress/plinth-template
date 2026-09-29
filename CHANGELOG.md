@@ -6,6 +6,21 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-09-29
+
+A new repository's CI calls plinth v1.1.0, so it gets plinth's 1.1 checks on a
+pull request that weakens the checks.
+
+### Changed
+- The `plinth_sha` default, the plinth commit a new repository's CI calls, moves
+  from `2673947` to `8e96702`, plinth v1.1.0. A new repository then gets
+  plinth's 1.1 checks: `ci / diff-size` warns about a change to the checks the
+  pull request description does not name, and `ci / floor-check` fails when
+  the `ci` job no longer calls plinth's workflow at a commit SHA, or carries a
+  key other than `uses:`, `with:`, `secrets:` and `permissions:`. The
+  generated `ci.yml` passes it unchanged. This repository's own CI moves to
+  the same commit.
+
 ## [1.5.8] - 2026-09-27
 
 A new repository's CI calls plinth at the commit that carries plinth's pre-1.0
