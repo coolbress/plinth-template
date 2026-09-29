@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-09-29
+
+A new repository's CI calls plinth v1.1.0, so it gets plinth's 1.1 checks on a
+pull request that weakens the checks.
+
 ### Changed
 - The `plinth_sha` default, the plinth commit a new repository's CI calls, moves
   from `2673947` to `8e96702`, plinth v1.1.0. A new repository then gets
