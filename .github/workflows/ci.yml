@@ -15,7 +15,11 @@ name: CI
 on:
   push:
     branches: [main]
+  # `edited` besides the default types: a retitled pull request re-runs the
+  # title check, and an edited description re-reads the diff-size warning,
+  # without a push (plinth #322).
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 # A new push to a pull request cancels the previous run; main is never cancelled.
 concurrency:
@@ -28,7 +32,7 @@ permissions:
 
 jobs:
   ci:
-    uses: coolbress/plinth/.github/workflows/python-ci.yml@8e96702424256a0b386dc6a68f4821474a09c159 # v1.1.0
+    uses: coolbress/plinth/.github/workflows/python-ci.yml@8f4edfc95edf8239c582d068c0908cae59e47507 # v1.5.0
     # A called workflow cannot widen what its caller grants: the label check
     # in `ci / floor-check` needs `issues: read`, scoped to this job.
     permissions:

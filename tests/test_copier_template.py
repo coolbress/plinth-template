@@ -183,6 +183,18 @@ def test_ci_calls_plinth_at_the_pinned_sha(rendered: Path) -> None:
     assert "coolbress/workflows" not in ci + label, "still calling the archived CI repository"
 
 
+def test_ci_reruns_when_the_pull_request_is_edited(rendered: Path) -> None:
+    """A retitled pull request re-runs `ci / pr-title`, and an edited
+    description re-reads `ci / diff-size`'s warning, without a push (plinth
+    #322). The default types stay: a list without them would stop CI on new
+    commits."""
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    m = re.search(r"^  pull_request:\n(?:    #.*\n)*    types: \[([^\]]*)\]", ci, re.M)
+    assert m, "pull_request has no types list"
+    types = {t.strip() for t in m.group(1).split(",")}
+    assert types == {"opened", "synchronize", "reopened", "edited"}, types
+
+
 def _ci(out: Path) -> str:
     return (out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
