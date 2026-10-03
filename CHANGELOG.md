@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-03
+
+A new repository calls plinth v1.5.0, which reads a private repository's wall
+against its licences, and its checks run again when a pull request is edited.
+
 ### Changed
 - The `plinth_sha` default, the plinth commit a new repository's CI calls, moves
   from `8e96702` (plinth v1.1.0) to `8f4edfc` (plinth v1.5.0). A new
