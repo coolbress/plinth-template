@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The `plinth_sha` default, the plinth commit a new repository's CI calls, moves
+  from `8e96702` (plinth v1.1.0) to `8f4edfc` (plinth v1.5.0). A new
+  repository's `ci / floor-check` then reads a private repository's wall
+  against its licences, so one created without the CodeQL rule (no Code
+  Security) can merge its first pull request, and reports push protection;
+  `ci / pr-title` refuses a title ending in `(#N)`. This repository's own CI
+  moves to the same commit.
+- A new repository's `ci.yml` runs on the `edited` pull-request event besides
+  the default types, so a retitled pull request re-runs `ci / pr-title` and an
+  edited description re-reads `ci / diff-size`'s warning without a push
+  (plinth #322). Every job re-runs on such an edit; the workflow's concurrency
+  cancels the run it replaces. This repository's own `ci.yml` does the same.
+
 ## [1.5.9] - 2026-09-29
 
 A new repository's CI calls plinth v1.1.0, so it gets plinth's 1.1 checks on a

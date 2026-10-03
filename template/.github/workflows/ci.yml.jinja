@@ -16,7 +16,12 @@ on:
   # No `branches:` filter on pull requests: a filter skips stacked pull
   # requests (base is another branch), and the diff-size limit pushes towards
   # stacking. Each piece is checked against its own base.
+  # `edited` besides the default types: a retitled pull request re-runs the
+  # title check, and an edited description re-reads the diff-size warning,
+  # without a push (plinth #322). The whole workflow re-runs; concurrency
+  # cancels the run the edit replaces.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 {% raw -%}
 # A new push to a pull request cancels the previous run; main is never cancelled.
