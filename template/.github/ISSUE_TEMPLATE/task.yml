@@ -29,8 +29,10 @@ body:
     attributes:
       label: Acceptance criteria
       description: |
-        One line each, as a checklist. Each line is something a check, a test or
-        a reviewer can confirm — a filled-in section is not one of those.
+        Done means: one line each, as a checklist. Each line is something a
+        check, a test or a reviewer can confirm — a filled-in section is not one
+        of those. When this closes, tick each one that was met; one left open
+        is named under `## Outcome` with why.
       value: |
         - [ ]
     validations:
