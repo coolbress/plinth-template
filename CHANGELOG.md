@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-04
+
+A new repository's issue form, pull request template and `AGENTS.md` tie each
+acceptance criterion to the test that checks it.
+
 ### Changed
 - A new repository ties each acceptance criterion to its evidence (plinth
   #299). The task form's acceptance criteria are a "Done means" checklist,
