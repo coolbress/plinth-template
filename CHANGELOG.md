@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The `plinth_sha` default moves from `8f4edfc` (plinth v1.5.0) to `e52e750`
+  (plinth v1.7.2). On a private repository without GitHub Code Security, a new
+  repository's `ci / deps` no longer fails every pull request: GitHub refuses
+  dependency review there, and the job now passes with a warning that nothing
+  was checked where the repository is not a fork and its dependency graph
+  answers (plinth #395). Its CI also carries plinth's fixes since v1.5.0. This
+  repository's own CI moves to the same commit.
+
 ## [1.7.0] - 2026-10-04
 
 A new repository's issue form, pull request template and `AGENTS.md` tie each

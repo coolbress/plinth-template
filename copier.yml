@@ -138,7 +138,7 @@ plinth_sha:
     Commit of coolbress/plinth whose reusable workflows this project calls.
     Press Enter for the one this template release was tested with; on an
     update, pass the pin the repository has now.
-  default: "8f4edfc95edf8239c582d068c0908cae59e47507"
+  default: "e52e750c6520ba013b2473c4e5e6157fc77fedb6"
 
 # Does the owner already publish these in their `.github` repository? The door
 # looks, and passes the answer in; it never renders and then deletes, because a
