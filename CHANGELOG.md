@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-05
+
+A new repository calls plinth v1.7.2, whose `ci / deps` no longer fails every
+pull request on a private repository without GitHub Code Security.
+
 ### Changed
 - The `plinth_sha` default moves from `8f4edfc` (plinth v1.5.0) to `e52e750`
   (plinth v1.7.2). On a private repository without GitHub Code Security, a new
