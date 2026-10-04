@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A new repository ties each acceptance criterion to its evidence (plinth
+  #299). The task form's acceptance criteria are a "Done means" checklist,
+  ticked when the issue closes, with an unticked one named under
+  `## Outcome`. The pull request template asks the description to name, for
+  each criterion it meets, the test that checks it or why none does, and says
+  a named test shows the criterion was exercised, not proved. `AGENTS.md`
+  says both, and a resume reads an issue's unticked criteria; it stays at 59
+  lines. No check enforces the form.
+
 ## [1.6.0] - 2026-10-03
 
 A new repository calls plinth v1.5.0, which reads a private repository's wall

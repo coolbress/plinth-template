@@ -572,6 +572,36 @@ def test_a_closing_word_in_a_sentence_is_named(rendered: Path) -> None:
     assert "anywhere above" in template
 
 
+def test_task_form_asks_what_done_means(rendered: Path) -> None:
+    """The task form's acceptance criteria are a "Done means" checklist, ticked
+    when met (plinth #299). The heading stays "Acceptance criteria": the
+    issue-tracker page and the agents read it by that name."""
+    form = (rendered / ".github" / "ISSUE_TEMPLATE" / "task.yml").read_text(encoding="utf-8")
+    field = form.split("id: acceptance", 1)[1].split("- type:", 1)[0]
+    assert "label: Acceptance criteria" in field
+    assert "Done means" in field
+    assert "tick each one" in field
+    assert "- [ ]" in field
+
+
+def test_pr_template_ties_each_criterion_to_a_test(rendered: Path) -> None:
+    """The description names, for each criterion the pull request meets, the
+    test that checks it, or why none does (plinth #299)."""
+    text = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+    verified = text.split("## How it was verified", 1)[1]
+    assert "For each acceptance criterion" in verified
+    assert "the test that checks it" in verified
+    assert "why none does" in verified
+
+
+def test_agents_md_ties_criteria_to_tests(rendered: Path) -> None:
+    """The agent fills the criterion-to-test lines, and a resume reads the
+    unticked criteria first (plinth #299), within the file's line budget."""
+    text = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "the test that checks it" in text
+    assert "unticked" in text
+
+
 def test_agents_md_says_where_decisions_live(rendered: Path) -> None:
     """Claude Code's automatic memory stays on one machine; a decision the next
     person needs goes into the issue or pull request (the record is the handover)."""
