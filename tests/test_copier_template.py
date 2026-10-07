@@ -261,6 +261,13 @@ def test_the_documents_say_who_can_move_the_wall(rendered: Path) -> None:
     assert len(rule) == 1, "the administration rule is not one line of AGENTS.md"
     assert "with-admin-token.sh" in rule[0]
     assert "Settings" in rule[0]
+    # A refused workflow push goes to a person, never to a wider token (plinth #417).
+    assert "workflow permission" in rule[0]
+    assert "gh auth refresh" in rule[0]
+    assert "separate terminal" in rule[0]
+    ending = [ln for ln in agents.splitlines() if "Closing an issue writes its ending" in ln]
+    assert len(ending) == 1, "AGENTS.md does not say who writes an issue's ending (plinth #418)"
+    assert "whoever merges writes it" in ending[0]
     contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "not the administrator" in contributing
 
