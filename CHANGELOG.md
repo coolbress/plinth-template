@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A new repository's `AGENTS.md` names workflow permission next to
+  administration: a push GitHub refuses because it changes
+  `.github/workflows/` stops at the commit and goes to a person, who pushes
+  it from a separate terminal, and a refusal is never answered by widening
+  the everyday token (a re-login or `gh auth refresh`), which can replace it
+  with a token that reaches every repository the account can (plinth #417). It also says that closing an
+  issue writes its `## Outcome`, and that whoever merges writes it when
+  `Closes` closes the issue on merge (plinth #418). It stays at 59 lines.
+- `docs/agents/issue-tracker.md` ends a research, prototype or grilling child
+  in `## Decision`, not also `## Outcome`, as plinth's own copy does.
+
 ## [1.7.1] - 2026-10-05
 
 A new repository calls plinth v1.7.2, whose `ci / deps` no longer fails every
