@@ -6,6 +6,11 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-07
+
+A new repository's agent hands a refused workflow push to a person instead
+of widening its token, and writes an issue's ending when a merge closes it.
+
 ### Changed
 - A new repository's `AGENTS.md` names workflow permission next to
   administration: a push GitHub refuses because it changes
