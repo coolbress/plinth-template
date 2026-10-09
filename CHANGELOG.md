@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-09
+
+The comment on a new repository's Dependabot configuration says how the plinth
+workflow pins are kept up to date: bare commit SHAs that Dependabot resolves
+to a release on its own, raised together after the default cooldown. No
+rendered file changes but that comment.
+
 ### Changed
 - The comment above the `github-actions` entry of `.github/dependabot.yml`
   no longer promises a version comment the pins do not carry. It says what
