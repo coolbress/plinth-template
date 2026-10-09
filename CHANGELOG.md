@@ -8,9 +8,11 @@ means `copier update` on an instance needs hands.
 
 ### Added
 - A new repository carries a project skill, `.claude/skills/verify/SKILL.md`.
-  Claude Code runs a project skill named `verify` right before a commit,
-  except for a commit that changes only documents or only tests, so the agent
-  runs the checks before committing rather than only in CI. The skill names
+  Claude Code tells the agent to run a project skill named `verify` right
+  before a commit, except for a commit that changes only documents or only
+  tests. It is a prompt, not a hook: the agent chooses whether to run it, and
+  in 5 of 6 trial code commits it did (the sixth ran most of the checks
+  itself). The skill names
   the code block in `AGENTS.md` as the list of commands and copies none of
   them. A red command stops the commit, and a check that looks wrong is fixed
   in the same change or asked about, never committed over in silence. CI stays
