@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-10
+
+A new repository's agent is told to run the checks `AGENTS.md` lists before a
+commit, through a project skill named `verify`, and its review budget says how
+to judge what is still fixed after two rounds. `copier update` applies both
+without hands: one new file and one longer line in `AGENTS.md`.
+
 ### Added
 - A new repository carries a project skill, `.claude/skills/verify/SKILL.md`.
   Claude Code tells the agent to run a project skill named `verify` right
