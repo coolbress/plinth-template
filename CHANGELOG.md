@@ -6,6 +6,25 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A new repository carries a project skill, `.claude/skills/verify/SKILL.md`.
+  Claude Code runs a project skill named `verify` right before a commit,
+  except for a commit that changes only documents or only tests, so the agent
+  runs the checks before committing rather than only in CI. The skill names
+  the code block in `AGENTS.md` as the list of commands and copies none of
+  them. A red command stops the commit, and a check that looks wrong is fixed
+  in the same change or asked about, never committed over in silence. CI stays
+  the gate. A plugin's skill does not trigger this, so it ships here and not in
+  plinth (plinth #409, #458).
+
+### Changed
+- The review-budget line of a new repository's `AGENTS.md` says how to judge
+  the class that is still fixed after two rounds: by what the diff does, not
+  by the reviewer's severity label. A line of guidance that could say more
+  exposes nothing, so it is never that class. When a finding repeats the last
+  one's kind, the author rewrites once for the whole kind (plinth #423, #457).
+  It stays at 59 lines.
+
 ## [1.8.1] - 2026-10-09
 
 The comment on a new repository's Dependabot configuration says how the plinth

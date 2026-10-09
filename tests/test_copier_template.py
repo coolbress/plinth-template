@@ -471,6 +471,23 @@ def test_output_style_ships_but_is_not_applied(rendered: Path) -> None:
     assert "outputStyle" not in _settings(rendered), "the style is applied by default; it is opt-in"
 
 
+def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
+    """Claude Code runs a project skill named `verify` before a commit; a plugin's
+    namespaced one does not trigger that (plinth #409), so the instance carries it.
+    It names AGENTS.md as the list and copies no command, so the two cannot drift."""
+    skill = rendered / ".claude" / "skills" / "verify" / "SKILL.md"
+    assert skill.is_file(), "the instance has no verify skill"
+    _, head, body = skill.read_text(encoding="utf-8").split("---", 2)
+    assert re.search(r"^name: verify$", head, re.MULTILINE), head
+    assert re.search(r"^description: \S", head, re.MULTILINE), head
+    assert "`AGENTS.md`" in body, "the skill does not name AGENTS.md as the source"
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    commands = re.findall(r"^uv [^#\n]*?(?=\s*(?:#|$))", agents, re.MULTILINE)
+    assert commands, "no check command found in AGENTS.md"
+    copied = [c for c in commands if c in body]
+    assert not copied, f"the skill copies AGENTS.md's commands: {copied}"
+
+
 # ── the document set ──────────────────────────────────────────────────────
 
 
@@ -507,6 +524,9 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "diagnosing-bugs",
         "/plinth:arsenal",
         "Review findings:",
+        "Judge the class by what the diff does, not by the reviewer's severity label",
+        "a line of guidance that could say more exposes nothing, so it is never that class",
+        "rewrite once for the whole kind",
         "Simplify within the agreed behaviour",
         "## Code Review Rules",
         "irreversible or reaching others, recoverable with one command, or hypothetical",
