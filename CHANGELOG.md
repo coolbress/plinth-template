@@ -6,6 +6,14 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The comment above the `github-actions` entry of `.github/dependabot.yml`
+  no longer promises a version comment the pins do not carry. It says what
+  a Dependabot job on a rendered repository showed: the plinth pins are bare
+  commit SHAs, Dependabot reads the release from the SHA and raises `ci.yml`
+  and `label.yml` together in one pull request after GitHub's default
+  three-day cooldown (plinth #455). The rendered `uses:` lines are unchanged.
+
 ## [1.8.0] - 2026-10-07
 
 A new repository's agent hands a refused workflow push to a person instead

@@ -21,8 +21,11 @@ updates:
         dependency-type: "production"
         update-types: ["minor", "patch"]
 
-  # The reusable workflows are pinned to a commit SHA of coolbress/plinth.
-  # Dependabot raises the SHA and the version comment beside it.
+  # The reusable workflows are pinned to a bare commit SHA of coolbress/plinth,
+  # with no version comment. Dependabot reads the release from the SHA itself
+  # and raises ci.yml and label.yml together in one pull request, after
+  # GitHub's default three-day cooldown (measured on a rendered repository,
+  # plinth #447).
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
