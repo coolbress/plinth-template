@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-10
+
+The commented-out third-party review job in a new repository's `ci.yml` no
+longer carries a rendered commit SHA, so a template update cannot conflict on
+a comment nothing keeps in step. The update that brings this version in still
+conflicts once on a comment moved by hand; later ones do not.
+
 ### Changed
 - The commented-out third-party review job in `.github/workflows/ci.yml` no
   longer carries a rendered SHA on its `uses:` line; it names the `ci` job's
