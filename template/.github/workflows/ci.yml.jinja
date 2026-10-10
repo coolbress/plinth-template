@@ -105,7 +105,10 @@ jobs:
 {%- endraw %}
 #   jobs:
 #     third-party:
-#       uses: coolbress/plinth/.github/workflows/pr-review.yml@{{ plinth_sha }}
+#       # The same full commit SHA the ci job above calls: copy it here when
+#       # enabling this job. It is not rendered, so a template update never
+#       # conflicts on this comment (plinth #463).
+#       uses: coolbress/plinth/.github/workflows/pr-review.yml@<the full commit SHA the ci job calls>
 #       with:
 #         reviewer-logins: "chatgpt-codex-connector[bot]"   # whose signal counts
 #         ask-comment: "@codex review"                       # posted to summon it; empty never summons

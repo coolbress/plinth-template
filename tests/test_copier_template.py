@@ -296,7 +296,11 @@ def test_third_party_review_is_offered_but_off(rendered: Path) -> None:
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     commented = [ln for ln in ci.splitlines() if ln.startswith("#")]
     block = "\n".join(commented)
-    assert f"uses: coolbress/plinth/.github/workflows/pr-review.yml@{_plinth_sha()}" in block
+    # The commented pin carries no rendered SHA: nothing keeps a commented SHA in
+    # step with the active lines, and a template update conflicted on it
+    # (plinth #463). It names the ci job's SHA as the one to copy.
+    assert "uses: coolbress/plinth/.github/workflows/pr-review.yml@<the full commit SHA the ci job calls>" in block
+    assert _plinth_sha() not in block, "a commented line carries the rendered plinth SHA"
     assert "reviewer-logins:" in block
     assert "ask-comment:" in block
     assert "third-party.yml" in block, "the block does not say where it goes"
