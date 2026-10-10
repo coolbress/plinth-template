@@ -6,6 +6,42 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A new repository carries a second project skill,
+  `.claude/skills/simplify/SKILL.md`. Claude Code tells the agent to run a
+  project skill named `simplify`, like one named `verify`, right before a
+  commit, except for a commit that changes only documents or only tests; the
+  project skill takes the place of the bundled `/simplify` there. The pass
+  keeps the agreed behaviour, the tests and `AGENTS.md`'s rules: it reuses a
+  helper that exists, removes an abstraction with one use and scaffolding for
+  a later need, looks at the standard library, the platform or an installed
+  dependency before adding one, and takes the shorter form of the same logic.
+  It never cuts validation at a trust boundary, error handling that prevents a
+  loss, a security measure or anything the issue asked for. On a commit that
+  answers a review finding it covers only the lines that fix touches. It ends
+  on the commands in `AGENTS.md`'s code block, named and not copied. The rules
+  come from `ponytail-skills`, a skill plinth's default set carried and no
+  observed session ever invoked; plinth #302 decided to move them to a skill
+  Claude Code is told to run (plinth #467). It is a prompt, not a hook, and
+  how often the agent follows it depends on the model. Exploratory runs with
+  `claude -p` on Claude Code 2.1.296, on a rendered repository (two more
+  runs stopped on permission prompts and are not counted):
+  - Claude Opus 5.5 called `simplify` before 3 of 3 commits of a new
+    function and 3 of 3 commits answering a planted review finding. It
+    called `verify` first in 1 and 3 of those, and ran the checks again after
+    `simplify` in 3 of those 4. It called no skill before 2 README-only
+    commits.
+  - Claude Sonnet 5.5 called `simplify` before 1 of 18 commits of a new
+    function (11 with both skills, 7 with `simplify` alone) and 0 of 3
+    review-fix commits; `verify` before 2 of 16 new-function commits (11
+    with both, 5 with `verify` alone, which 1.9.0's note measured at 5 of 6
+    on 2.1.295) and 0 of 3 review-fix commits. It called no skill before 4
+    README-only commits.
+  - All 6 review-fix commits changed only the fix's lines; Sonnet's ran no
+    pass, so that half says nothing about the skill.
+
+  CI stays the gate.
+
 ## [1.9.1] - 2026-10-10
 
 The commented-out third-party review job in a new repository's `ci.yml` no
