@@ -510,18 +510,29 @@ def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
     body = _project_skill_body(rendered, "simplify")
     flat = " ".join(body.split())
     for phrase in (
+        # the bounds of the pass
+        "keeps the agreed behaviour, the tests and `AGENTS.md`'s rules",
+        # what it may change
         "Reuse a helper that already exists",
         "abstraction with one use",
         "standard library",
         "shorter form of the same logic",
+        # what it never cuts
         "trust boundary",
         "error handling that prevents a loss",
         "security measure",
         "anything the issue asked for",
-        "review finding",
+        # a review fix keeps the diff the reviewer read
+        "answers a review finding, the pass covers only the lines that fix touches",
+        # the checks, last, and a red one stops the commit
         "code block at the top of `AGENTS.md`",
+        "fails stops the commit",
     ):
         assert phrase in flat, f"the skill does not say: {phrase}"
+    last = body.strip().split("\n\n")[-1]
+    assert "code block at the top of `AGENTS.md`" in " ".join(last.split()), (
+        "running the checks is not the skill's last step"
+    )
 
 
 # ── the document set ──────────────────────────────────────────────────────
