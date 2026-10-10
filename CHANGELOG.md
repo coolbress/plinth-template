@@ -6,6 +6,22 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The commented-out third-party review job in `.github/workflows/ci.yml` no
+  longer carries a rendered SHA on its `uses:` line; it names the `ci` job's
+  SHA as the one to copy when enabling the job. Nothing kept that commented
+  SHA in step with the active lines (Dependabot moves the active ones and
+  ignores comments; a hand move can set it to anything), so the next
+  `copier update` found three different values there and stopped on a
+  conflict: measured on a repository updated from v1.7.1 to v1.9.0, where
+  every other change applied without hands. The 1.9.0 note's "without hands"
+  held for every file but this line on a repository with a hand-moved comment
+  (plinth #463). The update that brings this version in still conflicts once
+  on a comment that was moved by hand (the old render, the file and the new
+  render differ); after it, the line is the same in every render, so a later
+  update keeps whatever the comment says. Both measured with copier 9.18.2.
+  The active `uses:` lines are unchanged.
+
 ## [1.9.0] - 2026-10-10
 
 A new repository's agent is told to run the checks `AGENTS.md` lists before a
