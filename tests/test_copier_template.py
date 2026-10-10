@@ -511,8 +511,12 @@ def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
     flat = " ".join(body.split())
     for phrase in (
         "Reuse a helper that already exists",
+        "abstraction with one use",
         "standard library",
+        "shorter form of the same logic",
         "trust boundary",
+        "error handling that prevents a loss",
+        "security measure",
         "anything the issue asked for",
         "review finding",
         "code block at the top of `AGENTS.md`",
