@@ -86,7 +86,9 @@ jobs:
 # reviewer account (the default is the Codex code reviewer, a ChatGPT
 # subscription). It is a separate workflow because it listens to review events
 # and must not be cancelled by a new push. To turn it on, put the lines below,
-# uncommented, in `.github/workflows/third-party.yml`; the how-to:
+# uncommented, in `.github/workflows/third-party.yml`, and set its `uses:`
+# ref to the full commit SHA the `ci` job above calls: the `<...>` placeholder
+# is not a ref, and GitHub refuses the workflow until it is replaced. The how-to:
 # https://github.com/coolbress/plinth/blob/main/docs/how-to/configure-the-third-party-reviewer.md
 #
 #   name: third-party
