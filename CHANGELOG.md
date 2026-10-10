@@ -16,7 +16,11 @@ means `copier update` on an instance needs hands.
   conflict: measured on a repository updated from v1.7.1 to v1.9.0, where
   every other change applied without hands. The 1.9.0 note's "without hands"
   held for every file but this line on a repository with a hand-moved comment
-  (plinth #463). The active `uses:` lines are unchanged.
+  (plinth #463). The update that brings this version in still conflicts once
+  on a comment that was moved by hand (the old render, the file and the new
+  render differ); after it, the line is the same in every render, so a later
+  update keeps whatever the comment says. Both measured with copier 9.18.2.
+  The active `uses:` lines are unchanged.
 
 ## [1.9.0] - 2026-10-10
 
