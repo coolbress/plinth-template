@@ -476,21 +476,63 @@ def test_output_style_ships_but_is_not_applied(rendered: Path) -> None:
     assert "outputStyle" not in _settings(rendered), "the style is applied by default; it is opt-in"
 
 
-def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
-    """Claude Code runs a project skill named `verify` before a commit; a plugin's
-    namespaced one does not trigger that (plinth #409), so the instance carries it.
-    It names AGENTS.md as the list and copies no command, so the two cannot drift."""
-    skill = rendered / ".claude" / "skills" / "verify" / "SKILL.md"
-    assert skill.is_file(), "the instance has no verify skill"
+def _project_skill_body(rendered: Path, name: str) -> str:
+    """The body of the instance's project skill `name`, after checking its
+    frontmatter and that it copies none of the commands AGENTS.md lists."""
+    skill = rendered / ".claude" / "skills" / name / "SKILL.md"
+    assert skill.is_file(), f"the instance has no {name} skill"
     _, head, body = skill.read_text(encoding="utf-8").split("---", 2)
-    assert re.search(r"^name: verify$", head, re.MULTILINE), head
+    assert re.search(rf"^name: {name}$", head, re.MULTILINE), head
     assert re.search(r"^description: \S", head, re.MULTILINE), head
-    assert "`AGENTS.md`" in body, "the skill does not name AGENTS.md as the source"
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
     commands = re.findall(r"^uv [^#\n]*?(?=\s*(?:#|$))", agents, re.MULTILINE)
     assert commands, "no check command found in AGENTS.md"
     copied = [c for c in commands if c in body]
     assert not copied, f"the skill copies AGENTS.md's commands: {copied}"
+    return body
+
+
+def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
+    """Claude Code runs a project skill named `verify` before a commit; a plugin's
+    namespaced one does not trigger that (plinth #409), so the instance carries it.
+    It names AGENTS.md as the list and copies no command, so the two cannot drift."""
+    body = _project_skill_body(rendered, "verify")
+    assert "`AGENTS.md`" in body, "the skill does not name AGENTS.md as the source"
+
+
+def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
+    rendered: Path,
+) -> None:
+    """Claude Code runs a project skill named `simplify` before a code commit, as
+    it does `verify` (plinth #467). It replaces the bundled `/simplify` here, so it
+    says what the pass may cut and what it never cuts, keeps a review fix to its
+    own lines, and ends on AGENTS.md's code block without copying it."""
+    body = _project_skill_body(rendered, "simplify")
+    flat = " ".join(body.split())
+    for phrase in (
+        # the bounds of the pass
+        "keeps the agreed behaviour, the tests and `AGENTS.md`'s rules",
+        # what it may change
+        "Reuse a helper that already exists",
+        "abstraction with one use",
+        "standard library",
+        "shorter form of the same logic",
+        # what it never cuts
+        "trust boundary",
+        "error handling that prevents a loss",
+        "security measure",
+        "anything the issue asked for",
+        # a review fix keeps the diff the reviewer read
+        "answers a review finding, the pass covers only the lines that fix touches",
+        # the checks, last, and a red one stops the commit
+        "code block at the top of `AGENTS.md`",
+        "fails stops the commit",
+    ):
+        assert phrase in flat, f"the skill does not say: {phrase}"
+    last = body.strip().split("\n\n")[-1]
+    assert "code block at the top of `AGENTS.md`" in " ".join(last.split()), (
+        "running the checks is not the skill's last step"
+    )
 
 
 # ── the document set ──────────────────────────────────────────────────────
