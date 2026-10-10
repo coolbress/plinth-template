@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-10
+
+A new repository's agent is told to clean a change up before a code commit,
+through a second project skill, `simplify`, which then runs the checks
+`AGENTS.md` lists. It carries the cleanup rules plinth's default set used to
+ship in a skill nobody invoked. `copier update` adds one file.
+
 ### Added
 - A new repository carries a second project skill,
   `.claude/skills/simplify/SKILL.md`. Claude Code tells the agent to run a
