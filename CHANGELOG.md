@@ -6,6 +6,41 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A new repository carries one pre-commit skill, `verify`, instead of two. Its
+  first step is the cleanup pass `simplify` carried, with the same wording; its
+  second runs the commands in `AGENTS.md`'s code block, last.
+  `.claude/skills/simplify/` is removed. In coolbress/plinth#496's trials
+  (Claude Code 2.1.296, five runs per cell, one small change), Claude Sonnet
+  5.5 ran a pre-commit skill before 0 of 5 commits on 1.11.0, 1 of 5 with the
+  skills folded, 0 of 5 with the deny rules below, and 4 of 5 with both; Claude
+  Opus 5.5 ran one before 5 of 5 in every case. These are trial counts, not a
+  rate. They point the same way as coolbress/plinth#474, where Sonnet ran
+  `verify` alone before 12 of 14 commits written with its edit tools and 2 of
+  16 written from the shell, and with both skills present ran neither before
+  any of 10.
+- `.claude/settings.json` denies `Bash(cat)`, `Bash(tee:*)` and
+  `Bash(sed -i:*)`, so the agent writes files with its edit tools. Claude Code
+  strips a redirection before it matches a rule, so a heredoc write such as
+  `cat > f << 'EOF'` is matched as bare `cat`, while `cat README.md` and
+  `cat README.md | head` still run; a rule that spells `>` refuses nothing.
+  What it costs: a person who asks for `tee` or `sed -i` is refused too, and
+  needs a hand edit of `.claude/settings.json` or their editor. A refusal is
+  not a prompt: the call is refused, and when a heredoc is chained after
+  another command (`git switch -c … && cat > f << 'EOF'`) the whole call is,
+  so the agent runs the first command again. What it lets through:
+  `echo … > f`, `printf … > f`, `python3 -c` writes and `cat file > copy`.
+
+### Fixed
+- What 1.10.0's trial counts left unexplained (coolbress/plinth#474): Sonnet's
+  fall from 1.9.0's 5 of 6 to 1 of 18 for `simplify` and 2 of 16 for
+  `verify` was not the Claude Code version. It followed how Sonnet wrote the
+  code, with its edit tools or from the shell, and whether one skill or two
+  was present. In those trials Sonnet ran ruff, mypy and pytest before every
+  commit anyway, chained after the file writes in the same shell command; what
+  the skipped skills left out was `uv build`, `uv sync --locked` and the
+  cleanup pass.
+
 ## [1.11.0] - 2026-10-11
 
 A new repository's two project skills say what they replace. `verify` runs
