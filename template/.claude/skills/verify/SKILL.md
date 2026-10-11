@@ -15,3 +15,7 @@ anywhere else.
   person is asked. Never commit over a failing check in silence.
 - CI runs the same checks as required checks and is the gate. This is the
   early look, so a failure costs a commit instead of a pull request round.
+
+This skill runs the checks, not the app. It takes the place of Claude Code's
+bundled `/verify`, which builds and runs the app; to see the change working in
+the running app, use the bundled `/run`.
