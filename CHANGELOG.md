@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-11
+
+A new repository's two project skills say what they replace. `verify` runs
+the checks, not the app, and points to the bundled `/run` for the running app;
+`simplify` also removes wasted work the change adds. `copier update` changes
+two files.
+
 ### Changed
 - The `verify` project skill says it runs the checks, not the app: it takes
   the place of Claude Code's bundled `/verify`, which builds and runs the app,
