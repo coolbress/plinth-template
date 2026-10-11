@@ -19,6 +19,10 @@ means `copier update` on an instance needs hands.
   `verify` alone before 12 of 14 commits written with its edit tools and 2 of
   16 written from the shell, and with both skills present ran neither before
   any of 10.
+  `copier update` from 1.11.0 removes `simplify` without a conflict even
+  where the repository edited it, so a local edit there is deleted with the
+  file: it shows in the update's uncommitted diff, to carry into `verify`
+  before committing.
 - `.claude/settings.json` denies `Bash(cat)`, `Bash(tee:*)` and
   `Bash(sed -i:*)`, so the agent writes files with its edit tools. Claude Code
   strips a redirection before it matches a rule, so a heredoc write such as
