@@ -34,6 +34,10 @@ means `copier update` on an instance needs hands.
   another command (`git switch -c … && cat > f << 'EOF'`) the whole call is,
   so the agent runs the first command again. What it lets through:
   `echo … > f`, `printf … > f`, `python3 -c` writes and `cat file > copy`.
+  `AGENTS.md` gains one line: write files with the Edit and Write tools; a
+  denied call ran nothing and is not a prompt, so the agent writes the file
+  with the edit tools and runs any chained commands on their own, and never
+  asks the person to approve it or loosen the deny list.
 
 ### Fixed
 - What 1.10.0's trial counts left unexplained (coolbress/plinth#474): Sonnet's

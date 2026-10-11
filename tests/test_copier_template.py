@@ -592,6 +592,9 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "a line of guidance that could say more exposes nothing, so it is never that class",
         "rewrite once for the whole kind",
         "Simplify within the agreed behaviour",
+        # a denied shell write is retried with the edit tools, not escalated (plinth #498)
+        "Write files with the Edit and Write tools",
+        "Never ask the person to approve it or to loosen the deny list",
         "## Code Review Rules",
         "irreversible or reaching others, recoverable with one command, or hypothetical",
         "Assisted-by:",
