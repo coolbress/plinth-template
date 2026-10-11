@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The `verify` project skill says it runs the checks, not the app: it takes
+  the place of Claude Code's bundled `/verify`, which builds and runs the app,
+  and it sends a person who wants to see the change working to the bundled
+  `/run`, which nothing replaces (coolbress/plinth#476).
+- The `simplify` project skill gains one directive: remove wasted work the
+  change adds (repeated computation or I/O, independent steps run one after
+  another, blocking work at startup or on a hot path). It is an addition from
+  the comparison with the bundled `/simplify`, whose efficiency angle the pass
+  lacked; no missed case was observed (coolbress/plinth#476).
+
 ## [1.10.0] - 2026-10-10
 
 A new repository's agent is told to clean a change up before a code commit,

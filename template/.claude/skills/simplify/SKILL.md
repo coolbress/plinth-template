@@ -14,6 +14,9 @@ exactly as they are; it changes only how the change is written.
 - Before adding a dependency, check what the standard library, the platform or
   a dependency already installed does.
 - Prefer the shorter form of the same logic.
+- Remove wasted work the change adds: the same computation or I/O repeated,
+  independent steps run one after another, blocking work at startup or on a
+  hot path.
 
 Never cut validation at a trust boundary, error handling that prevents a loss,
 a security measure, or anything the issue asked for. When unsure, keep it.

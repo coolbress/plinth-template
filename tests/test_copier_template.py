@@ -498,6 +498,11 @@ def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
     It names AGENTS.md as the list and copies no command, so the two cannot drift."""
     body = _project_skill_body(rendered, "verify")
     assert "`AGENTS.md`" in body, "the skill does not name AGENTS.md as the source"
+    # It replaces the bundled `/verify`, which runs the app; a person who types
+    # `/verify` for that is sent to `/run` (plinth #476).
+    flat = " ".join(body.split())
+    for phrase in ("runs the checks, not the app", "the bundled `/run`"):
+        assert phrase in flat, f"the skill does not say: {phrase}"
 
 
 def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
@@ -517,6 +522,8 @@ def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
         "abstraction with one use",
         "standard library",
         "shorter form of the same logic",
+        # added from the bundled `/simplify`'s efficiency angle (plinth #476)
+        "wasted work the change adds",
         # what it never cuts
         "trust boundary",
         "error handling that prevents a loss",
