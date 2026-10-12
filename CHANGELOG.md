@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-12
+
+A new repository carries one pre-commit skill instead of two, and refuses
+shell file writes so the agent writes code with its edit tools. In five
+trials per case, Claude Sonnet 5.5 ran the skill before 4 of 5 commits with
+both changes, against 0 or 1 of 5 with either alone or neither.
+`copier update` removes one file and changes three; a local edit to
+`simplify` is deleted with it, visibly in the update's diff.
+
 ### Changed
 - A new repository carries one pre-commit skill, `verify`, instead of two. Its
   first step is the cleanup pass `simplify` carried, with the same wording; its
