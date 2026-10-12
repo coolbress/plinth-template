@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-10-13
+
+A new repository's CI calls plinth v1.15.0 instead of v1.7.2, so its
+`ci / test` reports the changed lines no test ran, without failing the check.
+`copier update` changes the pin in two workflow files.
+
 ### Changed
 - The `plinth_sha` default moves from `e52e750` (plinth v1.7.2) to `3039c32`
   (plinth v1.15.0). A new repository's `ci / test` runs the tests under
