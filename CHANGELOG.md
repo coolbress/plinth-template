@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The `plinth_sha` default moves from `e52e750` (plinth v1.7.2) to `3039c32`
+  (plinth v1.15.0). A new repository's `ci / test` runs the tests under
+  coverage and, on a pull request, reports the changed lines no test ran as
+  `not yet confirmed`, without failing the check (plinth #503); each job's
+  summary says pass, fail or not yet confirmed (plinth #439); `ci / diff-size`
+  lists kept test files that lost lines or gained skip markers (plinth #444);
+  `ci / lint` gives zizmor the job's token, and every zizmor audit except
+  known-vulnerable-actions blocks (plinth #451). No check name, job, input or
+  secret a caller passes changes. This repository's own CI moves to the same
+  commit.
+
 ## [1.12.0] - 2026-10-12
 
 A new repository carries one pre-commit skill instead of two, and refuses
