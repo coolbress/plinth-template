@@ -359,6 +359,13 @@ def test_settings_deny_what_the_checks_cannot_undo(rendered: Path) -> None:
         # The login the tutorial recommends can delete any repository the
         # person owns; no required check can bring one back.
         "gh repo delete": ("Bash(gh repo delete",),
+        # Shell file writes: refused so the agent writes code with its edit
+        # tools, the path on which Sonnet ran `verify` (plinth #474, #496).
+        # Claude Code strips a redirection before matching, so a heredoc write
+        # is matched as bare `cat`; a rule spelling `>` refuses nothing.
+        "a heredoc write": ("Bash(cat)",),
+        "tee": ("Bash(tee:*)",),
+        "sed -i": ("Bash(sed -i:*)",),
         ".env": ("Read(./.env)",),
         "gh config": ("Read(~/.config/gh",),
     }
@@ -505,15 +512,22 @@ def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
         assert phrase in flat, f"the skill does not say: {phrase}"
 
 
-def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
-    rendered: Path,
-) -> None:
-    """Claude Code runs a project skill named `simplify` before a code commit, as
-    it does `verify` (plinth #467). It replaces the bundled `/simplify` here, so it
-    says what the pass may cut and what it never cuts, keeps a review fix to its
-    own lines, and ends on AGENTS.md's code block without copying it."""
-    body = _project_skill_body(rendered, "simplify")
-    flat = " ".join(body.split())
+def test_one_pre_commit_skill_cleans_up_then_runs_the_checks(rendered: Path) -> None:
+    """With `verify` and `simplify` both present, Claude Sonnet 5.5 ran neither
+    before a commit; folded into one skill, with shell file writes refused, it ran
+    it in 4 of 5 trials (plinth #474, #496). So the instance carries one skill,
+    `verify`: the cleanup pass first, then the checks. The pass says what it may
+    cut and what it never cuts, and keeps a review fix to its own lines."""
+    skills = rendered / ".claude" / "skills"
+    assert not (skills / "simplify").exists(), "the instance still carries a simplify skill"
+    body = _project_skill_body(rendered, "verify")
+    _, head, _ = (skills / "verify" / "SKILL.md").read_text(encoding="utf-8").split("---", 2)
+    assert re.search(r"^description: .*clean up.*checks", head, re.MULTILINE), head
+    cleanup = body.find("## 1. Clean up the change")
+    checks = body.find("## 2. Run the checks")
+    assert 0 <= cleanup < checks, "the cleanup step does not come before the checks step"
+    assert body.count("\n## ") == 2, "the checks step is not the skill's last step"
+    flat = " ".join(body[cleanup:checks].split())
     for phrase in (
         # the bounds of the pass
         "keeps the agreed behaviour, the tests and `AGENTS.md`'s rules",
@@ -531,15 +545,11 @@ def test_simplify_skill_cleans_up_within_the_rules_then_runs_the_checks(
         "anything the issue asked for",
         # a review fix keeps the diff the reviewer read
         "answers a review finding, the pass covers only the lines that fix touches",
-        # the checks, last, and a red one stops the commit
-        "code block at the top of `AGENTS.md`",
-        "fails stops the commit",
     ):
-        assert phrase in flat, f"the skill does not say: {phrase}"
-    last = body.strip().split("\n\n")[-1]
-    assert "code block at the top of `AGENTS.md`" in " ".join(last.split()), (
-        "running the checks is not the skill's last step"
-    )
+        assert phrase in flat, f"the cleanup step does not say: {phrase}"
+    flat = " ".join(body[checks:].split())
+    for phrase in ("code block at the top of `AGENTS.md`", "fails stops the commit"):
+        assert phrase in flat, f"the checks step does not say: {phrase}"
 
 
 # ── the document set ──────────────────────────────────────────────────────
@@ -582,6 +592,9 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "a line of guidance that could say more exposes nothing, so it is never that class",
         "rewrite once for the whole kind",
         "Simplify within the agreed behaviour",
+        # a denied shell write is retried with the edit tools, not escalated (plinth #498)
+        "Write files with the Edit and Write tools",
+        "Never ask the person to approve it or to loosen the deny list",
         "## Code Review Rules",
         "irreversible or reaching others, recoverable with one command, or hypothetical",
         "Assisted-by:",

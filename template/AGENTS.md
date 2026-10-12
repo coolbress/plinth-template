@@ -37,6 +37,7 @@ CI runs each of these as a separate check. Pass them locally, then open the pull
 - At four moments only (the start of a task, an important choice, a failure, the end or a resume) report in the five-item shape plinth's guidance defines (`/plinth:arsenal`), not every turn.
 - Answer the person in the language they write in, summaries and reports included. Code, commits, pull requests and documents follow this repository's convention, a separate choice.
 - What the required checks cannot undo, `.claude/settings.json` denies: force push, `rm -rf`, `gh repo delete`, reading or sourcing `.env` and `gh`'s token. The deny stops the Read tool, `cat`, `head`, `tail`, `sed`, `grep`, `<`, `.` and `source`, and a `cat` or `grep` of `.env` inside `$(...)`, a subshell or a group; not `bash -c`, another reader inside `$(...)`, a search that does not name the file, or a script that opens it, which only the sandbox stops. A `.env` value is asked of the person, never loaded from the file.
+- Write files with the Edit and Write tools. `.claude/settings.json` denies shell writes (a `cat` heredoc, `tee`, `sed -i`), so the agent's edits stay where the person can review them. A denied call is not a prompt and ran nothing, not even the commands chained before it: write the file with the edit tools and run those commands on their own. Never ask the person to approve it or to loosen the deny list.
 
 ## Agent skills
 
