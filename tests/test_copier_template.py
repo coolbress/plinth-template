@@ -1337,7 +1337,9 @@ def test_no_unrendered_jinja_survives_into_a_gitlab_instance(gitlab_backend: Pat
 def test_gitlab_ci_is_yaml_gitlab_can_load(tmp_path: Path, archetype: str) -> None:
     """GitLab refuses a pipeline whose YAML does not parse, with no job (a script
     line holding `": "` once did)."""
-    import yaml
+    # PyYAML comes with copier and ships no stubs; one test does not earn a
+    # types-PyYAML dependency in the lockfile.
+    import yaml  # type: ignore[import-untyped]
 
     out = render(tmp_path / archetype, host="gitlab", archetype=archetype)
     doc = yaml.safe_load((out / ".gitlab-ci.yml").read_text(encoding="utf-8"))
