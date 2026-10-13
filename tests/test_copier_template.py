@@ -1252,7 +1252,7 @@ def test_gitlab_service_archetype_carries_the_image_check(
     gitlab_backend: Path, gitlab: Path
 ) -> None:
     ci = (gitlab_backend / ".gitlab-ci.yml").read_text(encoding="utf-8")
-    assert "\nimage:\n" in ci
+    assert "\ndocker-image:\n" in ci
     assert re.search(r"image: docker:[\d.]+@sha256:[0-9a-f]{64}", ci), (
         "the image is not pinned by digest"
     )
@@ -1260,7 +1260,7 @@ def test_gitlab_service_archetype_carries_the_image_check(
         "the dind service is not pinned by digest"
     )
     assert '"message": "started"' in ci
-    assert "\nimage:\n" not in (gitlab / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert "\ndocker-image:\n" not in (gitlab / ".gitlab-ci.yml").read_text(encoding="utf-8")
     assert (gitlab_backend / ".env.example").is_file()
 
 
@@ -1346,4 +1346,7 @@ def test_gitlab_ci_is_yaml_gitlab_can_load(tmp_path: Path, archetype: str) -> No
         "https://raw.githubusercontent.com/coolbress/plinth/"
     )
     if archetype == "backend":
-        assert all(isinstance(line, str) for line in doc["image"]["script"]), doc["image"]["script"]
+        # `image` is a GitLab CI keyword: a job by that name is refused.
+        assert "image" not in doc or isinstance(doc["image"], str), doc["image"]
+        job = doc["docker-image"]
+        assert all(isinstance(line, str) for line in job["script"]), job["script"]

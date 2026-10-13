@@ -27,8 +27,10 @@ include:
 # which serves every archetype, so a cli or library project never carries it.
 # Docker-in-Docker on GitLab.com's shared runners; both images are pinned by
 # digest. No framework is chosen yet, so the entry point has no port: the one
-# request is a run to completion, answered by its first log line.
-image:
+# request is a run to completion, answered by its first log line. Named
+# `docker-image`, not GitHub's `image`: `image` is a GitLab CI keyword, and a
+# job by that name is refused.
+docker-image:
   stage: test
   image: docker:28.5.1@sha256:ea9d20492ca1caaaba78e68453433895d256173c79281756e88b745647fcbcfd
   services:

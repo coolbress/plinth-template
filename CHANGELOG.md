@@ -14,7 +14,8 @@ means `copier update` on an instance needs hands.
   under `.gitlab/`, and nothing under `.github/`; its `AGENTS.md`,
   `CONTRIBUTING.md`, issue-tracker guide, `SECURITY.md`, README, settings
   and comments name `glab`, merge requests and the pipeline's job names. A
-  service archetype's `image` check runs with Docker-in-Docker. The new
+  service archetype's image check runs with Docker-in-Docker as the job
+  `docker-image` (`image` is a GitLab CI keyword). The new
   `plinth_gitlab_integrity` answer carries the checksum; the default is the
   default pin's, and a pin other than the default without its own checksum
   is refused. With `github` an instance renders as before, given the same
