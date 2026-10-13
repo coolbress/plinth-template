@@ -109,10 +109,12 @@ one narrow ignore in `pyproject.toml`, with its reason.
    edit.
 {% if host == 'gitlab' %}7. Merge when the pipeline is green, on the word of the person the change is
    for: an agent merges only on their word for that merge request, and only
-   with a role the protected branch lets merge. Squash is the merge method
-   ("Squash commits when merging": Require, in the project's settings); the
-   commit is the merge request title and description, and the source branch
-   is deleted on merge. GitLab's default squash message is the title alone, so
+   with a role the protected branch lets merge. Squash is the merge method:
+   in the project's settings, "Squash commits when merging" is Require and the
+   merge method is "Fast-forward merge", so the squash commit is the one
+   commit `main` gains (a branch behind `main` is rebased first, `glab mr
+   rebase <n>`). The commit is the merge request title and description, and
+   the source branch is deleted on merge. GitLab's default squash message is the title alone, so
    the command passes the title and the description:
 
    ```bash
