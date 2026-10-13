@@ -156,6 +156,13 @@ plinth_sha:
     Press Enter for the one this template release was tested with; on an
     update, pass the pin the repository has now.
   default: "1e163e2a4d8deeed312734bd745f20361be8e79b"
+  # A branch, a tag or a short SHA can move or be ambiguous, and on GitLab a
+  # moved ref fails every pipeline against the recorded checksum.
+  validator: >-
+    {%- if not (plinth_sha | regex_search('^[0-9a-f]{40}$')) -%}
+    plinth_sha '{{ plinth_sha }}' is not a full commit SHA (40 lowercase hex
+    characters). Pass the commit, not a branch, a tag or a short SHA.
+    {%- endif -%}
 
 # Where the repository lives and what holds the wall outside the agent: the
 # protected branch, the required checks, the pipeline. GitHub is what every

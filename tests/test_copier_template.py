@@ -1352,3 +1352,17 @@ def test_gitlab_ci_is_yaml_gitlab_can_load(tmp_path: Path, archetype: str) -> No
         assert "image" not in doc or isinstance(doc["image"], str), doc["image"]
         job = doc["docker-image"]
         assert all(isinstance(line, str) for line in job["script"]), job["script"]
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+@pytest.mark.parametrize("ref", ["main", "v1.17.0", "1e163e2"])
+def test_plinth_sha_must_be_a_full_commit_sha(tmp_path: Path, host: str, ref: str) -> None:
+    """A branch, a tag or a short SHA can move or be ambiguous; on GitLab a moved
+    ref fails every pipeline against its recorded checksum."""
+    with pytest.raises(ValueError, match="plinth_sha"):
+        render(
+            tmp_path / "refused",
+            host=host,
+            plinth_sha=ref,
+            plinth_gitlab_integrity="A" * 43 + "=",
+        )
