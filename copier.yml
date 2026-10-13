@@ -14,6 +14,10 @@ _min_copier_version: "9.0.0"
 # `CLAUDE.md` is a symbolic link to `AGENTS.md`. Without this copier follows
 # the link and writes a copy, and the two drift apart.
 _preserve_symlinks: true
+# The link's source is `CLAUDE.md.jinja` -> `AGENTS.md`: `AGENTS.md` exists only
+# once `AGENTS.md.jinja` is rendered, and a dangling `CLAUDE.md` in this
+# repository crashes plinth's floor checker, which reads every `*.md` here.
+# copier drops the suffix from the link's name and keeps its target.
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
