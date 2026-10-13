@@ -36,8 +36,9 @@ anywhere else.
 - A check that looks wrong, such as a test of the old behaviour after an
   intended change, is said to be wrong and fixed in the same change, or the
   person is asked. Never commit over a failing check in silence.
-- CI runs the same checks as required checks and is the gate. This is the
-  early look, so a failure costs a commit instead of a pull request round.
+{% if host == 'gitlab' %}- The pipeline runs the same checks and is the gate. This is the early
+  look, so a failure costs a commit instead of a merge request round.{% else %}- CI runs the same checks as required checks and is the gate. This is the
+  early look, so a failure costs a commit instead of a pull request round.{% endif %}
 
 This skill runs the checks, not the app. It takes the place of Claude Code's
 bundled `/verify`, which builds and runs the app; to see the change working in

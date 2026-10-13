@@ -14,6 +14,10 @@ _min_copier_version: "9.0.0"
 # `CLAUDE.md` is a symbolic link to `AGENTS.md`. Without this copier follows
 # the link and writes a copy, and the two drift apart.
 _preserve_symlinks: true
+# The link's source is `CLAUDE.md.jinja` -> `AGENTS.md`: `AGENTS.md` exists only
+# once `AGENTS.md.jinja` is rendered, and a dangling `CLAUDE.md` in this
+# repository crashes plinth's floor checker, which reads every `*.md` here.
+# copier drops the suffix from the link's name and keeps its target.
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
@@ -31,6 +35,10 @@ _exclude:
   # (`scripts/floor-check.py`) names the same two archetypes; its test reads
   # this file over the network, so keep the condition on one line.
   - "{% if archetype not in ['backend', 'data-ml'] %}.env.example{% endif %}"
+  # Its source is `{{ "" }}.env.example.jinja`, which renders to
+  # `.env.example`: the instance's `.gitignore` in `template/` ignores
+  # `.env.*`, and copier, rendering a working tree with uncommitted changes,
+  # leaves out a file that rule matches, even a tracked one.
   # A container image is four files together: the image, the build-context
   # exclusions, the entry point the image runs, and nothing else. The image
   # alone is a stub.
@@ -52,6 +60,15 @@ _exclude:
   # The issue folder needs `/**`: a bare directory name matches nothing here.
   - "{% if owner_has_pr_template | string | lower == 'true' %}.github/PULL_REQUEST_TEMPLATE.md{% endif %}"
   - "{% if owner_has_issue_forms | string | lower == 'true' %}.github/ISSUE_TEMPLATE/**{% endif %}"
+  # One host's files only. On GitLab nothing under `.github/` is written: no
+  # workflow, Dependabot, issue form or pull-request template, which GitLab
+  # would not read. On GitHub no `.gitlab-ci.yml` or `.gitlab/`.
+  # The directory and its contents: `/**` alone leaves an empty directory.
+  - "{% if host == 'gitlab' %}.github{% endif %}"
+  - "{% if host == 'gitlab' %}.github/**{% endif %}"
+  - "{% if host != 'gitlab' %}.gitlab-ci.yml{% endif %}"
+  - "{% if host != 'gitlab' %}.gitlab{% endif %}"
+  - "{% if host != 'gitlab' %}.gitlab/**{% endif %}"
 
 project_name:
   type: str
@@ -90,7 +107,7 @@ package_name:
 # running copier by hand is asked. Empty means unknown: no author, no URLs.
 owner:
   type: str
-  help: GitHub owner of the repository (user or organization). Example my-org
+  help: Owner of the repository (a GitHub user or organization, or a GitLab namespace). Example my-org
   default: ""
 
 license:
@@ -138,7 +155,53 @@ plinth_sha:
     Commit of coolbress/plinth whose reusable workflows this project calls.
     Press Enter for the one this template release was tested with; on an
     update, pass the pin the repository has now.
-  default: "3039c32493e165796f37f76bd50ffe0ced920b05"
+  default: "1e163e2a4d8deeed312734bd745f20361be8e79b"
+  # A branch, a tag or a short SHA can move or be ambiguous, and on GitLab a
+  # moved ref fails every pipeline against the recorded checksum.
+  validator: >-
+    {%- if not (plinth_sha | regex_search('^[0-9a-f]{40}$')) -%}
+    plinth_sha '{{ plinth_sha }}' is not a full commit SHA (40 lowercase hex
+    characters). Pass the commit, not a branch, a tag or a short SHA.
+    {%- endif -%}
+
+# Where the repository lives and what holds the wall outside the agent: the
+# protected branch, the required checks, the pipeline. GitHub is what every
+# instance had before the question existed; GitLab (GitLab.com Free) gets the
+# pipeline plinth ships for it, coolbress/plinth's `gitlab/python-ci.yml`,
+# with the same job names. Only the CI file, the issue and merge request
+# templates and host-specific text differ.
+host:
+  type: str
+  help: Where the repository lives
+  default: github
+  choices:
+    GitHub: github
+    GitLab: gitlab
+
+# The SHA-256 of plinth's `gitlab/python-ci.yml` at `plinth_sha`, base64, for
+# the include's `integrity:`: GitLab refuses an included file whose bytes
+# differ, before any job runs (measured on GitLab.com Free, plinth #353).
+# The default is the checksum at the default `plinth_sha`. Nothing here can
+# compute another, and nothing refuses the default with another pin: the file
+# can have the same bytes at another commit, and a checksum that does not
+# match fails the pipeline with "failed integrity check", visibly, until the
+# right one is passed. Recorded in the answers file, so an update that passes
+# the instance's own pin and checksum keeps both.
+plinth_gitlab_integrity:
+  type: str
+  when: "{{ host == 'gitlab' }}"
+  help: |
+    SHA-256 of plinth's gitlab/python-ci.yml at plinth_sha, base64 (the
+    include's integrity). Press Enter for the default pin's; with another pin,
+    pass that commit's (curl the file, then openssl dgst -sha256 -binary |
+    openssl base64 -A).
+  default: "UlkWUWQ2r09+/QZp1X67dyVEf0M03AtBh3s//dv+s4A="
+  validator: >-
+    {%- if host == 'gitlab' and not (plinth_gitlab_integrity | regex_search('^[A-Za-z0-9+/]{43}=$')) -%}
+    plinth_gitlab_integrity is not a base64 SHA-256 (44 characters ending in =).
+    For plinth_sha {{ plinth_sha }}:
+    curl -fsSL https://raw.githubusercontent.com/coolbress/plinth/{{ plinth_sha }}/gitlab/python-ci.yml | openssl dgst -sha256 -binary | openssl base64 -A
+    {%- endif -%}
 
 # Does the owner already publish these in their `.github` repository? The door
 # looks, and passes the answer in; it never renders and then deletes, because a

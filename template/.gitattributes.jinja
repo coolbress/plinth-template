@@ -3,6 +3,6 @@
 * text=auto eol=lf
 
 # The lockfile is written by a machine. `linguist-generated` folds it in
-# GitHub diffs so review reads the changed line of pyproject.toml, not the
+# {% if host == 'gitlab' %}GitLab diffs so review reads{% else %}GitHub diffs so review reads{% endif %} the changed line of pyproject.toml, not the
 # hundreds of lines of uv.lock. It still counts in the file list.
 uv.lock linguist-generated

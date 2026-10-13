@@ -7,7 +7,7 @@ versions follow [Semantic Versioning](https://semver.org/).
 > entries per release; a project that never tags has no unit to fill, and an
 > empty changelog looks like information without being any. Delete the file
 > in that case. When releases start, add a section per version and a compare
-> link for each: `[1.0.0]: https://github.com/<owner>/<repo>/compare/v0.9.0...v1.0.0`
+> link for each: {% if host == 'gitlab' %}`[1.0.0]: https://gitlab.com/<owner>/<repo>/-/compare/v0.9.0...v1.0.0`{% else %}`[1.0.0]: https://github.com/<owner>/<repo>/compare/v0.9.0...v1.0.0`{% endif %}
 
 ## [Unreleased]
 

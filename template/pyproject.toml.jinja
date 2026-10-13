@@ -12,11 +12,12 @@ authors = [{ name = "{{ owner }}" }]
 dependencies = []
 {%- if owner %}
 
-# Distribution metadata. Read by `pip show`, GitHub and the dependency graph
+{% if host == 'gitlab' %}# Distribution metadata. Read by `pip show` and package indexes{% else %}# Distribution metadata. Read by `pip show`, GitHub and the dependency graph{% endif %}
 # even when the package is never uploaded.
 [project.urls]
-Homepage = "https://github.com/{{ owner }}/{{ project_name }}"
-Issues = "https://github.com/{{ owner }}/{{ project_name }}/issues"
+{% if host == 'gitlab' %}Homepage = "https://gitlab.com/{{ owner }}/{{ project_name }}"
+Issues = "https://gitlab.com/{{ owner }}/{{ project_name }}/-/issues"{% else %}Homepage = "https://github.com/{{ owner }}/{{ project_name }}"
+Issues = "https://github.com/{{ owner }}/{{ project_name }}/issues"{% endif %}
 {%- endif %}
 
 [build-system]
@@ -31,7 +32,7 @@ dev = [
 ]
 
 # Linter and formatter. The configuration is committed; CI runs `ruff check`
-# and `ruff format --check` as `ci / lint`.
+{% if host == 'gitlab' %}# and `ruff format --check` as `lint`.{% else %}# and `ruff format --check` as `ci / lint`.{% endif %}
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
@@ -43,13 +44,13 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "S", "A", "C4", "PT", "SIM", "RUF"
 # assert is the normal form in tests
 "tests/**" = ["S101"]
 
-# Type checking, `ci / typecheck`.
+{% if host == 'gitlab' %}# Type checking, `typecheck`.{% else %}# Type checking, `ci / typecheck`.{% endif %}
 [tool.mypy]
 strict = true
 python_version = "3.12"
 files = ["src", "tests"]
 
-# Tests, `ci / test`.
+{% if host == 'gitlab' %}# Tests, `test`.{% else %}# Tests, `ci / test`.{% endif %}
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # No silent failures: an unregistered `@pytest.mark.foo` is a no-op even when

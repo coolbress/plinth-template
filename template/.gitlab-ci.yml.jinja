@@ -1,0 +1,48 @@
+# The pipeline lives in coolbress/plinth, included at a commit SHA with the
+# file's checksum: a tag can move, a commit cannot, and GitLab refuses an
+# included file whose bytes differ from `integrity`, before any job runs.
+# Its jobs have the names of plinth's GitHub checks (lint, typecheck, test,
+# build, secrets, deps, diff-size, pr-title, floor-check). What each does,
+# what a red means and the fix:
+# https://github.com/coolbress/plinth/blob/main/docs/reference/gitlab-ci.md
+#
+# Raise the pin and the checksum together: the checksum is the file's at the
+# new commit, and that page has the command. Nothing raises them for you.
+#
+# GitLab Free has no required checks by name. "Pipelines must succeed" takes
+# the pipeline as a whole, built from a merge request's own copy of this
+# file: a merge request that removes the include or a job still merges when
+# what is left passes. Keep both.
+include:
+  - remote: https://raw.githubusercontent.com/coolbress/plinth/{{ plinth_sha }}/gitlab/python-ci.yml
+    integrity: sha256-{{ plinth_gitlab_integrity }}
+    inputs:
+      # pyproject declares `requires-python = ">=3.12"`; testing one version
+      # claims support that was never exercised.
+      extra-python-versions: "3.13"
+{%- if archetype in ['backend', 'data-ml'] %}
+
+# The container image, checked the one way that tells it from a stub: build
+# it, run it, read what it says. A job here and not in plinth's pipeline,
+# which serves every archetype, so a cli or library project never carries it.
+# Docker-in-Docker on GitLab.com's shared runners; both images are pinned by
+# digest. No framework is chosen yet, so the entry point has no port: the one
+# request is a run to completion, answered by its first log line. Named
+# `docker-image`, not GitHub's `image`: `image` is a GitLab CI keyword, and a
+# job by that name is refused.
+docker-image:
+  stage: test
+  image: docker:28.5.1@sha256:ea9d20492ca1caaaba78e68453433895d256173c79281756e88b745647fcbcfd
+  services:
+    - docker:28.5.1@sha256:ea9d20492ca1caaaba78e68453433895d256173c79281756e88b745647fcbcfd
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  # A block: the grep pattern's `": "` would make a plain list item a mapping.
+  # Never `docker logs … | head`: `head` closing the pipe first kills the
+  # writer with SIGPIPE, and a healthy container fails with exit 141.
+  script:
+    - |
+      docker build -t image-under-test .
+      out="$(docker run --rm image-under-test)"
+      printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+{%- endif %}

@@ -1,10 +1,15 @@
 # Contributing
 
-Changes land through pull requests only. `main` is protected by a ruleset
+{% if host == 'gitlab' %}Changes land through merge requests only. `main` is a protected branch:
+nobody pushes to it directly, the owner included, and the merge check
+"Pipelines must succeed" refuses a merge until the pipeline below passes.
+These settings stop the everyday agent, not a Maintainer: anyone with the
+Maintainer or Owner role can change them, which is why the agent's token
+never carries that role (`AGENTS.md`).{% else %}Changes land through pull requests only. `main` is protected by a ruleset
 that requires the checks below; nobody pushes to it directly, the owner included.
 The ruleset stops the everyday agent, not the administrator: the owner, or
 anyone holding administration, can change it, which is why the agent never
-holds administration (`AGENTS.md`).
+holds administration (`AGENTS.md`).{% endif %}
 
 ## Run the checks
 
@@ -16,17 +21,22 @@ uv run pytest
 uv build
 ```
 
-CI runs each of these as a separate check (`ci / lint`, `ci / typecheck`,
+{% if host == 'gitlab' %}The pipeline runs each of these as a separate job (`lint`, `typecheck`,
+`test`, `build`) and adds a secret scan, a dependency review, a diff-size
+limit, a title check and a floor check. GitLab Free has no required checks by
+name: "Pipelines must succeed" takes the pipeline as a whole, built from the
+merge request's own `.gitlab-ci.yml`, so a merge request that removes a job
+merges without it.{% else %}CI runs each of these as a separate check (`ci / lint`, `ci / typecheck`,
 `ci / test`, `ci / build`) and adds a secret scan, a dependency review, a
 diff-size limit, a title check, a floor check and CodeQL. The list of
-required checks is the repository's ruleset, not this file. Warnings are errors
+required checks is the repository's ruleset, not this file.{% endif %} Warnings are errors
 in pytest (`filterwarnings = ["error"]`); a third-party warning that blocks gets
 one narrow ignore in `pyproject.toml`, with its reason.
 
 ## Land a change
 
 1. For anything bigger than a typo, open an issue first, with acceptance criteria
-   a check or a reviewer can confirm. A typo goes straight to a pull request.
+   a check or a reviewer can confirm. {% if host == 'gitlab' %}A typo goes straight to a merge request.{% else %}A typo goes straight to a pull request.{% endif %}
 2. Branch from `origin/main`, always naming the base. Unless the checkout is
    yours alone — no command tells you whether another session is in it — make
    the branch in its own worktree: `git fetch origin`, then
@@ -41,8 +51,9 @@ one narrow ignore in `pyproject.toml`, with its reason.
    the only line that marks AI: remove a tool's default `Co-Authored-By` for the
    AI and its generated-with line. A person who co-wrote the change keeps their
    `Co-authored-by`.
-4. Open a pull request. Its title is `type(scope): summary`, checked by
-   `ci / pr-title`; the eleven types are `feat` `fix` `docs` `style` `refactor`
+{% if host == 'gitlab' %}4. Open a merge request. Its title is `type(scope): summary`, checked by
+   `pr-title` (a `Draft:` prefix is left out);{% else %}4. Open a pull request. Its title is `type(scope): summary`, checked by
+   `ci / pr-title`;{% endif %} the eleven types are `feat` `fix` `docs` `style` `refactor`
    `perf` `test` `build` `ci` `chore` `revert`. Do not invent a type; extra
    meaning goes in the scope (`docs(research):`, `fix(security):`).
 5. The description becomes the body of the squash commit, so write it as one,
@@ -63,9 +74,9 @@ one narrow ignore in `pyproject.toml`, with its reason.
    ```
 
    The issue link goes after the verification section, directly above the
-   attribution. `Closes #N` only when the pull request completes that issue;
+   attribution. {% if host == 'gitlab' %}`Closes #N` only when the merge request completes that issue;{% else %}`Closes #N` only when the pull request completes that issue;{% endif %}
    partial work links with `Part of #N`, related work with `Related to #N`.
-   `Closes` drives GitHub's auto-close, so the wrong verb closes an unfinished
+   {% if host == 'gitlab' %}`Closes` drives GitLab's auto-close,{% else %}`Closes` drives GitHub's auto-close,{% endif %} so the wrong verb closes an unfinished
    issue. So does a close, fix or resolve word (in any form) before `#N`
    anywhere in the description, a sentence included: "the two fixes #N
    decided" closes #N. Word such a sentence another way. With no issue to link, omit the line. A person's trailers
@@ -74,11 +85,15 @@ one narrow ignore in `pyproject.toml`, with its reason.
 
    This is your repository's convention, not a rule imposed from outside — if
    your team settles on a different shape, change this file and the templates
-   together. Check the template that actually applies before you write: a local
+   together. {% if host == 'gitlab' %}Check the template before you write:
+   `.gitlab/merge_request_templates/Default.md`. `glab mr create
+   --description`/`--description-file` bypasses it, so read it yourself. Delete
+   its comment lines: the squash commit is made from the description, comments
+   included.{% else %}Check the template that actually applies before you write: a local
    `.github/PULL_REQUEST_TEMPLATE.md`, or your owner account's `.github`
    defaults when there is none. `gh pr create --body`/`--body-file` bypasses it,
    so read it yourself. Delete its comment lines — GitHub keeps HTML comments in
-   the squash message.
+   the squash message.{% endif %}
 6. Before merging, read the description against the final diff: what changed
    and why, what was verified and what was not, as of the last commit. A
    review fix that changed the scope changes the description too, because
@@ -92,7 +107,28 @@ one narrow ignore in `pyproject.toml`, with its reason.
    them. Put user-facing explanation and history where it belongs — `README.md`,
    `CHANGELOG.md`, or the page that covers it; not every change needs a README
    edit.
-7. Merge when every required check is green, on the word of the person the
+{% if host == 'gitlab' %}7. Merge when the pipeline is green, on the word of the person the change is
+   for: an agent merges only on their word for that merge request, and only
+   with a role the protected branch lets merge. Squash is the merge method:
+   in the project's settings, "Squash commits when merging" is Require and the
+   merge method is "Fast-forward merge", so the squash commit is the one
+   commit `main` gains (a branch behind `main` is rebased first, `glab mr
+   rebase <n>`). The commit is the merge request title and description, and
+   the source branch is deleted on merge. GitLab's default squash message is the title alone, so
+   the command passes the title and the description:
+
+   ```bash
+   msg="$(glab mr view <n> -F json --jq '.title + "\n\n" + .description')" &&
+     glab mr merge <n> --squash --sha <sha> --squash-message "$msg" \
+       --remove-source-branch --auto-merge=false --yes
+   ```
+
+   The `&&` stops the merge when the read fails, rather than merging with an
+   empty message, and no file is left in the checkout to be committed later.
+   `--sha` names the head the description was read against: a commit pushed
+   after it stops the merge. It pins the commits only; the description is read
+   when the command runs, so finish editing it first. `--auto-merge=false`
+   merges now or refuses, instead of queueing a merge for later.{% else %}7. Merge when every required check is green, on the word of the person the
    change is for: an agent merges only on their word for that pull request.
    Squash is the only merge method; the commit is the pull request title and
    description, and the branch is deleted on merge. The description is the commit only when the merge passes
@@ -108,20 +144,23 @@ one narrow ignore in `pyproject.toml`, with its reason.
    empty body, and no file is left in the checkout to be committed later.
    `--match-head-commit` names the head the description was read against: a
    commit pushed after it stops the merge. It pins the commits only; the
-   description is read when the command runs, so finish editing it first.
+   description is read when the command runs, so finish editing it first.{% endif %}
 
-## Pull request size
+{% if host == 'gitlab' %}## Merge request size
 
-Aim at 200 changed lines and stay under 400; `ci / diff-size` blocks above.
+Aim at 200 changed lines and stay under 400; `diff-size` blocks above.{% else %}## Pull request size
+
+Aim at 200 changed lines and stay under 400; `ci / diff-size` blocks above.{% endif %}
 The figure comes from the largest published code-review case study (Cisco,
 one team): review effect falls off around 200 lines and 400 is its ceiling.
 Documentation and lockfiles are not counted. A bigger change is split into
-stacked pull requests; CI runs on each against its own base.
+{% if host == 'gitlab' %}stacked merge requests; the pipeline runs on each against its own target branch.{% else %}stacked pull requests; CI runs on each against its own base.{% endif %}
 
 ## Tests
 
-- A change in behaviour or a bug fix comes with the test that catches it, in the
-  same pull request; a documentation, configuration or refactoring change that
+- A change in behaviour or a bug fix {% if host == 'gitlab' %}comes with the test that catches it, in the
+  same merge request;{% else %}comes with the test that catches it, in the
+  same pull request;{% endif %} a documentation, configuration or refactoring change that
   keeps behaviour does not need one, say so in the description.
 - Writing the failing test first is encouraged, not enforced.
 - A new behaviour has a test that actually runs it. The measure is not coverage
