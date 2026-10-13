@@ -1331,3 +1331,19 @@ def test_no_unrendered_jinja_survives_into_a_gitlab_instance(gitlab_backend: Pat
         if hits:
             leaked[f.relative_to(gitlab_backend).as_posix()] = hits
     assert not leaked, leaked
+
+
+@pytest.mark.parametrize("archetype", ["cli", "backend"])
+def test_gitlab_ci_is_yaml_gitlab_can_load(tmp_path: Path, archetype: str) -> None:
+    """GitLab refuses a pipeline whose YAML does not parse, with no job (a script
+    line holding `": "` once did)."""
+    import yaml
+
+    out = render(tmp_path / archetype, host="gitlab", archetype=archetype)
+    doc = yaml.safe_load((out / ".gitlab-ci.yml").read_text(encoding="utf-8"))
+    assert isinstance(doc, dict), doc
+    assert doc["include"][0]["remote"].startswith(
+        "https://raw.githubusercontent.com/coolbress/plinth/"
+    )
+    if archetype == "backend":
+        assert all(isinstance(line, str) for line in doc["image"]["script"]), doc["image"]["script"]

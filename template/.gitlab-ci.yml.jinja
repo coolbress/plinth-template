@@ -35,10 +35,12 @@ image:
     - docker:28.5.1@sha256:ea9d20492ca1caaaba78e68453433895d256173c79281756e88b745647fcbcfd
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
+  # A block: the grep pattern's `": "` would make a plain list item a mapping.
+  # Never `docker logs … | head`: `head` closing the pipe first kills the
+  # writer with SIGPIPE, and a healthy container fails with exit 141.
   script:
-    - docker build -t image-under-test .
-    # Never `docker logs … | head`: `head` closing the pipe first kills the
-    # writer with SIGPIPE, and a healthy container fails with exit 141.
-    - out="$(docker run --rm image-under-test)"
-    - printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+    - |
+      docker build -t image-under-test .
+      out="$(docker run --rm image-under-test)"
+      printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
 {%- endif %}
