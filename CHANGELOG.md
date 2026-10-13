@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-13
+
+A new repository can live on GitLab.com: `host: gitlab` renders a
+`.gitlab-ci.yml` that includes plinth v1.17.0's GitLab pipeline at a commit
+SHA with its checksum, GitLab's merge request and issue templates, and
+guidance that names `glab` and merge requests. On GitLab.com Free a rendered
+project's merge requests ran green and merged as one squash commit.
+`host: github`, the default, renders as before; `copier update` on a GitHub
+instance that keeps its pin changes only the answers file, which gains
+`host: github`.
+
 ### Added
 - A `host` question, `github` (the default) or `gitlab` (plinth #353). With
   `gitlab` an instance gets a `.gitlab-ci.yml` that includes plinth's
