@@ -1229,11 +1229,9 @@ def test_the_default_checksum_is_the_file_at_the_default_pin() -> None:
     assert _default("plinth_gitlab_integrity") == expected
 
 
-def test_another_pin_without_its_checksum_is_refused(tmp_path: Path) -> None:
-    """With a pin other than the default, the default checksum would fail every
-    pipeline; copier refuses before writing a file."""
-    with pytest.raises(ValueError, match="plinth_gitlab_integrity"):
-        render(tmp_path / "refused", host="gitlab", plinth_sha="0" * 40)
+def test_a_pin_and_its_checksum_are_rendered_and_recorded(tmp_path: Path) -> None:
+    """Another pin renders with the checksum given for it, and both are recorded,
+    so an update that passes the instance's pin and checksum keeps them."""
     out = render(
         tmp_path / "given",
         host="gitlab",
@@ -1243,9 +1241,28 @@ def test_another_pin_without_its_checksum_is_refused(tmp_path: Path) -> None:
     ci = (out / ".gitlab-ci.yml").read_text(encoding="utf-8")
     assert f"plinth/{'0' * 40}/gitlab/python-ci.yml" in ci
     assert f"integrity: sha256-{'A' * 43}=" in ci
-    assert "plinth_gitlab_integrity: " + "A" * 43 + "=" in (out / ".copier-answers.yml").read_text(
-        encoding="utf-8"
-    ), "the checksum is not recorded, so an update would re-render the default"
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert "plinth_gitlab_integrity: " + "A" * 43 + "=" in answers, (
+        "the checksum is not recorded, so an update would re-render the default"
+    )
+
+
+def test_another_pin_may_share_the_default_checksum(tmp_path: Path) -> None:
+    """The file can have the same bytes at another commit, so its checksum is the
+    default's: an update that keeps an older pin over an unchanged file must
+    render. A checksum that does not match fails the pipeline on GitLab with
+    "failed integrity check", before any job, which is visible and fixed by
+    passing the right one."""
+    out = render(tmp_path / "shared", host="gitlab", plinth_sha="0" * 40)
+    ci = (out / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert f"plinth/{'0' * 40}/gitlab/python-ci.yml" in ci
+    assert f"integrity: sha256-{_default('plinth_gitlab_integrity')}" in ci
+
+
+@pytest.mark.parametrize("bad", ["", "abc", "A" * 44, "sha256-" + "A" * 43 + "="])
+def test_a_checksum_that_is_not_base64_sha256_is_refused(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(ValueError, match="plinth_gitlab_integrity"):
+        render(tmp_path / "bad", host="gitlab", plinth_gitlab_integrity=bad)
 
 
 def test_gitlab_service_archetype_carries_the_image_check(

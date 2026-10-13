@@ -181,26 +181,26 @@ host:
 # The SHA-256 of plinth's `gitlab/python-ci.yml` at `plinth_sha`, base64, for
 # the include's `integrity:`: GitLab refuses an included file whose bytes
 # differ, before any job runs (measured on GitLab.com Free, plinth #353).
-# The default is the checksum at the default `plinth_sha`, and nothing here
-# can compute another: with any other `plinth_sha` the checksum has to be
-# passed too, and the validator refuses the default rather than render an
-# include that fails every pipeline. Recorded in the answers file, so an
-# update that passes the instance's own pin and checksum keeps both.
+# The default is the checksum at the default `plinth_sha`. Nothing here can
+# compute another, and nothing refuses the default with another pin: the file
+# can have the same bytes at another commit, and a checksum that does not
+# match fails the pipeline with "failed integrity check", visibly, until the
+# right one is passed. Recorded in the answers file, so an update that passes
+# the instance's own pin and checksum keeps both.
 plinth_gitlab_integrity:
   type: str
   when: "{{ host == 'gitlab' }}"
   help: |
     SHA-256 of plinth's gitlab/python-ci.yml at plinth_sha, base64 (the
-    include's integrity). Press Enter for the default pin's.
+    include's integrity). Press Enter for the default pin's; with another pin,
+    pass that commit's (curl the file, then openssl dgst -sha256 -binary |
+    openssl base64 -A).
   default: "UlkWUWQ2r09+/QZp1X67dyVEf0M03AtBh3s//dv+s4A="
   validator: >-
-    {%- if host == 'gitlab' and plinth_sha != '1e163e2a4d8deeed312734bd745f20361be8e79b'
-          and plinth_gitlab_integrity == 'UlkWUWQ2r09+/QZp1X67dyVEf0M03AtBh3s//dv+s4A=' -%}
-    plinth_sha {{ plinth_sha }} is not the default pin, and this checksum is the
-    default pin's. Pass plinth_gitlab_integrity for {{ plinth_sha }}:
-    curl -fsSL https://raw.githubusercontent.com/coolbress/plinth/{{ plinth_sha }}/gitlab/python-ci.yml | openssl dgst -sha256 -binary | openssl base64 -A
-    {%- elif host == 'gitlab' and not (plinth_gitlab_integrity | regex_search('^[A-Za-z0-9+/]{43}=$')) -%}
+    {%- if host == 'gitlab' and not (plinth_gitlab_integrity | regex_search('^[A-Za-z0-9+/]{43}=$')) -%}
     plinth_gitlab_integrity is not a base64 SHA-256 (44 characters ending in =).
+    For plinth_sha {{ plinth_sha }}:
+    curl -fsSL https://raw.githubusercontent.com/coolbress/plinth/{{ plinth_sha }}/gitlab/python-ci.yml | openssl dgst -sha256 -binary | openssl base64 -A
     {%- endif -%}
 
 # Does the owner already publish these in their `.github` repository? The door

@@ -17,8 +17,9 @@ means `copier update` on an instance needs hands.
   service archetype's image check runs with Docker-in-Docker as the job
   `docker-image` (`image` is a GitLab CI keyword). The new
   `plinth_gitlab_integrity` answer carries the checksum; the default is the
-  default pin's, and a pin other than the default without its own checksum
-  is refused. With `github` an instance renders as before, given the same
+  default pin's, and with another pin that commit's checksum is passed (a
+  wrong one fails the pipeline with "failed integrity check", before any
+  job). `plinth_sha` must be a full commit SHA, on both hosts. With `github` an instance renders as before, given the same
   answers: four archetype and option combinations differ only in the
   answers file's new `host: github` line.
 
