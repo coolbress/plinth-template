@@ -23,21 +23,31 @@
       "Bash(git switch:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(gh pr view:*)",
+{% if host == 'gitlab' %}      "Bash(glab mr view:*)",
+      "Bash(glab mr list:*)",
+      "Bash(glab mr diff:*)",
+      "Bash(glab issue view:*)",
+      "Bash(glab issue list:*)",
+      "Bash(glab ci status:*)",
+      "Bash(glab ci list:*)",
+      "Bash(glab ci view:*)"{% else %}      "Bash(gh pr view:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)",
       "Bash(gh run view:*)",
-      "Bash(gh run list:*)"
+      "Bash(gh run list:*)"{% endif %}
     ],
     "deny": [
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(rm -rf:*)",
-      "Bash(gh auth token*)",
-      "Bash(gh repo delete:*)",
+{% if host == 'gitlab' %}      "Bash(glab auth status --show-token*)",
+      "Bash(glab auth status -t*)",
+      "Bash(glab config get token*)",
+      "Bash(glab repo delete:*)",{% else %}      "Bash(gh auth token*)",
+      "Bash(gh repo delete:*)",{% endif %}
       "Bash(cat)",
       "Bash(tee:*)",
       "Bash(sed -i:*)",
@@ -52,7 +62,8 @@
       "Bash(source *.env*)",
       "Bash(cat *.env)",
       "Bash(grep *.env)",
-      "Read(~/.config/gh/**)"
+{% if host == 'gitlab' %}      "Read(~/.config/glab-cli/**)",
+      "Read(~/Library/Application Support/glab-cli/**)"{% else %}      "Read(~/.config/gh/**)"{% endif %}
     ]
   },
   "sandbox": {

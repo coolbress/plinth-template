@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   ci:
-    uses: coolbress/plinth/.github/workflows/python-ci.yml@3039c32493e165796f37f76bd50ffe0ced920b05 # v1.15.0
+    uses: coolbress/plinth/.github/workflows/python-ci.yml@1e163e2a4d8deeed312734bd745f20361be8e79b # v1.17.0
     # A called workflow cannot widen what its caller grants: the label check
     # in `ci / floor-check` needs `issues: read`, scoped to this job.
     permissions:

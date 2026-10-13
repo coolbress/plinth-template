@@ -6,6 +6,28 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `host` question, `github` (the default) or `gitlab` (plinth #353). With
+  `gitlab` an instance gets a `.gitlab-ci.yml` that includes plinth's
+  `gitlab/python-ci.yml` from GitHub at `plinth_sha` with an
+  `include:integrity` checksum, GitLab merge request and issue templates
+  under `.gitlab/`, and nothing under `.github/`; its `AGENTS.md`,
+  `CONTRIBUTING.md`, issue-tracker guide, `SECURITY.md`, README, settings
+  and comments name `glab`, merge requests and the pipeline's job names. A
+  service archetype's `image` check runs with Docker-in-Docker. The new
+  `plinth_gitlab_integrity` answer carries the checksum; the default is the
+  default pin's, and a pin other than the default without its own checksum
+  is refused. With `github` an instance renders as before, given the same
+  answers: four archetype and option combinations differ only in the
+  answers file's new `host: github` line.
+
+### Changed
+- The `plinth_sha` default moves from `3039c32` (plinth v1.15.0) to `1e163e2`
+  (plinth v1.17.0), the first release with `gitlab/python-ci.yml`.
+  `python-ci.yml` and `pr-label.yml` are the same at both commits, so a
+  GitHub instance's checks do not change. This repository's own CI moves to
+  the same commit.
+
 ## [1.12.1] - 2026-10-13
 
 A new repository's CI calls plinth v1.15.0 instead of v1.7.2, so its

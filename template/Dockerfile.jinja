@@ -1,8 +1,9 @@
 # {{ project_name }}: the container image of a service archetype.
 #
 # Base images are pinned by digest, not tag: a tag can move, a digest cannot,
-# the same reason Actions are pinned to commit SHAs. Dependabot's `docker`
-# ecosystem raises the digests.
+{% if host == 'gitlab' %}# the same reason the pipeline is included at a commit SHA. Nothing raises
+# them on GitLab Free: raise them by hand.{% else %}# the same reason Actions are pinned to commit SHAs. Dependabot's `docker`
+# ecosystem raises the digests.{% endif %}
 
 # ── build stage ───────────────────────────────────────────────────────────
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS build

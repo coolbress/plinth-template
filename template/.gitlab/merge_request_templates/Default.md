@@ -1,0 +1,29 @@
+## What and why
+
+<!-- The problem, what actually changed, the result, and why this approach. -->
+
+## How it was verified
+
+<!-- For each acceptance criterion this merge request meets, name the test that checks it, or say why none does; a test named here shows the criterion was exercised, not that it is proved. Then what you ran and what it showed — and what you did not verify. A behaviour or bug change comes with the test that catches it (for a bug, the one that reproduces it before the fix), or say here why not. A review run in the same session that wrote the change is not an independent review; do not describe it as one. Put user-facing explanation and history where it belongs: README, CHANGELOG, or the page that covers it. -->
+
+<!--
+Then these two, in this order, at the end and with nothing after them:
+
+  Closes #N                     Only when this merge request completes the issue.
+                                `Part of #N` for partial work, `Related to #N`
+                                otherwise; omit the line when there is none.
+                                From another project: `group/project#N`.
+                                `Closes` auto-closes on merge into the default
+                                branch, so the wrong verb closes unfinished
+                                work. A close, fix or resolve word before #N
+                                anywhere above closes it too.
+
+  Assisted-by: <agent>:<model>  When AI wrote or assisted, e.g.
+                                `Assisted-by: Claude:claude-fable-5-1`. Keep a
+                                person's trailers with it in one block; remove a
+                                tool's default AI `Co-Authored-By` and
+                                generated-with line.
+
+This repository's CONTRIBUTING.md has the rest. Delete these comment lines:
+the squash commit is made from this description, comments included.
+-->

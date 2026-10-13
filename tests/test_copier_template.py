@@ -1035,6 +1035,9 @@ def test_a_raised_plinth_sha_survives_an_update_that_passes_it(tmp_path: Path) -
     shutil.copytree(
         TEMPLATE_ROOT,
         tpl,
+        # `template/CLAUDE.md` links to `AGENTS.md`, which exists only once
+        # `AGENTS.md.jinja` is rendered: copy the link, as copier does.
+        symlinks=True,
         ignore=shutil.ignore_patterns(
             ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
         ),
@@ -1164,3 +1167,167 @@ def test_service_archetype_image_actually_builds_and_runs(tmp_path: Path) -> Non
         check=False,
     )
     assert whoami.stdout.strip() != "root", "the container runs as root"
+
+
+# ── host: gitlab (plinth #353) ────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def gitlab(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return render(tmp_path_factory.mktemp("gitlab"), host="gitlab", owner="someone")
+
+
+@pytest.fixture(scope="module")
+def gitlab_backend(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return render(tmp_path_factory.mktemp("gitlab-backend"), host="gitlab", archetype="backend")
+
+
+def _default(question: str) -> str:
+    """A question's `default:` in copier.yml, the first one after its key."""
+    block = CONFIG.read_text(encoding="utf-8").split(f"\n{question}:\n", 1)[1]
+    found = re.search(r'^  default: "([^"]+)"', block, re.M)
+    assert found, f"no default for {question}"
+    return found.group(1)
+
+
+def test_gitlab_renders_its_own_files_and_nothing_under_github(gitlab: Path) -> None:
+    """GitLab reads none of `.github/`; a GitHub instance gets no `.gitlab*`."""
+    assert not (gitlab / ".github").exists(), sorted(
+        p.name for p in (gitlab / ".github").rglob("*")
+    )
+    assert (gitlab / ".gitlab-ci.yml").is_file()
+    assert (gitlab / ".gitlab" / "merge_request_templates" / "Default.md").is_file()
+    for name in ("Bug", "Feature", "Task"):
+        assert (gitlab / ".gitlab" / "issue_templates" / f"{name}.md").is_file(), name
+
+
+def test_github_renders_no_gitlab_files(rendered: Path) -> None:
+    assert not (rendered / ".gitlab-ci.yml").exists()
+    assert not (rendered / ".gitlab").exists(), "an empty `.gitlab/` is left behind"
+    assert (rendered / ".github" / "workflows" / "ci.yml").is_file()
+
+
+def test_gitlab_includes_plinth_at_the_pin_with_its_checksum(gitlab: Path) -> None:
+    ci = (gitlab / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    sha, checksum = _default("plinth_sha"), _default("plinth_gitlab_integrity")
+    remote = f"https://raw.githubusercontent.com/coolbress/plinth/{sha}/gitlab/python-ci.yml"
+    assert f"  - remote: {remote}\n    integrity: sha256-{checksum}\n" in ci, ci
+
+
+def test_the_default_checksum_is_the_file_at_the_default_pin() -> None:
+    """A wrong checksum fails every pipeline before any job (plinth #353), so the
+    default is checked against the bytes GitHub serves at the default pin."""
+    import base64
+    import hashlib
+    import urllib.request
+
+    sha = _default("plinth_sha")
+    url = f"https://raw.githubusercontent.com/coolbress/plinth/{sha}/gitlab/python-ci.yml"
+    with urllib.request.urlopen(url, timeout=30) as response:
+        body = response.read()
+    expected = base64.b64encode(hashlib.sha256(body).digest()).decode()
+    assert _default("plinth_gitlab_integrity") == expected
+
+
+def test_another_pin_without_its_checksum_is_refused(tmp_path: Path) -> None:
+    """With a pin other than the default, the default checksum would fail every
+    pipeline; copier refuses before writing a file."""
+    with pytest.raises(ValueError, match="plinth_gitlab_integrity"):
+        render(tmp_path / "refused", host="gitlab", plinth_sha="0" * 40)
+    out = render(
+        tmp_path / "given",
+        host="gitlab",
+        plinth_sha="0" * 40,
+        plinth_gitlab_integrity="A" * 43 + "=",
+    )
+    ci = (out / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert f"plinth/{'0' * 40}/gitlab/python-ci.yml" in ci
+    assert f"integrity: sha256-{'A' * 43}=" in ci
+    assert "plinth_gitlab_integrity: " + "A" * 43 + "=" in (out / ".copier-answers.yml").read_text(
+        encoding="utf-8"
+    ), "the checksum is not recorded, so an update would re-render the default"
+
+
+def test_gitlab_service_archetype_carries_the_image_check(
+    gitlab_backend: Path, gitlab: Path
+) -> None:
+    ci = (gitlab_backend / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert "\nimage:\n" in ci
+    assert re.search(r"image: docker:[\d.]+@sha256:[0-9a-f]{64}", ci), (
+        "the image is not pinned by digest"
+    )
+    assert re.search(r"- docker:[\d.]+@sha256:[0-9a-f]{64}", ci), (
+        "the dind service is not pinned by digest"
+    )
+    assert '"message": "started"' in ci
+    assert "\nimage:\n" not in (gitlab / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert (gitlab_backend / ".env.example").is_file()
+
+
+#: GitHub words a GitLab instance's guidance must not tell an agent to use.
+GITHUB_ONLY = re.compile(
+    r"\bgh\b|pull.request|\bruleset\b|Dependabot|CodeQL|\bci / |Security Advisories|`\.github",
+    re.IGNORECASE,
+)
+
+
+def test_gitlab_guidance_speaks_gitlab(gitlab_backend: Path) -> None:
+    """The text an agent reads every turn, and the guides it follows, name
+    `glab`, merge requests and the pipeline's job names on GitLab."""
+    found = {}
+    for name in (
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "README.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+        "pyproject.toml",
+        "Dockerfile",
+        "docs/agents/issue-tracker.md",
+        ".claude/skills/verify/SKILL.md",
+        ".claude/output-styles/non-engineer.md",
+        ".gitlab/merge_request_templates/Default.md",
+    ):
+        hits = [
+            line.strip()[:100]
+            for line in (gitlab_backend / name).read_text(encoding="utf-8").splitlines()
+            if GITHUB_ONLY.search(line)
+        ]
+        if hits:
+            found[name] = hits
+    assert not found, found
+    agents = (gitlab_backend / "AGENTS.md").read_text(encoding="utf-8")
+    assert "`glab issue list`" in agents
+    assert "GitLab Issues through `glab`" in agents
+    contributing = (gitlab_backend / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "glab mr merge <n> --squash --sha <sha> --squash-message" in contributing
+
+
+def test_gitlab_settings_deny_glab_token_and_repo_delete(gitlab: Path) -> None:
+    permissions = _settings(gitlab)["permissions"]
+    assert isinstance(permissions, dict)
+    deny, allow = permissions["deny"], permissions["allow"]
+    for wanted in (
+        "Bash(glab auth status --show-token",
+        "Bash(glab auth status -t",
+        "Bash(glab config get token",
+        "Bash(glab repo delete",
+        "Read(~/.config/glab-cli",
+        "Read(~/Library/Application Support/glab-cli",
+    ):
+        assert any(d.startswith(wanted) for d in deny), f"nothing denies {wanted}: {deny}"
+    assert not [a for a in allow if a.startswith("Bash(gh ")], allow
+    assert "Bash(glab mr view:*)" in allow
+
+
+def test_no_unrendered_jinja_survives_into_a_gitlab_instance(gitlab_backend: Path) -> None:
+    leaked = {}
+    for f in sorted(gitlab_backend.rglob("*")):
+        if not f.is_file() or f.suffix in {".lock", ".pyc"}:
+            continue
+        hits = [
+            line for line in f.read_text(encoding="utf-8").splitlines() if UNRENDERED.search(line)
+        ]
+        if hits:
+            leaked[f.relative_to(gitlab_backend).as_posix()] = hits
+    assert not leaked, leaked
