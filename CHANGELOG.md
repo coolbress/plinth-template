@@ -41,6 +41,15 @@ instance that keeps its pin changes only the answers file, which gains
   GitHub instance's checks do not change. This repository's own CI moves to
   the same commit.
 
+### Fixed
+- The 1.12.1 note below said `copier update` changes the pin in two workflow
+  files. Not by itself: `/plinth:template-update` passes the pin the
+  repository's workflows call (coolbress/plinth #219), so an update keeps it.
+  The pin moves only when a person chooses the pin the tag was tested with,
+  `--plinth-pin tested` (coolbress/plinth #511), as an update of a 1.12.1
+  repository to 1.13.0 did: both `uses:` lines and `.copier-answers.yml` then
+  named `1e163e2`.
+
 ## [1.12.1] - 2026-10-13
 
 A new repository's CI calls plinth v1.15.0 instead of v1.7.2, so its
