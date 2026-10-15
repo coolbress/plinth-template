@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-16
+
+The agent in a rendered repository now explains its work for a beginner
+engineer or a non-engineer by default: the output style is on, renamed, and
+adds a decision report at a merge, a template update or a failure, one
+recommended option before any choice, and a plain clause for a term at its
+first use. A person turns it off for themselves with `/output-style default`.
+`copier update` from 1.13.0 completed without hands on four cli instances;
+a personal local setting that selected `Non-engineer` needs its line removed.
+
 ### Changed
 - The output style is on by default and written for a beginner engineer or a
   non-engineer (coolbress/plinth #555). `.claude/settings.json` sets
