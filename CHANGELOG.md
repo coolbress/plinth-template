@@ -27,7 +27,8 @@ means `copier update` on an instance needs hands.
 - A repository made from an earlier tag gets the style only after
   `/plinth:template-update` to this tag. A `.claude/settings.local.json` that
   selected `Non-engineer` still takes precedence after the update and names a
-  style that no longer exists: remove that line.
+  style that no longer exists: until that line is removed, Claude Code uses
+  its default style for that person.
 
 ## [1.13.0] - 2026-10-13
 
