@@ -6,6 +6,29 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The output style is on by default and written for a beginner engineer or a
+  non-engineer (coolbress/plinth #555). `.claude/settings.json` sets
+  `"outputStyle": "Beginner or non-engineer"`, on both hosts.
+  `.claude/output-styles/non-engineer.md` becomes
+  `beginner-or-non-engineer.md`, and its text no longer assumes a reader who
+  will not read the code. Besides the **Insight** block after a change, it
+  asks for a decision report at a merge, a template update or a failure (what
+  changed; each check's verdict, `pass`, `fail` or `not yet confirmed`, with
+  the `not yet confirmed` lines and a dependency review that compared nothing
+  read from the run's summary first; what is still unknown, on GitLab that no
+  check is required by name; what the person decides, with one recommended
+  option), one recommended option before any choice, the command to type when
+  a request matches `/plinth:new-project` or `/plinth:template-update`, and a
+  plain clause for a term at its first use. The instance's README says what
+  the style does and how a person turns it off: `/output-style default`,
+  which writes `"outputStyle": "default"` to `.claude/settings.local.json`; a
+  user setting does not, because the project's setting takes precedence.
+- A repository made from an earlier tag gets the style only after
+  `/plinth:template-update` to this tag. A `.claude/settings.local.json` that
+  selected `Non-engineer` still takes precedence after the update and names a
+  style that no longer exists: remove that line.
+
 ## [1.13.0] - 2026-10-13
 
 A new repository can live on GitLab.com: `host: gitlab` renders a

@@ -37,8 +37,9 @@ before any file is written.
   or a subshell; a `bash -c`, another reader inside `$(...)`, a search that
   does not name the file, or a script that opens it is stopped only by the
   sandbox, which is a user setting and is not turned on here.
-- `.claude/output-styles/non-engineer.md`, not applied by default; select it
-  under `/config` → Output style.
+- `.claude/output-styles/beginner-or-non-engineer.md`, turned on by
+  `.claude/settings.json`; the instance's README says how a person turns it
+  off in `.claude/settings.local.json`.
 - For `backend` and `data-ml`: a `Dockerfile` pinned by digest, `.dockerignore`,
   an entry point that logs JSON, and `.env.example`.
 

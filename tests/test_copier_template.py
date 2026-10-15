@@ -473,14 +473,45 @@ def test_no_instance_hook(rendered: Path) -> None:
     assert not (rendered / ".claude" / "session-start.sh").exists()
 
 
-def test_output_style_ships_but_is_not_applied(rendered: Path) -> None:
-    style = rendered / ".claude" / "output-styles" / "non-engineer.md"
+STYLE = "Beginner or non-engineer"
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_output_style_is_on_by_default(tmp_path: Path, host: str) -> None:
+    """The style ships and the project settings select it, on both hosts
+    (plinth #555); a person turns it off in `.claude/settings.local.json`."""
+    out = render(tmp_path / host, host=host)
+    style = out / ".claude" / "output-styles" / "beginner-or-non-engineer.md"
     assert style.is_file()
-    head = style.read_text(encoding="utf-8").split("---", 2)[1]
+    _, head, body = style.read_text(encoding="utf-8").split("---", 2)
+    assert re.search(rf"^name: {STYLE}$", head, re.MULTILINE), head
     assert "keep-coding-instructions: true" in head, (
         "without keep-coding-instructions the style replaces the engineering instructions wholesale"
     )
-    assert "outputStyle" not in _settings(rendered), "the style is applied by default; it is opt-in"
+    assert _settings(out).get("outputStyle") == STYLE, "the style ships but is not selected"
+    assert not (out / ".claude" / "output-styles" / "non-engineer.md").exists()
+    assert "will not read" not in body, "the reader is a beginner or a non-engineer (plinth #514)"
+    for part in (
+        "beginner engineer or a non-engineer",
+        "**Insight**",
+        "**What changed.**",
+        "**What shows it.**",
+        "`not yet confirmed`",
+        "a dependency review",
+        "**What is still unknown.**",
+        "**What you are asked to decide**, with one recommended option",
+        "recommend one option and say why, then ask the person to",
+        "`/plinth:new-project` or `/plinth:template-update`",
+        "explain it in\n  one plain clause",
+        '"I ran it"',
+    ):
+        assert part in body, part
+    gitlab_only = "no\n   check is required by name"
+    assert (gitlab_only in body) == (host == "gitlab")
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert f"`{STYLE}`" in readme, "the README does not tell the person about the style"
+    assert "`/output-style default`" in readme, "the README does not say how to turn it off"
+    assert '"outputStyle": "default"' in readme
 
 
 def _project_skill_body(rendered: Path, name: str) -> str:
@@ -646,10 +677,11 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
 
 def test_the_agent_answers_in_the_persons_language(rendered: Path) -> None:
     """The person asked in Korean and the closing summaries came back in English
-    (#30); the output style is opt-in, so AGENTS.md carries it too."""
+    (#30); a person can turn the output style off, so AGENTS.md carries it too."""
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
     assert "Answer the person in the language they write in" in agents
-    style = (rendered / ".claude" / "output-styles" / "non-engineer.md").read_text(encoding="utf-8")
+    style_file = rendered / ".claude" / "output-styles" / "beginner-or-non-engineer.md"
+    style = style_file.read_text(encoding="utf-8")
     assert "language the person writes in" in style
     for text in (agents, style):
         assert "follow this repository's convention" in text
@@ -1302,7 +1334,7 @@ def test_gitlab_guidance_speaks_gitlab(gitlab_backend: Path) -> None:
         "Dockerfile",
         "docs/agents/issue-tracker.md",
         ".claude/skills/verify/SKILL.md",
-        ".claude/output-styles/non-engineer.md",
+        ".claude/output-styles/beginner-or-non-engineer.md",
         ".gitlab/merge_request_templates/Default.md",
     ):
         hits = [
