@@ -508,6 +508,20 @@ def test_output_style_is_on_by_default(tmp_path: Path, host: str) -> None:
         assert part in body, part
     gitlab_only = "no\n   check is required by name"
     assert (gitlab_only in body) == (host == "gitlab")
+    # The style names a command per host that reads the run's not yet
+    # confirmed lines, and asks for them copied or for "none found" (#563).
+    reads = {
+        "github": ("gh run view <run-id>", "`ANNOTATIONS`", "more are in the job summary"),
+        "gitlab": ("glab ci trace -p <pipeline-id> <job>", "`Verdict` section", "not a pass"),
+    }
+    for part in reads[host]:
+        assert part in body, part
+    other = "gitlab" if host == "github" else "github"
+    assert reads[other][0] not in body, f"{host} names {other}'s command"
+    flat = " ".join(body.split())
+    assert "copy every `not yet confirmed` line word for word" in flat
+    where = "run" if host == "github" else "pipeline"
+    assert f"I found no `not yet confirmed` line in {where}" in flat
     readme = (out / "README.md").read_text(encoding="utf-8")
     assert f"`{STYLE}`" in readme, "the README does not tell the person about the style"
     assert "`/output-style default`" in readme, "the README does not say how to turn it off"
@@ -683,6 +697,10 @@ def test_the_agent_answers_in_the_persons_language(rendered: Path) -> None:
     style_file = rendered / ".claude" / "output-styles" / "beginner-or-non-engineer.md"
     style = style_file.read_text(encoding="utf-8")
     assert "language the person writes in" in style
+    # The language held for the first answers and drifted to English after a
+    # merge whose tools spoke English (#563).
+    assert "for the whole session, the last report as much as the first" in style
+    assert "English in what you quote" in style
     for text in (agents, style):
         assert "follow this repository's convention" in text
 
