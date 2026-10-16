@@ -13,8 +13,9 @@ means `copier update` on an instance needs hands.
   (coolbress/plinth #563): on GitHub `gh run view <run-id>`, whose
   `ANNOTATIONS` carry each job's first nine (the rest are in the job summary,
   which only the run's page shows); on GitLab
-  `glab ci trace -p <pipeline-id> <job>`, whose log ends in a `Verdict`
-  section, and a job without one is not a pass. At coolbress/plinth-reach#21 the agent
+  `glab ci trace -p <pipeline-id> <job>`, filtered to the `Verdict` line and
+  the `not yet confirmed:` lines, so that a job whose log has no `Verdict`
+  shows as one and is not a pass. At coolbress/plinth-reach#21 the agent
   read the pass/fail list only. Both commands were run on a run that carried
   such a line.
 - The language rule moves to a section of its own and says it holds for the

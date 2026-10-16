@@ -512,7 +512,11 @@ def test_output_style_is_on_by_default(tmp_path: Path, host: str) -> None:
     # confirmed lines, and asks for them copied or for "none found" (#563).
     reads = {
         "github": ("gh run view <run-id>", "`ANNOTATIONS`", "more are in the job summary"),
-        "gitlab": ("glab ci trace -p <pipeline-id> <job>", "`Verdict` section", "not a pass"),
+        "gitlab": (
+            "glab ci trace -p <pipeline-id> <job>",
+            "grep -E ' Verdict$|not yet confirmed:'",  # an empty result is no Verdict
+            "not a pass",
+        ),
     }
     for part in reads[host]:
         assert part in body, part
