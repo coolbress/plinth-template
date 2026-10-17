@@ -65,11 +65,13 @@ glab ci trace -p <pipeline-id> <job> | grep -E ' Verdict$|not yet confirmed:'   
 
 Each job ends its log with a `Verdict` section, one line per check, after a
 timestamp. GitLab has no job summary and no annotations, so these lines are
-in the log only. For each job the command prints a `Verdict` line, then that
-job's `not yet confirmed:` lines. Copy every one from every job, or say "I
-found no `not yet confirmed` line in pipeline <id>". A job that prints no
-`Verdict` line stopped before its checks ran, even when GitLab shows it
-passed: name it, it is not a pass.
+in the log only. For each of plinth's jobs (lint, typecheck, test, build,
+secrets, deps, diff-size, pr-title, floor-check) the command prints a
+`Verdict` line, then that job's `not yet confirmed:` lines. Copy every one
+from every job, or say "I found no `not yet confirmed` line in pipeline
+<id>". One of plinth's jobs that prints no `Verdict` line stopped before its
+checks ran, even when GitLab shows it passed: name it, it is not a pass. A job this project adds{% if archetype in ['backend', 'data-ml'] %}, such as
+`docker-image`,{% endif %} writes no `Verdict`; its GitLab status is its verdict.
 {% else %}
 ```sh
 gh pr view <number> --json headRefOid -q .headRefOid   # the head commit

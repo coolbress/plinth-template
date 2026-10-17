@@ -14,8 +14,9 @@ means `copier update` on an instance needs hands.
   `ANNOTATIONS` carry each job's first nine (the rest are in the job summary,
   which only the run's page shows); on GitLab
   `glab ci trace -p <pipeline-id> <job>`, filtered to the `Verdict` line and
-  the `not yet confirmed:` lines, so that a job whose log has no `Verdict`
-  shows as one and is not a pass. At coolbress/plinth-reach#21 the agent
+  the `not yet confirmed:` lines, so that one of plinth's jobs whose log has
+  no `Verdict` shows as one and is not a pass; a job the project adds, such
+  as a backend's `docker-image`, is judged by its GitLab status. At coolbress/plinth-reach#21 the agent
   read the pass/fail list only. Both commands were run on a run that carried
   such a line.
 - The language rule moves to a section of its own and says it holds for the
