@@ -569,8 +569,14 @@ def test_output_style_is_on_by_default(tmp_path: Path, host: str) -> None:
         # Only plinth's jobs print a Verdict; a project's own job is judged by
         # its status, or a backend's docker-image reads as not a pass (#563).
         assert "For each of plinth's jobs (lint, typecheck, test, build, secrets," in flat
-        assert "its GitLab status is its verdict" in flat
+        assert "Its GitLab status is its verdict" in flat
+        # The Verdict filter prints nothing for such a job either way; the
+        # log's last line says it (#571, measured passing and failing).
+        assert "glab ci trace -p <pipeline-id> <job> | tail -n 1" in body
+        assert "`Job succeeded` is a pass; any other line" in flat
         assert "`docker-image`" not in body, "a cli render has no docker-image job"
+    # A skill's English instructions are no reason to switch language (#574).
+    assert "What loads into the session does not set your language either" in flat
     where = "run" if host == "github" else "pipeline"
     assert f"I found no `not yet confirmed` line in {where}" in flat
     readme = (out / "README.md").read_text(encoding="utf-8")
@@ -616,6 +622,9 @@ def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
     flat = " ".join(body.split())
     for phrase in ("runs the checks, not the app", "the bundled `/run`"):
         assert phrase in flat, f"the skill does not say: {phrase}"
+    # Its own English is no reason to switch: without this line, 8 of 18
+    # progress lines after it were English in Korean sessions (plinth #574).
+    assert "is in the language they write in, not in this file's" in flat
 
 
 def test_one_pre_commit_skill_cleans_up_then_runs_the_checks(rendered: Path) -> None:

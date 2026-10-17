@@ -6,6 +6,26 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The output style's language rule says that what loads into the session, a
+  skill's or a command's instructions, `AGENTS.md` or a file the agent opens,
+  does not set the language of its messages, and the `verify` skill ends with
+  a line saying the same for what the agent tells the person while it runs
+  (coolbress/plinth #574). In Korean sessions that called `verify` before a
+  commit, 8 of 18 progress lines after the skill call were English on 1.15.0
+  and 1 of 19 with this change, ten sessions each. A first wording that said
+  "English you read is no reason to switch" made it worse (7 of 8 in five
+  sessions) and is not shipped.
+- On GitLab, the output style names the read for a job the project adds, such
+  as a backend's `docker-image`, whose log has no `Verdict` line:
+  `glab ci trace -p <pipeline-id> <job> | tail -n 1`, where `Job succeeded` is
+  a pass and any other line is not (coolbress/plinth #571). The `Verdict`
+  filter printed nothing for that job whether it passed or failed. Measured on
+  a pipeline where it passed and one where it failed; it ran without a prompt
+  under the existing `glab ci trace` allow rule, and no rule is added.
+- A repository made from an earlier tag gets these only after
+  `/plinth:template-update` to the tag that carries them.
+
 ## [1.15.0] - 2026-10-17
 
 Before the agent in a rendered repository calls a check green, the output
