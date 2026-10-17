@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-17
+
+The agent in a rendered repository keeps the person's language after a skill
+loads: in Korean sessions that ran the `verify` skill before a commit, the
+progress lines after it were English 1 time in 19 instead of 8 in 18. On
+GitLab it reads the status of a job the project adds, such as a backend's
+`docker-image`, from the last line of that job's log, under the allow rule
+it already had. Still seen after the change, in small samples: a whole final
+report in English in 1 of 10 sessions (as on 1.15.0), and the line announcing
+`verify` before the call in English in 3 of 15 sessions with the shipped
+wording (0 of 10 on 1.15.0). `copier update` from 1.15.0 completed without
+hands on an untouched cli instance on GitHub and an untouched backend
+instance on GitLab.
+
 ### Changed
 - The output style's language rule says that what loads into the session, a
   skill's or a command's instructions, `AGENTS.md` or a file the agent opens,
