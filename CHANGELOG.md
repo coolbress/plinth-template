@@ -6,6 +6,26 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The output style names the commands that read a run's `not yet confirmed`
+  lines and asks the agent to run them before it calls a check green, then to
+  copy every such line word for word or say it found none
+  (coolbress/plinth #563): on GitHub `gh run view <run-id>`, whose
+  `ANNOTATIONS` carry each job's first nine (the rest are in the job summary,
+  which only the run's page shows); on GitLab
+  `glab ci trace -p <pipeline-id> <job>`, filtered to the `Verdict` line and
+  the `not yet confirmed:` lines, so that one of plinth's jobs whose log has
+  no `Verdict` shows as one and is not a pass; a job the project adds, such
+  as a backend's `docker-image`, is judged by its GitLab status. At coolbress/plinth-reach#21 the agent
+  read the pass/fail list only. Both commands were run on a run that carried
+  such a line.
+- The language rule moves to a section of its own and says it holds for the
+  whole session, and that English in quoted tool output is no reason to
+  switch: after a merge, the report had come back in English to a person who
+  wrote in Korean.
+- A repository made from an earlier tag gets both only after
+  `/plinth:template-update` to the tag that carries them.
+
 ## [1.14.0] - 2026-10-16
 
 The agent in a rendered repository now explains its work for a beginner
