@@ -431,6 +431,33 @@ def test_settings_allow_the_checks_without_a_prompt(rendered: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> None:
+    """The output style's "Reading the run" commands run before every report on
+    a merge; each part of each pipeline is allowed, or every report stops for an
+    approval (plinth #570). `Bash(x:*)` allows a prefix, `Bash(x)` the exact part."""
+    out = render(tmp_path / host, host=host)
+    style = (out / ".claude" / "output-styles" / "beginner-or-non-engineer.md").read_text(
+        encoding="utf-8"
+    )
+    section = style.split("## Reading the run", 1)[1].split("\n## ", 1)[0]
+    block = section.split("```sh\n", 1)[1].split("```", 1)[0]
+    permissions = _settings(out)["permissions"]
+    assert isinstance(permissions, dict)
+    allow = permissions["allow"]
+    prefixes = [a[5:-3] for a in allow if a.startswith("Bash(") and a.endswith(":*)")]
+    exact = {a[5:-1] for a in allow if a.startswith("Bash(") and not a.endswith(":*)")}
+    parts = []
+    for line in block.splitlines():
+        command = re.split(r"\s{2,}#", line)[0].strip()
+        if command:
+            parts += [part.strip() for part in re.split(r" \| (?=[a-z])", command)]
+    assert parts, block
+    for part in parts:
+        allowed = part in exact or any(part == p or part.startswith(f"{p} ") for p in prefixes)
+        assert allowed, f"{part!r} would prompt: {allow}"
+
+
 def test_settings_do_not_block_env_example(backend: Path) -> None:
     """`Read(./.env.*)` also matched `.env.example`, the one file that is meant to
     be read. No deny rule may match it, and `.env` itself must still be denied."""

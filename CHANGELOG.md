@@ -23,7 +23,13 @@ means `copier update` on an instance needs hands.
   whole session, and that English in quoted tool output is no reason to
   switch: after a merge, the report had come back in English to a person who
   wrote in Korean.
-- A repository made from an earlier tag gets both only after
+- On GitLab, `.claude/settings.json` allows the commands that read a run,
+  `glab ci get` and `glab ci trace`, and the exact filter the style pipes them
+  into, `grep -E ' Verdict$|not yet confirmed:'` (coolbress/plinth #570).
+  Without them a session in default permission mode stopped for an approval
+  before each report; plain `grep` needs no rule, but this pattern did. The
+  GitHub commands were already allowed.
+- A repository made from an earlier tag gets these only after
   `/plinth:template-update` to the tag that carries them.
 
 ## [1.14.0] - 2026-10-16
