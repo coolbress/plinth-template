@@ -59,9 +59,11 @@ Give a decision report before asking for anything, in this order:
 Before you call any check green, run these yourself and read their output.
 {% if host == 'gitlab' %}
 ```sh
-glab ci get --merge-request <iid>                  # the pipeline's ID and its jobs
+glab mr view <iid> -F json --jq .head_pipeline.id   # the pipeline's ID
 glab ci trace -p <pipeline-id> <job> | grep -E ' Verdict$|not yet confirmed:'   # every job
 ```
+
+The jobs are plinth's nine, named below, and any that `.gitlab-ci.yml` adds.
 
 Each job ends its log with a `Verdict` section, one line per check, after a
 timestamp. GitLab has no job summary and no annotations, so these lines are
