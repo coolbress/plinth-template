@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-17
+
+Before the agent in a rendered repository calls a check green, the output
+style now has it read the run with a named command and copy every
+`not yet confirmed` line, or say it found none; and it keeps answering in the
+person's language for the whole session, also when it quotes English tool
+output. On GitLab the commands it names run without a prompt; `glab ci get`
+is still not allowed, so a pipeline's variables stay behind an approval.
+Still open: on GitLab the named commands do not show the status of a job the
+project adds, such as a backend's `docker-image` (coolbress/plinth #571).
+`copier update` from 1.14.0 completed without hands on the cli instances
+measured on both hosts, including ones with an allow or deny line added by
+hand.
+
 ### Changed
 - The output style names the commands that read a run's `not yet confirmed`
   lines and asks the agent to run them before it calls a check green, then to
