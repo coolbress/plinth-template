@@ -458,6 +458,27 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> No
         assert allowed, f"{part!r} would prompt: {allow}"
 
 
+def test_gitlab_settings_deny_pipeline_variables(tmp_path: Path) -> None:
+    """`glab ci get:*` is allowed for reading a run, and the same prefix would
+    approve `--with-variables`, which prints the pipeline's variables, secrets
+    among them (plinth #570, third-party review). Measured on Claude Code
+    2.1.302: the deny refuses the flag in any position and as `=true`, and the
+    style's own command still runs; fnmatch stands in for the harness here."""
+    from fnmatch import fnmatchcase
+
+    permissions = _settings(render(tmp_path / "gitlab", host="gitlab"))["permissions"]
+    assert isinstance(permissions, dict)
+    bash = [d[len("Bash(") : -1] for d in permissions["deny"] if d.startswith("Bash(")]
+    for cmd in (
+        "glab ci get --merge-request 1 --with-variables",
+        "glab ci get --with-variables --merge-request 1",
+        "glab ci get -p 1 --with-variables=true",
+    ):
+        assert any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is not denied: {bash}"
+    for cmd in ("glab ci get --merge-request 1", "glab ci get -p 1 --with-job-details"):
+        assert not any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is denied: {bash}"
+
+
 def test_settings_do_not_block_env_example(backend: Path) -> None:
     """`Read(./.env.*)` also matched `.env.example`, the one file that is meant to
     be read. No deny rule may match it, and `.env` itself must still be denied."""

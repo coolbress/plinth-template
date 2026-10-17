@@ -28,7 +28,10 @@ means `copier update` on an instance needs hands.
   into, `grep -E ' Verdict$|not yet confirmed:'` (coolbress/plinth #570).
   Without them a session in default permission mode stopped for an approval
   before each report; plain `grep` needs no rule, but this pattern did. The
-  GitHub commands were already allowed.
+  GitHub commands were already allowed. A deny rule keeps
+  `glab ci get --with-variables` behind a refusal, since it prints the
+  pipeline's variables, secrets among them, and the allowed prefix would
+  otherwise approve it.
 - A repository made from an earlier tag gets these only after
   `/plinth:template-update` to the tag that carries them.
 

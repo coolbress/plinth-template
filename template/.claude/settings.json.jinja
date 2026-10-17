@@ -50,6 +50,7 @@
 {% if host == 'gitlab' %}      "Bash(glab auth status --show-token*)",
       "Bash(glab auth status -t*)",
       "Bash(glab config get token*)",
+      "Bash(glab ci get *--with-variables*)",
       "Bash(glab repo delete:*)",{% else %}      "Bash(gh auth token*)",
       "Bash(gh repo delete:*)",{% endif %}
       "Bash(cat)",
