@@ -458,25 +458,18 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> No
         assert allowed, f"{part!r} would prompt: {allow}"
 
 
-def test_gitlab_settings_deny_pipeline_variables(tmp_path: Path) -> None:
-    """`glab ci get:*` is allowed for reading a run, and the same prefix would
-    approve `--with-variables`, which prints the pipeline's variables, secrets
-    among them (plinth #570, third-party review). Measured on Claude Code
-    2.1.302: the deny refuses the flag in any position and as `=true`, and the
-    style's own command still runs; fnmatch stands in for the harness here."""
-    from fnmatch import fnmatchcase
-
+def test_gitlab_settings_do_not_allow_glab_ci_get(tmp_path: Path) -> None:
+    """`glab ci get --with-variables` prints the pipeline's variables, secrets
+    among them, and a Bash rule matches the written text, so a deny on the flag
+    is passed by a quoted spelling (plinth #570, third-party review). The style
+    reads the pipeline's ID with `glab mr view` instead, and no rule allows
+    `glab ci get`: it asks first, however it is spelt."""
     permissions = _settings(render(tmp_path / "gitlab", host="gitlab"))["permissions"]
     assert isinstance(permissions, dict)
-    bash = [d[len("Bash(") : -1] for d in permissions["deny"] if d.startswith("Bash(")]
-    for cmd in (
-        "glab ci get --merge-request 1 --with-variables",
-        "glab ci get --with-variables --merge-request 1",
-        "glab ci get -p 1 --with-variables=true",
-    ):
-        assert any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is not denied: {bash}"
-    for cmd in ("glab ci get --merge-request 1", "glab ci get -p 1 --with-job-details"):
-        assert not any(fnmatchcase(cmd, p) for p in bash), f"{cmd!r} is denied: {bash}"
+    assert not any(a.startswith("Bash(glab ci get") for a in permissions["allow"]), permissions
+    assert not any("with-variables" in d for d in permissions["deny"]), (
+        "a deny on the written flag is passed by a quoted spelling; it promises what it cannot hold"
+    )
 
 
 def test_settings_do_not_block_env_example(backend: Path) -> None:

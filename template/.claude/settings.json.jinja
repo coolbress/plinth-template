@@ -29,7 +29,6 @@
       "Bash(glab mr diff:*)",
       "Bash(glab issue view:*)",
       "Bash(glab issue list:*)",
-      "Bash(glab ci get:*)",
       "Bash(glab ci trace:*)",
       "Bash(grep -E ' Verdict$|not yet confirmed:')",
       "Bash(glab ci status:*)",
@@ -50,7 +49,6 @@
 {% if host == 'gitlab' %}      "Bash(glab auth status --show-token*)",
       "Bash(glab auth status -t*)",
       "Bash(glab config get token*)",
-      "Bash(glab ci get *--with-variables*)",
       "Bash(glab repo delete:*)",{% else %}      "Bash(gh auth token*)",
       "Bash(gh repo delete:*)",{% endif %}
       "Bash(cat)",
