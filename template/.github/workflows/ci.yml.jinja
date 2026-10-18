@@ -31,9 +31,9 @@ on:
 
 {% raw -%}
 # A new push to a pull request cancels the previous run; main is never
-# cancelled. The group is keyed on the event: with one group for both, the
-# re-run of a push's run cancelled the review run that started it, and the
-# merge was refused as `cancelled` (plinth #518).
+# cancelled. The group is keyed on the event: with one group for every
+# event, the re-run of a push's run cancelled the review run that started it,
+# and the merge was refused as `cancelled` (plinth #518).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

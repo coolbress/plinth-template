@@ -6,6 +6,43 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A rendered project's CI also runs when a review is submitted or dismissed,
+  its `ci` job grants `pull-requests: read` and `actions: write`, and its
+  `concurrency` group is keyed on the event (coolbress/plinth #586). From
+  plinth v2.0.0, `ci / diff-size` fails a pull request that changes how
+  strict the checks are until an admin approves its head; the run that
+  approval starts re-runs the latest red run, and the check turns green
+  without a push. With one `concurrency` group for every event, that re-run
+  cancelled the review run that started it and the merge was refused as
+  `cancelled` (coolbress/plinth #518).
+- The `plinth_sha` default moves from `1e163e2` (plinth v1.17.0) to
+  `033fbe3` (plinth v2.0.0), and `plinth_gitlab_integrity` to that commit's
+  checksum of `gitlab/python-ci.yml`. A new project calls the check that
+  needs the two grants.
+- The output style says a change to the checks that `diff-size` lists is
+  the person's decision: the agent brings each one with a recommendation
+  and what to check, and does not merge that pull or merge request on its
+  own word.
+
+The order matters for a repository made from an earlier tag: update the
+template first, then raise the plinth pin. `/plinth:template-update` keeps
+the pin your workflows call today unless you choose the tested one, so the
+update adds the two permissions while CI still calls the plinth it called
+before, which runs as it did. Once that update is merged, raising the pin to
+plinth v2.0.0 or later is safe, by hand or by Dependabot's pull request.
+Choosing the tested pin in the same update moves both together, which is
+safe as well. The other order breaks CI: a pin raised to v2.0.0 before the
+update makes every check fail at startup, since plinth v2.0.0 asks for
+permissions the old `ci.yml` does not give. A Dependabot pull request that
+raises the pin and was opened before the update fails the same way; after
+the update is merged, ask Dependabot to rebase it, or close it.
+
+`copier update` from 1.16.0 completed without hands on untouched cli
+instances: on GitHub keeping the old pin, with the tested pin, and with a pin
+Dependabot had raised to plinth v1.23.0, and on GitLab keeping the old pin
+and its checksum.
+
 ## [1.16.0] - 2026-10-17
 
 The agent in a rendered repository keeps the person's language after a skill
