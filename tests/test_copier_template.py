@@ -195,6 +195,29 @@ def test_ci_reruns_when_the_pull_request_is_edited(rendered: Path) -> None:
     assert types == {"opened", "synchronize", "reopened", "edited"}, types
 
 
+def test_ci_reruns_on_a_review(rendered: Path) -> None:
+    """An admin's approval turns `ci / diff-size` green without a push, and a
+    dismissed one turns it red again: the review run re-runs the latest red
+    run (plinth #586)."""
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    m = re.search(r"^  pull_request_review:\n(?:    #.*\n)*    types: \[([^\]]*)\]", ci, re.M)
+    assert m, "no pull_request_review trigger with a types list"
+    assert {t.strip() for t in m.group(1).split(",")} == {"submitted", "dismissed"}
+
+
+def test_ci_concurrency_is_keyed_on_the_event(rendered: Path) -> None:
+    """With one group for every event, the re-run of a push's run cancelled
+    the review run that started it, and the merge was refused as `cancelled`
+    (plinth #518). Pushes still cancel each other; main never."""
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    block = re.search(r"^concurrency:\n((?:  \S.*\n)+)", ci, re.M)
+    assert block, "no top-level concurrency"
+    assert block.group(1) == (
+        "  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}\n"
+        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n"
+    ), block.group(1)
+
+
 def _ci(out: Path) -> str:
     return (out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
@@ -206,16 +229,21 @@ def _job(ci: str, name: str) -> str:
     return re.split(r"\n(?=\S|  \S)", body[1], maxsplit=1)[0]
 
 
-def test_ci_grants_issues_read_to_the_call(rendered: Path) -> None:
-    """A called workflow cannot widen what its caller grants: without this the
-    label check in `ci / floor-check` reads an API error and reports `not
-    verified` in every instance (plinth #102). On the job, not the file."""
+def test_ci_grants_what_the_call_asks_for(rendered: Path) -> None:
+    """A called workflow cannot widen what its caller grants: without
+    `issues: read` the label check in `ci / floor-check` reads an API error
+    and reports `not verified` in every instance (plinth #102); without
+    `pull-requests: read` and `actions: write` plinth v2.0.0's call fails at
+    startup, since `ci / diff-size` reads the reviews and re-runs a red run
+    (plinth #586). On the job, not the file."""
     ci = _ci(rendered)
     granted = re.search(r"^    permissions:\n((?:      \S.*\n)+)", _job(ci, "ci"), re.M)
     assert granted, "the ci job grants nothing: the label check never runs"
     assert sorted(ln.strip() for ln in granted.group(1).splitlines()) == [
+        "actions: write",
         "contents: read",
         "issues: read",
+        "pull-requests: read",
     ], granted.group(1)
     file_level = re.findall(r"^permissions:\n((?:  \S.*\n)+)", ci, re.M)
     assert file_level == ["  contents: read\n"], f"raised for the file: {file_level}"
@@ -575,6 +603,16 @@ def test_output_style_is_on_by_default(tmp_path: Path, host: str) -> None:
         assert "glab ci trace -p <pipeline-id> <job> | tail -n 1" in body
         assert "`Job succeeded` is a pass; any other line" in flat
         assert "`docker-image`" not in body, "a cli render has no docker-image job"
+    # A change to the checks is the person's decision, never merged on the
+    # agent's word (plinth #518, #586).
+    listed = {
+        "github": '`ci / diff-size` lists under "Changes to the checks" is the person\'s decision',
+        "gitlab": "`diff-size` lists in its log is the person's decision",
+    }
+    assert listed[host] in flat, listed[host]
+    assert "with your recommendation and what to check" in flat
+    request = "merge request" if host == "gitlab" else "pull request"
+    assert f"never merge that {request} on your own word" in flat
     # A skill's English instructions are no reason to switch language (#574).
     assert "What loads into the session does not set your language either" in flat
     where = "run" if host == "github" else "pipeline"

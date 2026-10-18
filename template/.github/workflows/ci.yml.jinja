@@ -22,11 +22,20 @@ on:
   # cancels the run the edit replaces.
   pull_request:
     types: [opened, synchronize, reopened, edited]
+  # A review re-runs CI without a push. When a pull request changes how strict
+  # the checks are, `ci / diff-size` fails until an admin approves the head;
+  # the run this approval starts re-runs the latest red one, and the check
+  # turns green. A dismissed approval makes it red again (plinth #586).
+  pull_request_review:
+    types: [submitted, dismissed]
 
 {% raw -%}
-# A new push to a pull request cancels the previous run; main is never cancelled.
+# A new push to a pull request cancels the previous run; main is never
+# cancelled. The group is keyed on the event: with one group for both, the
+# re-run of a push's run cancelled the review run that started it, and the
+# merge was refused as `cancelled` (plinth #518).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 {%- endraw %}
 
@@ -45,10 +54,15 @@ jobs:
     # A called workflow cannot widen what its caller grants. `ci / floor-check`
     # reads the repository's labels, and labels belong to issues: without this
     # the label check reads an API error and reports `not verified` (plinth
-    # #102). Scoped to this job, not raised for the file.
+    # #102). `ci / diff-size` reads the reviews and re-runs a red run after an
+    # approval (plinth #586); from plinth v2.0.0 a call that does not grant
+    # these two fails at startup, every check with it. Scoped to this job, not
+    # raised for the file.
     permissions:
       contents: read
       issues: read
+      pull-requests: read
+      actions: write
 {%- if archetype in ['backend', 'data-ml'] %}
 
   # The container image, checked the one way that tells it from a stub: build
