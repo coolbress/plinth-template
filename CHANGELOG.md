@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-19
+
+A rendered project stops sending its agent to skills plinth v2.1.0 no
+longer installs. From that release, plinth installs eight
+`mattpocock-skills` skills and lists twelve more, `/ask-matt`,
+`/grill-with-docs` and `/wayfinder` among them, which
+`claude plugin install mattpocock-skills-extra@plinth` adds. "Starting
+something new" in `AGENTS.md` now points at `/plinth:arsenal`;
+`docs/agents/domain.md` and `docs/agents/issue-tracker.md` say which skill is
+listed and how to add it. Only the wording of those three files changes.
+`copier update` from 1.17.0 completed without hands on untouched cli
+instances on GitHub and GitLab and an untouched backend instance on GitHub;
+hand-edited instances were not updated.
+
 ### Changed
 - A rendered project no longer sends the agent to skills plinth stops
   installing (coolbress/plinth #593). From plinth's next release,
