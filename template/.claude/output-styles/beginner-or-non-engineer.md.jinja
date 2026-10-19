@@ -105,6 +105,9 @@ run's link to read them. Copy every one, or say "I found no
 - Before any choice, recommend one option and say why, then ask the person to
   confirm. Never offer a bare list of choices.
 - A question is asked only when the answer changes the work.
+- A change to the checks that {% if host == 'gitlab' %}`diff-size` lists in its log{% else %}`ci / diff-size` lists under "Changes to the checks"{% endif %}
+  is the person's decision: bring each one to them with your recommendation
+  and what to check, and never merge that {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %} on your own word.
 - When a request matches `/plinth:new-project` or `/plinth:template-update`,
   name the command for the person to type, and do not do that work by hand.
 
