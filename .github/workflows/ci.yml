@@ -23,7 +23,9 @@ on:
   # A review re-runs CI without a push. When a pull request changes how strict
   # the checks are, `ci / diff-size` fails until an admin approves the head;
   # the run this approval starts re-runs the latest red one, and the check
-  # turns green. A dismissed approval makes it red again (plinth #586).
+  # turns green. A dismissed approval makes it red again (plinth #586). From
+  # a fork the token is read-only and cannot re-run it: the check then says
+  # to use "Re-run failed jobs" on the latest red `ci / diff-size`.
   pull_request_review:
     types: [submitted, dismissed]
 
