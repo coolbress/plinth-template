@@ -6,24 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
-### Changed
-- A rendered project's CI also runs when a review is submitted or dismissed,
-  its `ci` job grants `pull-requests: read` and `actions: write`, and its
-  `concurrency` group is keyed on the event (coolbress/plinth #586). From
-  plinth v2.0.0, `ci / diff-size` fails a pull request that changes how
-  strict the checks are until an admin approves its head; the run that
-  approval starts re-runs the latest red run, and the check turns green
-  without a push. With one `concurrency` group for every event, that re-run
-  cancelled the review run that started it and the merge was refused as
-  `cancelled` (coolbress/plinth #518).
-- The `plinth_sha` default moves from `1e163e2` (plinth v1.17.0) to
-  `033fbe3` (plinth v2.0.0), and `plinth_gitlab_integrity` to that commit's
-  checksum of `gitlab/python-ci.yml`. A new project calls the check that
-  needs the two grants.
-- The output style says a change to the checks that `diff-size` lists is
-  the person's decision: the agent brings each one with a recommendation
-  and what to check, and does not merge that pull or merge request on its
-  own word.
+## [1.17.0] - 2026-10-19
+
+A rendered project is ready for plinth v2.0.0. When a pull request changes
+how strict the checks are, an admin's approval now turns `ci / diff-size`
+green without a push, and a new project calls plinth v2.0.0. The agent
+brings each such change to the person as their decision. Not run yet: a
+review-started run in a repository that keeps an older plinth pin. Reading
+plinth v1.17.0 and v1.23.0, it should repeat the push run's result.
+`copier update` from 1.16.0 completed without hands on untouched cli
+instances: on GitHub keeping the old pin, with the tested pin, and with a
+pin Dependabot had raised to plinth v1.23.0, and on GitLab keeping the old
+pin and its checksum.
 
 The order matters for a repository made from an earlier tag: update the
 template first, then raise the plinth pin. `/plinth:template-update` keeps
@@ -38,10 +32,25 @@ permissions the old `ci.yml` does not give. A Dependabot pull request that
 raises the pin and was opened before the update fails the same way; after
 the update is merged, ask Dependabot to rebase it, or close it.
 
-`copier update` from 1.16.0 completed without hands on untouched cli
-instances: on GitHub keeping the old pin, with the tested pin, and with a pin
-Dependabot had raised to plinth v1.23.0, and on GitLab keeping the old pin
-and its checksum.
+### Changed
+- A rendered project's CI also runs when a review is submitted or dismissed,
+  its `ci` job grants `pull-requests: read` and `actions: write`, and its
+  `concurrency` group is keyed on the event (coolbress/plinth #586). From
+  plinth v2.0.0, `ci / diff-size` fails a pull request that changes how
+  strict the checks are until an admin approves its head; the run that
+  approval starts re-runs the latest red run, and the check turns green
+  without a push. From a fork the token is read-only and cannot re-run it;
+  the check then says to use "Re-run failed jobs". With one `concurrency`
+  group for every event, that re-run cancelled the review run that started
+  it and the merge was refused as `cancelled` (coolbress/plinth #518).
+- The `plinth_sha` default moves from `1e163e2` (plinth v1.17.0) to
+  `033fbe3` (plinth v2.0.0), and `plinth_gitlab_integrity` to that commit's
+  checksum of `gitlab/python-ci.yml`. A new project calls the check that
+  needs the two grants.
+- The output style says a change to the checks that `diff-size` lists is
+  the person's decision: the agent brings each one with a recommendation
+  and what to check, and does not merge that pull or merge request on its
+  own word.
 
 ## [1.16.0] - 2026-10-17
 
