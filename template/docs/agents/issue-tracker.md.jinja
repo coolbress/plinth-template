@@ -86,7 +86,10 @@ Create a GitLab issue. Acceptance criteria map to checks (see `AGENTS.md`).
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. A **map** is one issue; tickets are its **child** issues.
+A **map** is one issue; tickets are its **child** issues. The `/wayfinder`
+skill can work a map with these steps, but plinth does not install it: it is
+listed only, and `claude plugin install mattpocock-skills-extra@plinth` adds
+it. Without it, follow the steps by hand.
 GitLab Free has no blocking links between issues, so blocking is written in
 the body.
 
@@ -186,7 +189,10 @@ Create a GitHub issue. Acceptance criteria map to checks (see `AGENTS.md`).
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. A **map** is one issue; tickets are its **child** issues.
+A **map** is one issue; tickets are its **child** issues. The `/wayfinder`
+skill can work a map with these steps, but plinth does not install it: it is
+listed only, and `claude plugin install mattpocock-skills-extra@plinth` adds
+it. Without it, follow the steps by hand.
 
 - **Map**: one issue labelled `wayfinder:map`. `gh issue create --label wayfinder:map`
 - **Child ticket**: a sub-issue of the map (`gh api` sub-issues endpoint). If sub-issues are unavailable, add it to the map's task list and start the child body with `Part of #<map>`. Label: `wayfinder:<type>` (`research` / `prototype` / `grilling` / `task`). Assign yourself when you claim it.

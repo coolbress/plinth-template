@@ -736,7 +736,7 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         f"AGENTS.md is {len(lines)} lines; everything in it is loaded every turn"
     )
     for must in (
-        "/ask-matt",
+        "Starting something new, or choosing a tool: `/plinth:arsenal`",
         "/implement #N",
         "diagnosing-bugs",
         "/plinth:arsenal",
@@ -757,6 +757,44 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
     ):
         assert must in text, f"AGENTS.md no longer says: {must}"
     assert "when planning" not in text.lower(), "the planning block moved out of AGENTS.md"
+
+
+#: The `mattpocock-skills` skills plinth lists but does not install (plinth #593);
+#: `claude plugin install mattpocock-skills-extra@plinth` adds them.
+LISTED_SKILLS = (
+    "ask-matt",
+    "grill-with-docs",
+    "to-spec",
+    "to-tickets",
+    "wayfinder",
+    "improve-codebase-architecture",
+    "prototype",
+    "research",
+    "resolving-merge-conflicts",
+    "wizard",
+    "handoff",
+    "wait-what",
+)
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_listed_skill_is_never_named_as_installed(tmp_path: Path, host: str) -> None:
+    """A paragraph that sends the agent to a listed skill says how to install it;
+    `/ask-matt` recommended skills plinth does not install (plinth #593)."""
+    out = render(tmp_path / host, host=host)
+    called = re.compile(r"/(?:mattpocock-skills:)?(" + "|".join(LISTED_SKILLS) + r")\b")
+    assert called.search("then `/wayfinder` it"), "the gate does not catch a planted call"
+    hits = []
+    for path in sorted(p for p in out.rglob("*") if p.is_file() and ".git" not in p.parts):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for paragraph in text.split("\n\n"):
+            found = called.search(paragraph)
+            if found and "mattpocock-skills-extra@plinth" not in paragraph:
+                hits.append(f"{path.relative_to(out)}: {found.group(0)}")
+    assert not hits, f"a listed skill named as installed: {hits}"
 
 
 def test_contributing_and_readme_list_every_check_agents_lists(rendered: Path) -> None:

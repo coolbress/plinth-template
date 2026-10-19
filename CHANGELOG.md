@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A rendered project no longer sends the agent to skills plinth stops
+  installing (coolbress/plinth #593). From plinth's next release,
+  `/ask-matt`, `/grill-with-docs`, `/wayfinder` and nine more
+  `mattpocock-skills` skills are listed, not installed;
+  `claude plugin install mattpocock-skills-extra@plinth` adds them.
+  `AGENTS.md`'s "Starting something new" points at `/plinth:arsenal`,
+  because `/ask-matt` recommended skills that were not installed.
+  `docs/agents/domain.md` says `/domain-modeling` creates `CONTEXT.md`
+  without naming `/grill-with-docs`. `docs/agents/issue-tracker.md` says
+  `/wayfinder` is listed only and how to add it; the `wayfinder:*` labels
+  and the map-and-child steps are unchanged and work by hand.
+
 ## [1.17.0] - 2026-10-19
 
 A rendered project is ready for plinth v2.0.0. When a pull request changes
