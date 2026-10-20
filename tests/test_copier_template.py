@@ -1532,18 +1532,14 @@ def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
     ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     steps = [step["run"] for step in ci["jobs"]["image"]["steps"] if "run" in step]
     assert len(steps) == 2, steps
-    # The job's steps name the container `image-under-test`. One that already
-    # exists is someone else's: stop before the steps run, so the cleanup
-    # below only ever removes the container this test started.
-    taken = subprocess.run(
-        ["docker", "container", "inspect", "image-under-test"],  # noqa: S607
-        capture_output=True,
-        check=False,
-    )
-    assert taken.returncode != 0, (
-        "a container named image-under-test already exists; remove it or rename it, "
-        "this test will not touch it"
-    )
+    # The job's steps name the container and the image `image-under-test`.
+    # Here that name becomes one this run made up, in every step and in the
+    # cleanup, so the test can only ever start, tag or remove its own: a
+    # container or image another process holds under the job's name is never
+    # touched, whenever it was created.
+    own = f"image-under-test-{os.urandom(6).hex()}"
+    assert all("image-under-test" in script for script in steps), steps
+    steps = [script.replace("image-under-test", own) for script in steps]
     try:
         for script in steps:
             done = subprocess.run(  # noqa: S603
@@ -1578,7 +1574,8 @@ def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
         assert css.returncode == 0, css.stderr
         assert css.stdout.startswith("200 text/css"), css.stdout
     finally:
-        subprocess.run(["docker", "rm", "-f", "image-under-test"], capture_output=True, check=False)  # noqa: S607
+        for remove in (["docker", "rm", "-f", own], ["docker", "rmi", "-f", own]):
+            subprocess.run(remove, capture_output=True, check=False)  # noqa: S603
 
 
 # ── host: gitlab (plinth #353) ────────────────────────────────────────────
