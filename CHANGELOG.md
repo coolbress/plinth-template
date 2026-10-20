@@ -21,6 +21,8 @@ means `copier update` on an instance needs hands.
   read, merge separation is not established. One sign-in read is never taken
   as a separated merge. On GitLab the role decides, since no rule reserves
   the merge to an admin.
+  `.claude/settings.json` allows its two reads as exact commands, so they
+  run without an approval prompt; no `gh api` or `glab api` prefix is allowed.
 
 ## [1.18.0] - 2026-10-19
 

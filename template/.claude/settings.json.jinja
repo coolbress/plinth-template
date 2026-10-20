@@ -33,14 +33,18 @@
       "Bash(grep -E ' Verdict$|not yet confirmed:')",
       "Bash(glab ci status:*)",
       "Bash(glab ci list:*)",
-      "Bash(glab ci view:*)"{% else %}      "Bash(gh pr view:*)",
+      "Bash(glab ci view:*)",
+      "Bash(glab api user)",
+      "Bash(glab api projects/:id)"{% else %}      "Bash(gh pr view:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)",
       "Bash(gh run view:*)",
-      "Bash(gh run list:*)"{% endif %}
+      "Bash(gh run list:*)",
+      "Bash(gh api user --jq .login)",
+      "Bash(gh api 'repos/{owner}/{repo}' --jq .permissions.admin)"{% endif %}
     ],
     "deny": [
       "Bash(git push --force:*)",

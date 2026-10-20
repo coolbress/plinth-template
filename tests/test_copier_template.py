@@ -459,16 +459,20 @@ def test_settings_allow_the_checks_without_a_prompt(rendered: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("heading", ["Reading the run", "Who you work as"])
 @pytest.mark.parametrize("host", ["github", "gitlab"])
-def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> None:
+def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, heading: str) -> None:
     """The output style's "Reading the run" commands run before every report on
     a merge; each part of each pipeline is allowed, or every report stops for an
-    approval (plinth #570). `Bash(x:*)` allows a prefix, `Bash(x)` the exact part."""
+    approval (plinth #570). "Who you work as" reads the identity at a session's
+    first task, a resume and before a merge, so its reads are allowed too, each
+    as the exact command: a `gh api` prefix would allow writes (plinth #602).
+    `Bash(x:*)` allows a prefix, `Bash(x)` the exact part."""
     out = render(tmp_path / host, host=host)
     style = (out / ".claude" / "output-styles" / "beginner-or-non-engineer.md").read_text(
         encoding="utf-8"
     )
-    section = style.split("## Reading the run", 1)[1].split("\n## ", 1)[0]
+    section = style.split(f"## {heading}", 1)[1].split("\n## ", 1)[0]
     block = section.split("```sh\n", 1)[1].split("```", 1)[0]
     permissions = _settings(out)["permissions"]
     assert isinstance(permissions, dict)
@@ -484,6 +488,7 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> No
     for part in parts:
         allowed = part in exact or any(part == p or part.startswith(f"{p} ") for p in prefixes)
         assert allowed, f"{part!r} would prompt: {allow}"
+    assert not any(a.startswith(("Bash(gh api:", "Bash(glab api:")) for a in allow), allow
 
 
 def test_gitlab_settings_do_not_allow_glab_ci_get(tmp_path: Path) -> None:
