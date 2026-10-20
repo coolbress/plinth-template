@@ -6,6 +6,21 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- One reporting contract instead of two (coolbress/plinth #602). The output
+  style "Beginner or non-engineer" now carries the moments to report (a
+  task's start, an important choice, a failure, the end of a change, a
+  resume) and, at a start or a resume, the goal, the next action and where
+  the record lives. `AGENTS.md` no longer points at the five-item report in
+  `/plinth:arsenal`, which plinth removes in the same release.
+- The output style says which account the agent works under, read in that
+  session, at a session's first task, at a resume and before a merge. As the
+  repository's owner (GitLab: a Maintainer or Owner), merging and approving a
+  change that weakens a check are guidance only; when the account cannot be
+  read, merge separation is not established. One sign-in read is never taken
+  as a separated merge. On GitLab the role decides, since no rule reserves
+  the merge to an admin.
+
 ## [1.18.0] - 2026-10-19
 
 A rendered project stops sending its agent to skills plinth v2.1.0 no

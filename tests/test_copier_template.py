@@ -633,6 +633,44 @@ def test_the_gitlab_style_names_the_backend_s_own_job(tmp_path: Path) -> None:
     assert "docker-image:" in (out / ".gitlab-ci.yml").read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_one_reporting_contract_states_the_identity(tmp_path: Path, host: str) -> None:
+    """The output style is the one reporting contract; AGENTS.md no longer
+    points at a second one in plinth's arsenal (plinth #602). It says which
+    account the agent works under at a session's first task, a resume and
+    before a merge, as read in that session, and never infers a separated
+    merge from one sign-in read."""
+    out = render(tmp_path / host, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    assert "five-item shape" not in agents
+    assert "At four moments only" not in agents
+    style = (out / ".claude" / "output-styles" / "beginner-or-non-engineer.md").read_text(
+        encoding="utf-8"
+    )
+    flat = " ".join(style.split())
+    for part in (
+        "the start of a task, an important choice, a failure, the end of a change, and a resume",
+        "A request for an explanation is not approval of a change",
+        "**The goal now**",
+        "**Where the record lives**",
+        "at a session's first task, at a resume, and in the decision report before a merge",
+        "do not carry it over from an earlier session",
+        "merging and approving a change that weakens a check are guidance only right now",
+        '"merge separation is not established"',
+        "one sign-in read does not separate the merge",
+        'open with the line "Who you work as" gives',
+    ):
+        assert part in flat, part
+    commands = {
+        "github": ("gh api user --jq .login", "--jq .permissions.admin", "`the merge:` line"),
+        "gitlab": ("glab api user", "glab api projects/:id", "the role decides"),
+    }
+    for part in commands[host]:
+        assert part in flat, part
+    other = "gitlab" if host == "github" else "github"
+    assert commands[other][0] not in style, f"{host} names {other}'s command"
+
+
 def _project_skill_body(rendered: Path, name: str) -> str:
     """The body of the instance's project skill `name`, after checking its
     frontmatter and that it copies none of the commands AGENTS.md lists."""
