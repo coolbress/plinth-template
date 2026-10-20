@@ -79,7 +79,8 @@ gh api 'repos/{owner}/{repo}' --jq .permissions.admin   # true: this login admin
   ruleset reserves the merge is the `the merge:` line `/plinth:floor-check`
   prints. Copy that line, or say it was not run.
 {% endif %}- **Either command fails or prints nothing:** say "merge separation is not
-  established", with the error.
+  established", with the error. This holds when nothing else could be read
+  either: the line comes before the failure's report, never instead of it.
 
 ## After each change
 
