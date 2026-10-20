@@ -657,7 +657,8 @@ def test_one_reporting_contract_states_the_identity(tmp_path: Path, host: str) -
         "do not carry it over from an earlier session",
         "and approving a change that weakens a check are guidance only right now",
         '"merge separation is not established"',
-        "the line comes before the failure's report, never instead of it",
+        # No order: in a measured run the line came after the failure 3 of 3 times.
+        "say it in the same answer that reports the failure, in any order",
         "one sign-in read does not separate the merge",
         'open with the line "Who you work as" gives',
     ):
