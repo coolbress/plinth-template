@@ -11,7 +11,10 @@ means `copier update` on an instance needs hands.
   gate: a Django 5.2 LTS project under `src/`, served by uvicorn from
   `python -m <package>`, with Postgres from `DATABASE_URL`. Its settings
   come from the environment, and the entry point refuses to start without
-  the secret key, the allowed hosts and the database URL. A rendered `web`
+  the secret key, the allowed hosts and the database URL. WhiteNoise serves
+  the static files the image collects at build time, the admin's included;
+  `.env.example` lists every key the project reads, and the README says to
+  load `.env` with `uv run --env-file .env`. A rendered `web`
   project passes its own `uv sync --locked`, ruff, mypy (with django-stubs),
   pytest (with pytest-django) and `uv build`, under the names and assertions
   the checks already have. GitHub only: copier refuses `web` with
@@ -20,8 +23,8 @@ means `copier update` on an instance needs hands.
   that has them and coolbress/plinth #613, #614 and #615.
 
 ### Changed
-- `.gitignore` ignores `db.sqlite3`, Django's local database, in every
-  archetype. No other file of an existing archetype's render changes.
+- `.gitignore` ignores `db.sqlite3` and `staticfiles/`, Django's local
+  database and collected static files, in every archetype. No other file of an existing archetype's render changes.
 
 ## [1.19.0] - 2026-10-20
 

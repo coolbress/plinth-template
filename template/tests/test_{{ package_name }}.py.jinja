@@ -1,7 +1,11 @@
 {% if archetype == 'web' %}from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import Client
 
 from {{ package_name }} import greet
@@ -23,6 +27,19 @@ def test_admin_asks_an_anonymous_visitor_to_log_in(client: Client) -> None:
     response = client.get("/admin/", secure=True)
     assert response.status_code == 302
     assert "/admin/login/" in response["Location"]
+
+
+# The mark: closing the response ends the request, which closes database connections.
+@pytest.mark.django_db
+def test_the_admin_s_static_files_are_served(tmp_path: Path, settings: Any, client: Client) -> None:
+    settings.STATIC_ROOT = tmp_path
+    call_command("collectstatic", "--noinput", verbosity=0)
+    response = client.get("/static/admin/css/base.css", secure=True)
+    try:
+        assert response.status_code == 200
+        assert response.headers["Content-Type"].startswith("text/css")
+    finally:
+        response.close()  # a file response holds the file open until closed
 
 
 @pytest.mark.django_db

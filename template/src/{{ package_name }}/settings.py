@@ -59,6 +59,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Right after security: it answers /static/ before the rest runs.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -91,6 +93,9 @@ USE_TZ = True
 # Django sets the process time zone from this; UTC keeps log timestamps in one zone.
 TIME_ZONE = "UTC"
 STATIC_URL = "static/"
+# `collectstatic` writes here; the image runs it at build time, inside the
+# package so the run stage carries the files, and WhiteNoise serves them.
+STATIC_ROOT = PACKAGE_DIR / "staticfiles"
 
 # Behind the host's TLS proxy: production answers over HTTPS only.
 if not DEBUG:
