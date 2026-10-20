@@ -1,9 +1,16 @@
 """The container's entry point: `python -m <package>`, what the Dockerfile's CMD runs.
 
+{% if archetype == 'web' -%}
+It serves the Django project with uvicorn on `$PORT` (default 8000), after
+checking that production's settings are in the environment: a start without a
+secret key, allowed hosts or a database URL is refused, not served with
+defaults.
+{%- else -%}
 No framework is chosen here; what serves the application is this project's
 decision, and a `uvicorn` or `flask` planted here would be a stub in every
 project that does not use it. Replace the body of `main()` when a server
 arrives; the logging setup can stay.
+{%- endif %}
 
 Logs are one JSON object per line on stdout, so a container's output is
 collected as is. Standard library only. Metrics, traces and SLOs live outside
@@ -14,10 +21,15 @@ from __future__ import annotations
 
 import json
 import logging
+{%- if archetype == 'web' %}
+import os
+{%- endif %}
 import sys
 from typing import Any
+{%- if archetype != 'web' %}
 
 from . import greet
+{%- endif %}
 
 # The fields every LogRecord carries. Anything else came in through
 # `logger.info("...", extra={...})` and is kept: context in fields is the
@@ -51,9 +63,34 @@ def configure(level: int = logging.INFO) -> None:
     root.setLevel(level)
 
 
+{% if archetype == 'web' -%}
+REQUIRED = ("DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DATABASE_URL")
+
+
+def missing(environ: dict[str, str]) -> list[str]:
+    """The production settings not set in `environ`."""
+    return [name for name in REQUIRED if not environ.get(name)]
+
+
+def main() -> None:
+    configure()
+    log = logging.getLogger(__package__)
+    absent = missing(dict(os.environ))
+    if absent:
+        log.error("not started: missing %s", ", ".join(absent))
+        sys.exit(2)
+    port = int(os.environ.get("PORT", "8000"))
+    log.info("started", extra={"port": port})
+
+    import uvicorn
+
+    # All interfaces: inside a container the host reaches the server from outside it.
+    uvicorn.run(f"{__package__}.asgi:application", host="0.0.0.0", port=port, log_config=None)  # noqa: S104
+{%- else -%}
 def main() -> None:
     configure()
     logging.getLogger(__package__).info("started", extra={"greeting": greet("world")})
+{%- endif %}
 
 
 if __name__ == "__main__":

@@ -6,6 +6,23 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `web` archetype, the first part of coolbress/plinth #612's prototype
+  gate: a Django 5.2 LTS project under `src/`, served by uvicorn from
+  `python -m <package>`, with Postgres from `DATABASE_URL`. Its settings
+  come from the environment, and the entry point refuses to start without
+  the secret key, the allowed hosts and the database URL. A rendered `web`
+  project passes its own `uv sync --locked`, ruff, mypy (with django-stubs),
+  pytest (with pytest-django) and `uv build`, under the names and assertions
+  the checks already have. GitHub only: copier refuses `web` with
+  `host: gitlab`. Its `image` job, and the test that starts the server,
+  follow in the next change; plinth does not offer `web` until it pins a tag
+  that has them and coolbress/plinth #613, #614 and #615.
+
+### Changed
+- `.gitignore` ignores `db.sqlite3`, Django's local database, in every
+  archetype. No other file of an existing archetype's render changes.
+
 ## [1.19.0] - 2026-10-20
 
 A rendered project's agent reports in one place and says which account it

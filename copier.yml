@@ -32,9 +32,9 @@ _exclude:
   - __pycache__
   # Conditional on the archetype. The files are not deleted after rendering;
   # they are never written, so no stub is left behind. The checker in plinth
-  # (`scripts/floor-check.py`) names the same two archetypes; its test reads
+  # (`scripts/floor-check.py`) names the same archetypes; its test reads
   # this file over the network, so keep the condition on one line.
-  - "{% if archetype not in ['backend', 'data-ml'] %}.env.example{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml', 'web'] %}.env.example{% endif %}"
   # Its source is `{{ "" }}.env.example.jinja`, which renders to
   # `.env.example`: the instance's `.gitignore` in `template/` ignores
   # `.env.*`, and copier, rendering a working tree with uncommitted changes,
@@ -42,9 +42,15 @@ _exclude:
   # A container image is four files together: the image, the build-context
   # exclusions, the entry point the image runs, and nothing else. The image
   # alone is a stub.
-  - "{% if archetype not in ['backend', 'data-ml'] %}Dockerfile{% endif %}"
-  - "{% if archetype not in ['backend', 'data-ml'] %}.dockerignore{% endif %}"
-  - "{% if archetype not in ['backend', 'data-ml'] %}src/{{ package_name }}/__main__.py{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml', 'web'] %}Dockerfile{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml', 'web'] %}.dockerignore{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml', 'web'] %}src/{{ package_name }}/__main__.py{% endif %}"
+  # The web archetype's Django project: its settings, routes, the ASGI
+  # application the entry point serves, and Django's command line.
+  - "{% if archetype != 'web' %}src/{{ package_name }}/settings.py{% endif %}"
+  - "{% if archetype != 'web' %}src/{{ package_name }}/urls.py{% endif %}"
+  - "{% if archetype != 'web' %}src/{{ package_name }}/asgi.py{% endif %}"
+  - "{% if archetype != 'web' %}manage.py{% endif %}"
   # The owner's shared community-health files, when they publish them. GitHub
   # applies `owner/.github`'s copy to a repository that has none of its own, so
   # writing ours would silently replace the owner's convention. The door answers
@@ -120,8 +126,9 @@ license:
 
 # This generator produces a Python package (pyproject, hatchling, uv.lock,
 # src/<package>/, plinth's python-ci). The choices are only what it can
-# actually build: a web front end or a mobile app would come out as a plain
-# Python package, so they are not offered.
+# actually build: a single-page front end or a mobile app would come out as a
+# plain Python package, so they are not offered. `web` is a server-rendered
+# Django app with Postgres, on GitHub only (plinth #604).
 #
 # The yes/no axes (published, cloud, handles user data) are not asked here:
 # they change later and are not a kind of project.
@@ -137,6 +144,7 @@ archetype:
     Library: library
     Backend or API service: backend
     Data or ML: data-ml
+    Web app with a database: web
 
 # The commit of coolbress/plinth whose reusable workflows the instance calls,
 # the one this template release was tested with. It is the only pin the
@@ -177,6 +185,12 @@ host:
   choices:
     GitHub: github
     GitLab: gitlab
+  # The web archetype's hosting path deploys from GitHub (plinth #604).
+  validator: >-
+    {%- if host == 'gitlab' and archetype == 'web' -%}
+    The web archetype is GitHub only: its deployment and checks are built for
+    GitHub. Choose GitHub, or another archetype for GitLab.
+    {%- endif -%}
 
 # The SHA-256 of plinth's `gitlab/python-ci.yml` at `plinth_sha`, base64, for
 # the include's `integrity:`: GitLab refuses an included file whose bytes
