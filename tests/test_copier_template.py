@@ -1532,6 +1532,18 @@ def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
     ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     steps = [step["run"] for step in ci["jobs"]["image"]["steps"] if "run" in step]
     assert len(steps) == 2, steps
+    # The job's steps name the container `image-under-test`. One that already
+    # exists is someone else's: stop before the steps run, so the cleanup
+    # below only ever removes the container this test started.
+    taken = subprocess.run(
+        ["docker", "container", "inspect", "image-under-test"],  # noqa: S607
+        capture_output=True,
+        check=False,
+    )
+    assert taken.returncode != 0, (
+        "a container named image-under-test already exists; remove it or rename it, "
+        "this test will not touch it"
+    )
     try:
         for script in steps:
             done = subprocess.run(  # noqa: S603
