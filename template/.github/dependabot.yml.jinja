@@ -33,7 +33,7 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-{%- if archetype in ['backend', 'data-ml'] %}
+{%- if archetype in ['backend', 'data-ml', 'web'] %}
   # Base images are pinned by digest; Dependabot raises them the same way.
   - package-ecosystem: "docker"
     directory: "/"

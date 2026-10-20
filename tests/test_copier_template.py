@@ -100,17 +100,17 @@ def test_cli_archetype_omits_service_only_files(rendered: Path) -> None:
         assert not (rendered / name).exists(), f"{name} rendered for the cli archetype"
 
 
-@pytest.mark.parametrize("archetype", ["backend", "data-ml"])
+@pytest.mark.parametrize("archetype", ["backend", "data-ml", "web"])
 def test_service_archetypes_include_them(tmp_path: Path, archetype: str) -> None:
     out = render(tmp_path / f"svc-{archetype}", archetype=archetype)
     for name in (".env.example", "Dockerfile", ".dockerignore", "src/probe/__main__.py"):
         assert (out / name).is_file(), f"{name} missing for the {archetype} archetype"
 
 
-#: What this generator can actually build. It emits a Python package; a web
-#: front end or a mobile app would come out as a plain Python package, so
-#: they are not offered.
-SERVABLE = {"cli", "library", "backend", "data-ml"}
+#: What this generator can actually build. It emits a Python package; a
+#: single-page front end or a mobile app would come out as a plain Python
+#: package, so they are not offered. `web` is a server-rendered Django app.
+SERVABLE = {"cli", "library", "backend", "data-ml", "web"}
 
 
 def _offered() -> set[str]:
@@ -138,12 +138,12 @@ def test_the_door_can_read_the_archetype_choices() -> None:
 def test_the_conditional_archetypes_are_named_on_one_line() -> None:
     """plinth's floor checker reads this file over the network and takes the first
     `archetype not in [...]` as the set of archetypes that get an image and a
-    `.env.example`. The literal must stay on one line, and name only those two."""
+    `.env.example`. The literal must stay on one line, and name only those."""
     text = CONFIG.read_text(encoding="utf-8")
     hits = re.findall(r"archetype not in \[([^]]*)\]", text)
     assert hits, "no `archetype not in [...]` condition in copier.yml"
     names = {n.strip("' ") for n in hits[0].split(",")}
-    assert names == {"backend", "data-ml"}, names
+    assert names == {"backend", "data-ml", "web"}, names
     assert all(h == hits[0] for h in hits), "the conditions disagree with each other"
 
 
@@ -269,6 +269,27 @@ def test_service_archetype_ci_carries_the_image_check(backend: Path, rendered: P
     cli = _ci(rendered)
     assert not re.search(r"^  image:\n", cli, re.M), "a cli instance carries the image check"
     assert "docker" not in cli
+
+
+def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backend: Path) -> None:
+    out = render(tmp_path / "web", archetype="web")
+    django = (
+        "src/probe/settings.py",
+        "src/probe/urls.py",
+        "src/probe/asgi.py",
+        "manage.py",
+        "tests/conftest.py",
+    )
+    for name in django:
+        assert (out / name).is_file(), f"{name} missing for the web archetype"
+        for other in (rendered, backend):
+            assert not (other / name).exists(), f"{name} rendered outside the web archetype"
+    assert "django" not in (backend / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_web_archetype_is_refused_on_gitlab(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="GitHub only"):
+        render(tmp_path / "gl-web", archetype="web", host="gitlab")
 
 
 def test_service_archetype_dependabot_leaves_the_python_minor_alone(backend: Path) -> None:
@@ -1156,10 +1177,11 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
 
 # ── end to end ────────────────────────────────────────────────────────────
 
-#: The archetypes whose file sets differ. Every `_exclude` condition is
-#: `archetype not in ['backend', 'data-ml']`, so there are two sets: {cli,
-#: library} and {backend, data-ml}. One representative each covers both.
-E2E_ARCHETYPES = ("cli", "backend")
+#: The archetypes whose file sets differ. The service conditions are
+#: `archetype not in ['backend', 'data-ml', 'web']` and the Django files
+#: `archetype != 'web'`, so there are three sets: {cli, library}, {backend,
+#: data-ml} and {web}. One representative each covers them.
+E2E_ARCHETYPES = ("cli", "backend", "web")
 
 
 def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> None:

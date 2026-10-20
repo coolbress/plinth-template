@@ -15,6 +15,11 @@ dist/
 .env.*
 !.env.example
 
+# Django's local database (the web archetype, when DATABASE_URL is unset) and
+# its collected static files
+db.sqlite3
+staticfiles/
+
 # OS
 .DS_Store
 

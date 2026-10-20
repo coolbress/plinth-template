@@ -20,6 +20,12 @@ RUN uv sync --locked --no-install-project --no-dev
 COPY src/ ./src/
 COPY README.md ./
 RUN uv sync --locked --no-dev
+{%- if archetype == 'web' %}
+# The static files (the admin's CSS and JavaScript) into the package's
+# `staticfiles/`, which the run stage copies with `src/`. No secret or
+# database is needed to collect them.
+RUN DJANGO_SETTINGS_MODULE={{ package_name }}.settings .venv/bin/python -m django collectstatic --noinput
+{%- endif %}
 
 # ── run stage ─────────────────────────────────────────────────────────────
 FROM python:3.12-slim@sha256:09f7da3bc104798d0afb40bc08d23ab2da20a76130cec1f2ef170848f5d85217
