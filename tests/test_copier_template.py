@@ -655,7 +655,7 @@ def test_one_reporting_contract_states_the_identity(tmp_path: Path, host: str) -
         "**Where the record lives**",
         "at a session's first task, at a resume, and in the decision report before a merge",
         "do not carry it over from an earlier session",
-        "merging and approving a change that weakens a check are guidance only right now",
+        "and approving a change that weakens a check are guidance only right now",
         '"merge separation is not established"',
         "the line comes before the failure's report, never instead of it",
         "one sign-in read does not separate the merge",
@@ -663,8 +663,21 @@ def test_one_reporting_contract_states_the_identity(tmp_path: Path, host: str) -
     ):
         assert part in flat, part
     commands = {
-        "github": ("gh api user --jq .login", "--jq .permissions.admin", "`the merge:` line"),
-        "gitlab": ("glab api user", "glab api projects/:id", "the role decides"),
+        # admin is not ownership (an organization's administrator), and a red
+        # required check still stops an admin's merge: one report said it did not.
+        "github": (
+            "gh api user --jq .login",
+            "--jq .permissions.admin",
+            "`the merge:` line",
+            "an admin of this repository (its owner or an administrator",
+            "GitHub still refuses a merge while a required check fails",
+        ),
+        "gitlab": (
+            "glab api user",
+            "glab api projects/:id",
+            "the role decides",
+            "GitLab still refuses a merge while the pipeline fails",
+        ),
     }
     for part in commands[host]:
         assert part in flat, part

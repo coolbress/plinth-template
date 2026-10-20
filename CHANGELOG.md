@@ -14,9 +14,10 @@ means `copier update` on an instance needs hands.
   the record lives. `AGENTS.md` no longer points at the five-item report in
   `/plinth:arsenal`, which plinth removes in the same release.
 - The output style says which account the agent works under, read in that
-  session, at a session's first task, at a resume and before a merge. As the
-  repository's owner (GitLab: a Maintainer or Owner), merging and approving a
-  change that weakens a check are guidance only; when the account cannot be
+  session, at a session's first task, at a resume and before a merge. As an
+  admin of the repository (GitLab: a Maintainer or Owner), a failing
+  required check still stops the merge, but merging a passing one and
+  approving a change that weakens a check are guidance only; when the account cannot be
   read, merge separation is not established. One sign-in read is never taken
   as a separated merge. On GitLab the role decides, since no rule reserves
   the merge to an admin.

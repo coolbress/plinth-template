@@ -58,8 +58,9 @@ The higher of the two access levels is your role: 50 Owner, 40 Maintainer,
 role decides, and this project's protected `main` lets Maintainers merge.
 
 - **Maintainer or Owner:** say "I work as `<login>`, a `<role>` of this
-  project: merging and approving a change that weakens a check are guidance
-  only right now; GitLab does not stop me."
+  project: GitLab still refuses a merge while the pipeline fails, but
+  merging a passing merge request and approving a change that weakens a
+  check are guidance only right now."
 - **Developer or below:** say the login and role, and that one sign-in read
   does not separate the merge: another login on this machine may still merge,
   and whether `main` lets only Maintainers merge is what `/plinth:floor-check`
@@ -71,9 +72,11 @@ gh api user --jq .login                                 # the login
 gh api 'repos/{owner}/{repo}' --jq .permissions.admin   # true: this login administers the repository
 ```
 
-- **`true`:** say "I work as `<login>`, the repository's owner: merging and
-  approving a change that weakens a check are guidance only right now;
-  GitHub does not stop me."
+- **`true`:** say "I work as `<login>`, an admin of this repository (its
+  owner or an administrator; this read does not tell which): GitHub still
+  refuses a merge while a required check fails, but merging a green pull
+  request and approving a change that weakens a check are guidance only
+  right now."
 - **`false`:** say the login, and that one sign-in read does not separate
   the merge: another login on this machine may still merge, and whether a
   ruleset reserves the merge is the `the merge:` line `/plinth:floor-check`
