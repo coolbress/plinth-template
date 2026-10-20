@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-20
+
+A rendered project's agent reports in one place and says which account it
+works under. The output style "Beginner or non-engineer" is now the only
+reporting contract: `AGENTS.md` stops pointing at the report in
+`/plinth:arsenal`, which plinth removes in the release that pins this tag.
+At a session's first task, at a resume and before a merge, the agent reads
+its login and whether it administers the repository, and says what that
+means for the merge; `.claude/settings.json` allows those reads as exact
+commands. Only those three files change. `copier update` from 1.18.0
+completed without hands on untouched cli instances on GitHub and GitLab and
+an untouched backend instance on GitHub, and the updated files equal a fresh
+render; hand-edited instances were not updated.
+
 ### Changed
 - One reporting contract instead of two (coolbress/plinth #602). The output
   style "Beginner or non-engineer" now carries the moments to report (a
