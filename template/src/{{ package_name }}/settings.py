@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from django.core.management.utils import get_random_secret_key
 
@@ -43,6 +43,8 @@ def database(url: str | None) -> dict[str, object]:
         "HOST": parts.hostname or "",
         "PORT": str(parts.port or ""),
         "CONN_MAX_AGE": 60,
+        # Connection options in the query (`?sslmode=verify-full`) reach psycopg as given.
+        "OPTIONS": dict(parse_qsl(parts.query)),
     }
 
 

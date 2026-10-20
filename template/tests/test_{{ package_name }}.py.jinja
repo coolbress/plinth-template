@@ -53,10 +53,11 @@ def test_production_start_names_what_is_missing() -> None:
 
 
 def test_database_url_becomes_a_postgres_entry() -> None:
-    entry = database("postgres://user:p%40ss@db.internal:5432/app")
+    entry = database("postgres://user:p%40ss@db.internal:5432/app?sslmode=verify-full")
     assert entry["ENGINE"] == "django.db.backends.postgresql"
     assert (entry["NAME"], entry["USER"], entry["PASSWORD"]) == ("app", "user", "p@ss")
     assert (entry["HOST"], entry["PORT"]) == ("db.internal", "5432")
+    assert entry["OPTIONS"] == {"sslmode": "verify-full"}
 
 
 def test_database_url_refuses_another_engine() -> None:
