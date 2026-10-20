@@ -459,16 +459,20 @@ def test_settings_allow_the_checks_without_a_prompt(rendered: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("heading", ["Reading the run", "Who you work as"])
 @pytest.mark.parametrize("host", ["github", "gitlab"])
-def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> None:
+def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, heading: str) -> None:
     """The output style's "Reading the run" commands run before every report on
     a merge; each part of each pipeline is allowed, or every report stops for an
-    approval (plinth #570). `Bash(x:*)` allows a prefix, `Bash(x)` the exact part."""
+    approval (plinth #570). "Who you work as" reads the identity at a session's
+    first task, a resume and before a merge, so its reads are allowed too, each
+    as the exact command: a `gh api` prefix would allow writes (plinth #602).
+    `Bash(x:*)` allows a prefix, `Bash(x)` the exact part."""
     out = render(tmp_path / host, host=host)
     style = (out / ".claude" / "output-styles" / "beginner-or-non-engineer.md").read_text(
         encoding="utf-8"
     )
-    section = style.split("## Reading the run", 1)[1].split("\n## ", 1)[0]
+    section = style.split(f"## {heading}", 1)[1].split("\n## ", 1)[0]
     block = section.split("```sh\n", 1)[1].split("```", 1)[0]
     permissions = _settings(out)["permissions"]
     assert isinstance(permissions, dict)
@@ -484,6 +488,7 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str) -> No
     for part in parts:
         allowed = part in exact or any(part == p or part.startswith(f"{p} ") for p in prefixes)
         assert allowed, f"{part!r} would prompt: {allow}"
+    assert not any(a.startswith(("Bash(gh api:", "Bash(glab api:")) for a in allow), allow
 
 
 def test_gitlab_settings_do_not_allow_glab_ci_get(tmp_path: Path) -> None:
@@ -631,6 +636,59 @@ def test_the_gitlab_style_names_the_backend_s_own_job(tmp_path: Path) -> None:
     flat = " ".join(style.read_text(encoding="utf-8").split())
     assert "such as `docker-image`, writes no `Verdict`" in flat
     assert "docker-image:" in (out / ".gitlab-ci.yml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_one_reporting_contract_states_the_identity(tmp_path: Path, host: str) -> None:
+    """The output style is the one reporting contract; AGENTS.md no longer
+    points at a second one in plinth's arsenal (plinth #602). It says which
+    account the agent works under at a session's first task, a resume and
+    before a merge, as read in that session, and never infers a separated
+    merge from one sign-in read."""
+    out = render(tmp_path / host, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    assert "five-item shape" not in agents
+    assert "At four moments only" not in agents
+    style = (out / ".claude" / "output-styles" / "beginner-or-non-engineer.md").read_text(
+        encoding="utf-8"
+    )
+    flat = " ".join(style.split())
+    for part in (
+        "the start of a task, an important choice, a failure, the end of a change, and a resume",
+        "A request for an explanation is not approval of a change",
+        "**The goal now**",
+        "**Where the record lives**",
+        "at a session's first task, at a resume, and in the decision report before a merge",
+        "do not carry it over from an earlier session",
+        "and approving a change that weakens a check are guidance only right now",
+        '"merge separation is not established"',
+        # No order: in a measured run the line came after the failure 3 of 3 times.
+        "say it in the same answer that reports the failure, in any order",
+        "one sign-in read does not separate the merge",
+        'open with the line "Who you work as" gives',
+    ):
+        assert part in flat, part
+    commands = {
+        # admin is not ownership (an organization's administrator), and a red
+        # required check still stops an admin's merge: one report said it did not.
+        "github": (
+            "gh api user --jq .login",
+            "--jq .permissions.admin",
+            "`the merge:` line",
+            "an admin of this repository (its owner or an administrator",
+            "GitHub still refuses a merge while a required check fails",
+        ),
+        "gitlab": (
+            "glab api user",
+            "glab api projects/:id",
+            "the role decides",
+            "GitLab still refuses a merge while the pipeline fails",
+        ),
+    }
+    for part in commands[host]:
+        assert part in flat, part
+    other = "gitlab" if host == "github" else "github"
+    assert commands[other][0] not in style, f"{host} names {other}'s command"
 
 
 def _project_skill_body(rendered: Path, name: str) -> str:
