@@ -23,6 +23,10 @@ from pathlib import Path
 
 import pytest
 
+# PyYAML comes with copier and ships no stubs; two tests do not earn a
+# types-PyYAML dependency in the lockfile.
+import yaml  # type: ignore[import-untyped]
+
 from template_render import TEMPLATE_ROOT, render
 
 CONFIG = TEMPLATE_ROOT / "copier.yml"
@@ -269,6 +273,23 @@ def test_service_archetype_ci_carries_the_image_check(backend: Path, rendered: P
     cli = _ci(rendered)
     assert not re.search(r"^  image:\n", cli, re.M), "a cli instance carries the image check"
     assert "docker" not in cli
+
+
+def test_web_archetype_image_check_serves_and_is_asked(tmp_path: Path) -> None:
+    """A server never exits, so `docker run --rm` would hang until the job's
+    timeout. The web job starts it detached with production-shaped settings,
+    asks /healthz, and reads the same first log line (plinth #604)."""
+    out = render(tmp_path / "web", archetype="web")
+    job = _job(_ci(out), "image")
+    assert "docker run -d --name image-under-test" in job
+    assert "curl -fsS http://localhost:8000/healthz" in job
+    assert 'out="$(docker logs image-under-test)"' in job
+    assert '\'"message": "started"\'' in job
+    assert 'DJANGO_SECRET_KEY="$(openssl rand -hex 32)"' in job, "a literal key in a workflow"
+    # `||` is not a pipe: the trap prints the log when a step fails.
+    piped = re.search(r"^\s+[^#\n]*docker (run|logs)[^\n|]*\|(?!\|)", job, re.M)
+    assert not piped, f"a live docker process is piped: {piped.group(0).strip()}"
+    assert "docker run --rm" not in job
 
 
 def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backend: Path) -> None:
@@ -1224,6 +1245,57 @@ def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str)
         )
 
 
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_web_entry_point_refuses_then_serves(tmp_path: Path) -> None:
+    """What the web image check asks, without Docker: installed without the dev
+    tools, as the image is, `python -m <package>` refuses to start without
+    production's settings, and with them its first line says it started and
+    /healthz answers."""
+    import socket
+    import urllib.request
+
+    out = render(tmp_path / "serve", archetype="web")
+    subprocess.run(["uv", "sync", "--locked", "--no-dev", "--quiet"], cwd=out, check=True)  # noqa: S607
+    python = str(out / ".venv" / "bin" / "python")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    refused = subprocess.run(  # noqa: S603
+        [python, "-m", "probe"], cwd=out, env=env, capture_output=True, text=True, timeout=60
+    )
+    assert refused.returncode == 2, refused.stdout + refused.stderr
+    assert "not started: missing DJANGO_SECRET_KEY" in refused.stdout
+    assert '"message": "started"' not in refused.stdout
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    env |= {
+        "DJANGO_SECRET_KEY": os.urandom(32).hex(),
+        "DJANGO_ALLOWED_HOSTS": "localhost",
+        "DATABASE_URL": "postgres://check@localhost:5432/none",
+        "PORT": str(port),
+    }
+    server = subprocess.Popen(  # noqa: S603
+        [python, "-m", "probe"], cwd=out, env=env, stdout=subprocess.PIPE, text=True
+    )
+    try:
+        assert server.stdout is not None
+        assert '"message": "started"' in server.stdout.readline()
+        body = b""
+        for _ in range(60):
+            try:
+                with urllib.request.urlopen(f"http://localhost:{port}/healthz", timeout=2) as r:
+                    body = r.read()
+                break
+            except OSError:
+                time.sleep(0.5)
+        assert body == b"ok"
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+        if server.stdout is not None:
+            server.stdout.close()
+
+
 def _speaking(language: str) -> dict[str, str]:
     """A child environment whose git speaks `language`.
 
@@ -1445,6 +1517,67 @@ def test_service_archetype_image_actually_builds_and_runs(tmp_path: Path) -> Non
     assert whoami.stdout.strip() != "root", "the container runs as root"
 
 
+def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
+    """The web instance's `image` job, run as rendered: its own `run:` steps, in
+    order, on a fresh render. The steps are read from the rendered `ci.yml`, not
+    copied here, so this test and the job cannot drift (plinth #612). Then the
+    admin's stylesheet from the running container: `collectstatic` ran inside
+    the image's build. Skipped only on a machine without docker, as the backend
+    image test is."""
+    if shutil.which("docker") is None:
+        assert not os.environ.get("CI"), "CI has no docker: the web image test tried to skip"
+        pytest.skip("docker is not installed (a laptop); on CI the assertion above stops this")
+
+    out = render(tmp_path / "web-image", project_name="web.probe", archetype="web", owner="x")
+    ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    steps = [step["run"] for step in ci["jobs"]["image"]["steps"] if "run" in step]
+    assert len(steps) == 2, steps
+    # The job's steps name the container and the image `image-under-test`.
+    # Here that name becomes one this run made up, in every step and in the
+    # cleanup, so the test can only ever start, tag or remove its own: a
+    # container or image another process holds under the job's name is never
+    # touched, whenever it was created.
+    own = f"image-under-test-{os.urandom(6).hex()}"
+    assert all("image-under-test" in script for script in steps), steps
+    steps = [script.replace("image-under-test", own) for script in steps]
+    try:
+        for script in steps:
+            done = subprocess.run(  # noqa: S603
+                ["bash", "-euo", "pipefail", "-c", script],  # noqa: S607
+                cwd=out,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert done.returncode == 0, (
+                f"{script.splitlines()[0]}\n{done.stdout[-2000:]}\n{done.stderr[-2000:]}"
+            )
+        # The container the job left running: the admin's stylesheet, collected
+        # at build time and served by WhiteNoise. `X-Forwarded-Proto` is what
+        # the host's TLS proxy adds; without it the app redirects to HTTPS.
+        css = subprocess.run(
+            [  # noqa: S607
+                "curl",
+                "-fsS",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code} %{content_type}",
+                "-H",
+                "X-Forwarded-Proto: https",
+                "http://localhost:8000/static/admin/css/base.css",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert css.returncode == 0, css.stderr
+        assert css.stdout.startswith("200 text/css"), css.stdout
+    finally:
+        for remove in (["docker", "rm", "-f", own], ["docker", "rmi", "-f", own]):
+            subprocess.run(remove, capture_output=True, check=False)  # noqa: S603
+
+
 # ── host: gitlab (plinth #353) ────────────────────────────────────────────
 
 
@@ -1630,10 +1763,6 @@ def test_no_unrendered_jinja_survives_into_a_gitlab_instance(gitlab_backend: Pat
 def test_gitlab_ci_is_yaml_gitlab_can_load(tmp_path: Path, archetype: str) -> None:
     """GitLab refuses a pipeline whose YAML does not parse, with no job (a script
     line holding `": "` once did)."""
-    # PyYAML comes with copier and ships no stubs; one test does not earn a
-    # types-PyYAML dependency in the lockfile.
-    import yaml  # type: ignore[import-untyped]
-
     out = render(tmp_path / archetype, host="gitlab", archetype=archetype)
     doc = yaml.safe_load((out / ".gitlab-ci.yml").read_text(encoding="utf-8"))
     assert isinstance(doc, dict), doc

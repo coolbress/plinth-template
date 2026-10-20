@@ -65,7 +65,7 @@ jobs:
       issues: read
       pull-requests: read
       actions: write
-{%- if archetype in ['backend', 'data-ml'] %}
+{%- if archetype in ['backend', 'data-ml', 'web'] %}
 
   # The container image, checked the one way that tells it from a stub: build
   # it, run it, read what it says. A plain job here and not one in
@@ -83,6 +83,27 @@ jobs:
         with:
           persist-credentials: false   # nothing here pushes
       - run: docker build -t image-under-test .
+{%- if archetype == 'web' %}
+      # The web archetype serves, so the container runs detached with
+      # production-shaped settings: a key made for this run and placeholder
+      # hosts, nothing real, and nothing here reaches a database. It must
+      # answer /healthz, and its first log line must say it started. Never
+      # `docker logs … | head`: under `pipefail`, `head` closing the pipe first
+      # kills `docker logs` with SIGPIPE (plinth #151).
+      - name: Start the image, ask it, and read its first log line
+        run: |
+          set -euo pipefail
+          trap 'docker logs image-under-test || true' ERR
+          docker run -d --name image-under-test -p 8000:8000 \
+            -e DJANGO_SECRET_KEY="$(openssl rand -hex 32)" \
+            -e DJANGO_ALLOWED_HOSTS=localhost \
+            -e DATABASE_URL=postgres://image-check@localhost:5432/none \
+            image-under-test
+          for _ in $(seq 30); do curl -fsS http://localhost:8000/healthz && break; sleep 1; done
+          curl -fsS http://localhost:8000/healthz
+          out="$(docker logs image-under-test)"
+          printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+{%- else %}
       # No framework is chosen yet, so the entry point has no port: the one
       # request is a run to completion, answered by its first log line. When a
       # server arrives, start the container with `-d -p`, `curl` it, and read
@@ -95,6 +116,7 @@ jobs:
           set -euo pipefail
           out="$(docker run --rm image-under-test)"
           printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+{%- endif %}
 {%- endif %}
 
 # Optional: a review signal from a third party on every ready pull request,
