@@ -273,7 +273,13 @@ def test_service_archetype_ci_carries_the_image_check(backend: Path, rendered: P
 
 def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backend: Path) -> None:
     out = render(tmp_path / "web", archetype="web")
-    django = ("src/probe/settings.py", "src/probe/urls.py", "src/probe/asgi.py", "manage.py")
+    django = (
+        "src/probe/settings.py",
+        "src/probe/urls.py",
+        "src/probe/asgi.py",
+        "manage.py",
+        "tests/conftest.py",
+    )
     for name in django:
         assert (out / name).is_file(), f"{name} missing for the web archetype"
         for other in (rendered, backend):

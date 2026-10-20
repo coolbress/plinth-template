@@ -86,13 +86,4 @@ DJANGO_SETTINGS_MODULE = "{{ package_name }}.settings"
 addopts = ["--strict-markers", "--strict-config"]
 # Warnings are errors. A third-party warning that blocks gets one narrow
 # ignore here, with its reason.
-{%- if archetype == 'web' %}
-filterwarnings = [
-    "error",
-    # WhiteNoise warns that `staticfiles/` is missing until `collectstatic`
-    # runs, which the image does at build time and tests do not need.
-    "ignore:No directory at:UserWarning",
-]
-{%- else %}
 filterwarnings = ["error"]
-{%- endif %}

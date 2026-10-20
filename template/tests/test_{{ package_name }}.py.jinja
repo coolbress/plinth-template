@@ -1,7 +1,6 @@
 {% if archetype == 'web' %}from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
@@ -31,8 +30,7 @@ def test_admin_asks_an_anonymous_visitor_to_log_in(client: Client) -> None:
 
 # The mark: closing the response ends the request, which closes database connections.
 @pytest.mark.django_db
-def test_the_admin_s_static_files_are_served(tmp_path: Path, settings: Any, client: Client) -> None:
-    settings.STATIC_ROOT = tmp_path
+def test_the_admin_s_static_files_are_served(static_root: Path, client: Client) -> None:
     call_command("collectstatic", "--noinput", verbosity=0)
     response = client.get("/static/admin/css/base.css", secure=True)
     try:
