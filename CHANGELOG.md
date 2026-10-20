@@ -18,9 +18,17 @@ means `copier update` on an instance needs hands.
   project passes its own `uv sync --locked`, ruff, mypy (with django-stubs),
   pytest (with pytest-django) and `uv build`, under the names and assertions
   the checks already have. GitHub only: copier refuses `web` with
-  `host: gitlab`. Its `image` job, and the test that starts the server,
-  follow in the next change; plinth does not offer `web` until it pins a tag
-  that has them and coolbress/plinth #613, #614 and #615.
+  `host: gitlab`. plinth does not offer `web` until it pins a tag that also
+  has coolbress/plinth #613, #614 and #615.
+- The `web` archetype's `image` job, the second part of that gate. A server
+  never exits, so the container starts detached with production-shaped
+  settings (a key made for the run, placeholder hosts, no database reached),
+  must answer `/healthz`, and its first log line must carry
+  `"message": "started"`, the line the job already reads. Two tests run it:
+  one starts `python -m <package>` installed without the dev tools, and on
+  CI one runs the rendered job's own steps with docker, then gets the
+  admin's stylesheet from the running container as `text/css`, which
+  `collectstatic` in the image's build put there.
 
 ### Changed
 - `.gitignore` ignores `db.sqlite3` and `staticfiles/`, Django's local

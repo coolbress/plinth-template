@@ -15,11 +15,13 @@ uv build
 ```
 
 `pytest` renders the template into temporary directories and checks the
-result. Two tests go further: `test_generated_project_passes_its_own_checks`
+result. Some tests go further: `test_generated_project_passes_its_own_checks`
 runs `uv sync --locked`, ruff, mypy, pytest and `uv build` inside a rendered
-instance (network, for the packages), and
+instance (network, for the packages);
 `test_service_archetype_image_actually_builds_and_runs` builds and runs the
-`backend` image (docker; skipped on a machine without it, never on CI).
+`backend` image, and `test_web_archetype_image_job_passes_as_rendered` runs
+the `web` instance's `image` job steps as rendered (docker; both skipped on a
+machine without it, never on CI).
 
 ## Test a render by hand
 
