@@ -53,8 +53,11 @@ block of `settings.py`, and each comes off `SILENCED_SYSTEM_CHECKS` when set:
 
 To deploy, create the service and its database once from `render.yaml` in
 Render's dashboard (New > Blueprint, this repository) and type the allowed
-hosts there. Render then deploys each commit to the default branch after its
-checks pass, and runs the migrations first.
+hosts there. Then, in the Blueprint's Settings, set Auto Sync to No. Render
+deploys each commit to the default branch after its checks pass, and runs the
+migrations first. A change to `render.yaml` itself is the exception: with
+Auto Sync on, Render applies it on push, before any check. With it off, press
+Manual Sync once that change is merged and its checks have passed.
 {%- endif %}
 
 {% endif %}## Working with Claude Code

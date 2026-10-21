@@ -374,6 +374,16 @@ def test_web_render_yaml_deploys_after_checks_on_paid_plans(tmp_path: Path, rend
     assert [k for k, e in env.items() if "value" in e] == ["DJANGO_SETTINGS_MODULE"]
 
 
+def test_web_render_yaml_names_stay_strings(tmp_path: Path) -> None:
+    """A repository named `true` or `null` is a YAML boolean or null unquoted;
+    Render's Blueprint wants a string."""
+    for name in ("true", "null"):
+        out = render(tmp_path / name, project_name=name, archetype="web")
+        spec = yaml.safe_load((out / "render.yaml").read_text(encoding="utf-8"))
+        assert spec["services"][0]["name"] == name
+        assert spec["databases"][0]["name"] == f"{name}-db"
+
+
 def test_web_pre_deploy_migrates_without_manage_py(tmp_path: Path) -> None:
     """The image's run stage has `src/` and the environment but no
     `manage.py`; Render runs the pre-deploy command there."""
