@@ -43,5 +43,6 @@ other, so a new command in either document changes this file or the list.
   that prefix would also pass `git worktree add -B <branch>`, which resets an
   existing branch's tip, while `-b` refuses when the branch exists and git
   refuses `-b` together with `-B` or `--detach`. So the allowed form writes
-  only a new branch and a folder in the checkout, both undone with one
-  command, and it is the first step of every task.
+  only a new branch and a folder in the checkout: the folder goes with
+  `git worktree remove`, the branch with `git branch -D` after it, and
+  nothing else changes. It is the first step of every task.
