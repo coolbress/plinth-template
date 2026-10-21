@@ -55,7 +55,9 @@
       "Bash(glab config get token*)",
       "Bash(glab repo delete:*)",{% else %}      "Bash(gh auth token*)",
       "Bash(gh repo delete:*)",{% endif %}
-      "Bash(cat)",
+{% if archetype == 'web' %}      "Bash(render:*)",
+      "Read(~/.render/**)",
+{% endif %}      "Bash(cat)",
       "Bash(tee:*)",
       "Bash(sed -i:*)",
       "Read(./.env)",
@@ -82,7 +84,8 @@
         "./.env.development",
         "./.env.test",
         "./.env.staging",
-        "./.env.production"
+        "./.env.production"{% if archetype == 'web' %},
+        "~/.render"{% endif %}
       ]
     }
   }
