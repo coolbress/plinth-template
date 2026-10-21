@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    f"{__package__}.notes",
 ]
 
 MIDDLEWARE = [
@@ -67,11 +68,17 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Every view needs a logged-in person unless it is marked public
+    # (notes/access.py): a route nobody decided about is not open.
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 ROOT_URLCONF = f"{__package__}.urls"
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "notes"
+LOGOUT_REDIRECT_URL = "login"
 
 TEMPLATES = [
     {

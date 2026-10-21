@@ -1,0 +1,6 @@
+<!doctype html>
+<title>Notes</title>
+<h1>Your notes</h1>
+<form method="post">{% csrf_token %}<input name="text" maxlength="200" required> <button>Add</button></form>
+<ul>{% for note in notes %}<li><a href="{% url 'note' note.pk %}">{{ note.text }}</a></li>{% empty %}<li>None yet.</li>{% endfor %}</ul>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Log out</button></form>
