@@ -32,6 +32,18 @@ Copy [`.env.example`](.env.example) to `.env` and fill in the values.
 {%- if archetype == 'web' %} Nothing reads `.env` by itself: run with
 `uv run --env-file .env python -m {{ package_name }}`, or
 `uv run --env-file .env python manage.py <command>`.
+
+On a new database, apply the migrations before the first start:
+`uv run --env-file .env python manage.py migrate`. `/healthz` does not touch
+the database, so it answers on an unmigrated one while log-in and the admin
+fail.
+
+HSTS preload and include-subdomains are off, and their two deployment
+warnings are silenced in `settings.py` with the reason: preload is hard to
+undo, and subdomains reach the whole domain. To turn one on, set
+`SECURE_HSTS_PRELOAD` or `SECURE_HSTS_INCLUDE_SUBDOMAINS` to `True` in the
+production block of `settings.py` and remove its line from
+`SILENCED_SYSTEM_CHECKS`.
 {%- endif %}
 
 {% endif %}## Working with Claude Code
