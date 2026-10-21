@@ -350,6 +350,67 @@ def test_web_deploy_check_passes_and_its_silences_are_why(tmp_path: Path) -> Non
     assert found == {"security.W005", "security.W021"}, done.stdout + done.stderr
 
 
+def test_web_render_yaml_deploys_after_checks_on_paid_plans(tmp_path: Path, rendered: Path) -> None:
+    """One web service and one Postgres, never `free`; migrations before each
+    deploy; a deploy only after the checks pass; no value that is a secret
+    (coolbress/plinth #613)."""
+    out = render(tmp_path / "blueprint", archetype="web")
+    assert not (rendered / "render.yaml").exists()
+    spec = yaml.safe_load((out / "render.yaml").read_text(encoding="utf-8"))
+    (web,) = spec["services"]
+    (db,) = spec["databases"]
+    assert (web["type"], web["runtime"]) == ("web", "docker")
+    assert "free" not in (web["plan"], db["plan"])
+    assert web["autoDeployTrigger"] == "checksPass"
+    assert web["healthCheckPath"] == "/healthz"
+    assert web["preDeployCommand"] == "python -m django migrate --no-input"
+    env = {e["key"]: e for e in web["envVars"]}
+    assert env["DJANGO_SECRET_KEY"] == {"key": "DJANGO_SECRET_KEY", "generateValue": True}
+    assert env["DJANGO_ALLOWED_HOSTS"]["sync"] is False
+    assert env["DATABASE_URL"]["fromDatabase"]["name"] == db["name"]
+    assert [k for k, e in env.items() if "value" in e] == ["DJANGO_SETTINGS_MODULE"]
+
+
+def test_web_pre_deploy_migrates_without_manage_py(tmp_path: Path) -> None:
+    """The image's run stage has `src/` and the environment but no
+    `manage.py`; Render runs the pre-deploy command there."""
+    out = render(tmp_path / "predeploy", archetype="web")
+    subprocess.run(["uv", "sync", "--locked", "--no-dev", "--quiet"], cwd=out, check=True)  # noqa: S607
+    elsewhere = tmp_path / "run-stage"
+    elsewhere.mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    env["DJANGO_SETTINGS_MODULE"] = "probe.settings"
+    python = str(out / ".venv" / "bin" / "python")
+    done = subprocess.run(  # noqa: S603
+        [python, "-m", "django", "migrate", "--no-input"],
+        cwd=elsewhere,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "Applying notes.0001_initial... OK" in done.stdout
+
+
+def test_web_settings_deny_the_render_cli_and_its_credentials(
+    tmp_path: Path, rendered: Path
+) -> None:
+    web = json.loads(
+        (render(tmp_path / "walls", archetype="web") / ".claude/settings.json").read_text()
+    )
+    assert {"Bash(render:*)", "Read(~/.render/**)"} <= set(web["permissions"]["deny"])
+    assert "~/.render" in web["sandbox"]["filesystem"]["denyRead"]
+    other = (rendered / ".claude/settings.json").read_text(encoding="utf-8")
+    assert "render" not in other.replace("rendered", "")
+
+
+def test_the_web_choice_states_its_cost() -> None:
+    help_text = CONFIG.read_text(encoding="utf-8").split("\nplinth_sha:", 1)[0]
+    for fact in ("US $13 a month", "$7 web service", "$6 Postgres", "no spending cap", "30 days"):
+        assert fact in help_text, fact
+
+
 def test_web_archetype_is_refused_on_gitlab(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="GitHub only"):
         render(tmp_path / "gl-web", archetype="web", host="gitlab")

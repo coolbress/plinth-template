@@ -50,6 +50,11 @@ block of `settings.py`, and each comes off `SILENCED_SYSTEM_CHECKS` when set:
   `SECURE_HSTS_PRELOAD = True`. Then submit the domain at
   <https://hstspreload.org>; browsers apply it only after that, and removal
   takes months.
+
+To deploy, create the service and its database once from `render.yaml` in
+Render's dashboard (New > Blueprint, this repository) and type the allowed
+hosts there. Render then deploys each commit to the default branch after its
+checks pass, and runs the migrations first.
 {%- endif %}
 
 {% endif %}## Working with Claude Code
