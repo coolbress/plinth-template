@@ -766,20 +766,25 @@ def test_no_allow_rule_reaches_a_write_left_to_ask(tmp_path: Path, host: str) ->
     """The rules are exact or below the subcommand: `git fetch origin` with no
     `:*`, because a `git fetch` prefix also passes `--upload-pack=<program>`
     and a refspec that rewrites local branches; `git worktree list:*` and
-    `git worktree add:*`, which cannot reach `remove` (plinth-template #94)."""
+    `git worktree add --no-track -b:*`, which cannot reach `remove`, nor
+    `add -B <branch>`, which resets an existing branch's tip (plinth-template
+    #94, and its review)."""
     out = render(tmp_path / host, host=host)
     permissions = _settings(out)["permissions"]
     assert isinstance(permissions, dict)
     exact, prefixes = _bash_rules(permissions["allow"])
     assert "git fetch origin" in exact
     assert "git worktree list" in prefixes
-    assert "git worktree add" in prefixes
+    assert "git worktree add --no-track -b" in prefixes
     writes = [
         *_asks_on_purpose(out),
         "git fetch",
         "git fetch --upload-pack=/bin/sh origin",
         "git fetch origin +refs/heads/main:refs/heads/main",
         "git worktree remove .claude/worktrees/x",
+        "git worktree add -B main .claude/worktrees/x origin/main",
+        "git worktree add --no-track -B main .claude/worktrees/x origin/main",
+        "git worktree add .claude/worktrees/x",
         "git worktree",
         "git push origin HEAD:main",
     ]
