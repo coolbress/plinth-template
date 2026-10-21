@@ -36,3 +36,9 @@ databases:
   # backups, so it is not supported.
   - name: {{ project_name }}-db
     plan: 0.1c-256mb
+    # The 1 GB the price includes. Left out, Render gives this tier 15 GB at
+    # $0.30 a GB beyond the first, and a disk can grow but never shrink.
+    diskSizeGB: 1
+    # Only Render's private network: the app reaches it through
+    # `connectionString`, and nothing on the internet can try a password.
+    ipAllowList: []

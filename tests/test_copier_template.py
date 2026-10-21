@@ -361,6 +361,9 @@ def test_web_render_yaml_deploys_after_checks_on_paid_plans(tmp_path: Path, rend
     (db,) = spec["databases"]
     assert (web["type"], web["runtime"]) == ("web", "docker")
     assert "free" not in (web["plan"], db["plan"])
+    # The disk the quoted price includes, and no public address for the database.
+    assert db["diskSizeGB"] == 1
+    assert db["ipAllowList"] == []
     assert web["autoDeployTrigger"] == "checksPass"
     assert web["healthCheckPath"] == "/healthz"
     assert web["preDeployCommand"] == "python -m django migrate --no-input"
