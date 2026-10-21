@@ -53,6 +53,12 @@ jobs:
       # claims support that was never exercised. Not a matrix: a matrix would
       # rename the check to `ci / test (3.13)` and the ruleset requires `ci / test`.
       extra-python-versions: "3.13"
+{%- if archetype == 'web' %}
+      # Turns on `ci / migrations` and `ci / deploy-check`, which the ruleset
+      # requires for this archetype. Without it both pass as "does not apply",
+      # and `ci / floor-check` fails the job for that (plinth #614, #620).
+      web: true
+{%- endif %}
     # A called workflow cannot widen what its caller grants. `ci / floor-check`
     # reads the repository's labels, and labels belong to issues: without this
     # the label check reads an API error and reports `not verified` (plinth

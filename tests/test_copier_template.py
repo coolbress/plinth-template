@@ -308,6 +308,44 @@ def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backen
     assert "django" not in (backend / "pyproject.toml").read_text(encoding="utf-8")
 
 
+def test_web_ci_passes_web_true_and_no_other_archetype_does(tmp_path: Path, rendered: Path) -> None:
+    """The web archetype's ruleset requires `ci / migrations` and
+    `ci / deploy-check`, which run only with `web: true`; another archetype
+    passing it would run them on a project with no Django (plinth #614)."""
+    web = yaml.safe_load(_ci(render(tmp_path / "web", archetype="web")))
+    assert web["jobs"]["ci"]["with"]["web"] is True
+    assert "web" not in yaml.safe_load(_ci(rendered))["jobs"]["ci"]["with"]
+
+
+def test_web_deploy_check_passes_and_its_silences_are_why(tmp_path: Path) -> None:
+    """`ci / deploy-check`'s command on a fresh render, with its settings:
+    debug unset, placeholder hosts and database, a key made for the run. It
+    passes because HSTS preload and subdomains are silenced, and without the
+    silences it fails on exactly those two (plinth #614, Decisions)."""
+    out = render(tmp_path / "deploy", archetype="web")
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, check=True)  # noqa: S607
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    env |= {
+        "DJANGO_SECRET_KEY": os.urandom(32).hex(),
+        "DJANGO_ALLOWED_HOSTS": "deploy-check.invalid",
+        "DATABASE_URL": "postgres://deploy-check@localhost:5432/none",
+    }
+    python = str(out / ".venv" / "bin" / "python")
+    check = [python, "manage.py", "check", "--deploy", "--fail-level", "WARNING"]
+    done = subprocess.run(check, cwd=out, env=env, capture_output=True, text=True, timeout=120)  # noqa: S603
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "(2 silenced)" in done.stdout + done.stderr
+
+    settings = out / "src" / "probe" / "settings.py"
+    text = settings.read_text(encoding="utf-8")
+    unsilenced = text.split("\n# HSTS preload and include-subdomains", 1)[0]
+    settings.write_text(unsilenced + "\n", encoding="utf-8")
+    done = subprocess.run(check, cwd=out, env=env, capture_output=True, text=True, timeout=120)  # noqa: S603
+    assert done.returncode != 0
+    found = set(re.findall(r"security\.W\d+", done.stdout + done.stderr))
+    assert found == {"security.W005", "security.W021"}, done.stdout + done.stderr
+
+
 def test_web_archetype_is_refused_on_gitlab(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="GitHub only"):
         render(tmp_path / "gl-web", archetype="web", host="gitlab")

@@ -29,8 +29,22 @@ means `copier update` on an instance needs hands.
   CI one runs the rendered job's own steps with docker, then gets the
   admin's stylesheet from the running container as `text/css`, which
   `collectstatic` in the image's build put there.
+- A `web` project's `ci.yml` passes `web: true` to plinth's python-ci, which
+  turns on `ci / migrations` and `ci / deploy-check` (coolbress/plinth
+  #614). Its settings silence `security.W005` and `security.W021` (HSTS
+  include-subdomains and preload) from the first render, each with the
+  reason: preload is hard to undo, and subdomains reach the whole domain. A
+  fresh render then passes `manage.py check --deploy --fail-level WARNING`.
+  The README says how to turn either on, and to run `manage.py migrate`
+  before the first start on a new database.
 
 ### Changed
+- The `plinth_sha` default moves from `033fbe3` (plinth v2.0.0) to
+  `1af8f03` (plinth v2.5.0), the release with the `web` input. For every
+  other archetype the two new checks report a pass that does not apply,
+  which no ruleset requires, and no caller grants a new permission.
+  `plinth_gitlab_integrity` is unchanged: `gitlab/python-ci.yml` has the
+  same bytes at both commits.
 - `.gitignore` ignores `db.sqlite3` and `staticfiles/`, Django's local
   database and collected static files, in every archetype. No other file of an existing archetype's render changes.
 

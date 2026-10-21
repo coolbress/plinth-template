@@ -108,3 +108,13 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 3600
+
+# HSTS preload and include-subdomains are the owner's choice, not a default:
+# preload is hard to undo, and subdomains reach the whole domain. To turn one
+# on, set it above and remove its check here; preload also needs
+# include-subdomains, SECURE_HSTS_SECONDS of a year or more, and submission at
+# hstspreload.org (README). `ci / deploy-check` passes either way.
+SILENCED_SYSTEM_CHECKS = [
+    "security.W005",  # SECURE_HSTS_INCLUDE_SUBDOMAINS
+    "security.W021",  # SECURE_HSTS_PRELOAD
+]
