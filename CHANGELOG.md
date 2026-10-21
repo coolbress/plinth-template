@@ -4,6 +4,28 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 versions follow [Semantic Versioning](https://semver.org/). A MAJOR version
 means `copier update` on an instance needs hands.
 
+## [1.21.0] - 2026-10-21
+
+A fresh render of any archetype calls plinth v2.6.0, the release that
+carries the `ci / diff-size` rows for the `web` archetype
+(coolbress/plinth #615). In a new `web` repository that check now asks a
+person to approve a pull request that widens the public route list, edits
+or deletes an existing migration, changes the production settings module,
+`render.yaml`, the `Dockerfile` or `tests/migration_rows.json`; in a new
+repository of every archetype it asks when the `archetype:` line of
+`.copier-answers.yml` changes or the file goes. Nothing else in a render
+changes. `copier update` from 1.20.0 completed without hands on untouched
+cli instances on GitHub and GitLab and an untouched web instance on
+GitHub. It changes `.copier-answers.yml` alone and keeps each instance's
+own plinth pin, so an existing repository gets the new rows when its
+Dependabot raises the pin; hand-edited instances were not updated.
+
+### Changed
+- The `plinth_sha` default moves from `1af8f03` (plinth v2.5.0) to
+  `d50950b` (plinth v2.6.0). plinth's `gitlab/python-ci.yml` has the same
+  bytes at both commits, so `plinth_gitlab_integrity` is unchanged, and no
+  caller grants a new permission.
+
 ## [1.20.0] - 2026-10-21
 
 A new archetype, `web`: a Django app on Postgres, deployed to Render, with
