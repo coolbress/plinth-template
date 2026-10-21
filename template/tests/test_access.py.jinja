@@ -1,0 +1,130 @@
+"""Who may reach what, asked as the host's proxy asks: over HTTPS.
+
+With debug off every plain-HTTP request is a redirect to HTTPS, so a test
+that asked over HTTP and accepted "a redirect" would pass with no access rule
+at all. These ask with `secure=True` and assert where a redirect goes.
+"""
+
+from __future__ import annotations
+
+import re
+import secrets
+from collections.abc import Callable, Iterator
+from pathlib import Path
+
+import pytest
+from django.contrib.auth.models import Group, User
+from django.core.management import call_command
+from django.http import HttpRequest, HttpResponse
+from django.test import Client
+from django.urls import URLPattern, URLResolver, get_resolver, path
+
+from {{ package_name }}.notes.models import Note
+
+ROWS = Path(__file__).parent / "migration_rows.json"
+
+
+def routes(
+    patterns: list[URLPattern | URLResolver], prefix: str = "", namespace: str = ""
+) -> Iterator[tuple[str, str, Callable[..., object]]]:
+    """Every route as (path, namespace, view)."""
+    for p in patterns:
+        if isinstance(p, URLResolver):
+            yield from routes(p.url_patterns, prefix + str(p.pattern), p.namespace or namespace)
+        else:
+            yield prefix + str(p.pattern), namespace, p.callback
+
+
+def unmarked(patterns: list[URLPattern | URLResolver]) -> list[str]:
+    """Routes whose view is marked neither public nor for logged-in people.
+
+    The admin's own routes are marked by Django: its log-in is public, and
+    every other admin page checks the staff permission itself.
+    """
+    return [
+        route
+        for route, namespace, view in routes(patterns)
+        if namespace != "admin" and getattr(view, "login_required", None) not in (True, False)
+    ]
+
+
+def test_every_route_is_marked_public_or_for_logged_in_people() -> None:
+    """plinth's proposal, not a published standard: a route nobody decided about fails here."""
+    assert unmarked(get_resolver().url_patterns) == []
+
+
+def test_an_unmarked_route_is_named() -> None:
+    def forgotten(request: HttpRequest) -> HttpResponse:
+        return HttpResponse()
+
+    assert unmarked([path("forgotten/", forgotten)]) == ["forgotten/"]
+
+
+def test_an_anonymous_request_goes_to_the_log_in_page(client: Client) -> None:
+    for url in ("/", "/notes/1/"):
+        response = client.get(url, secure=True)
+        assert response.status_code == 302
+        assert response["Location"] == f"/accounts/login/?next={url}"
+
+
+@pytest.mark.django_db
+def test_another_person_s_note_is_not_found(client: Client) -> None:
+    alice = User.objects.create_user("alice", password=secrets.token_urlsafe())
+    bob = User.objects.create_user("bob", password=secrets.token_urlsafe())
+    note = Note.objects.create(owner=alice, text="alice only")
+    client.force_login(bob)
+
+    assert client.get(f"/notes/{note.pk}/", secure=True).status_code == 404
+    changed = client.post(f"/notes/{note.pk}/", {"text": "bob was here"}, secure=True)
+    assert changed.status_code == 404
+    note.refresh_from_db()
+    assert note.text == "alice only"
+    assert "alice only" not in client.get("/", secure=True).content.decode()
+
+
+def _csrf(html: str) -> str:
+    m = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', html)
+    assert m, "no CSRF token on the page"
+    return m.group(1)
+
+
+@pytest.mark.django_db
+def test_log_in_write_a_note_and_read_it() -> None:
+    """The flow a browser takes, through the forms, with CSRF checked. Over
+    HTTPS Django also wants the same-origin Referer a browser sends."""
+    secret = secrets.token_urlsafe()
+    User.objects.create_user("carol", password=secret)
+    browser = Client(enforce_csrf_checks=True)
+
+    def post(url: str, data: dict[str, str]) -> HttpResponse:
+        page = browser.get(url, secure=True).content.decode()
+        response = browser.post(
+            url,
+            data | {"csrfmiddlewaretoken": _csrf(page)},
+            secure=True,
+            headers={"referer": f"https://testserver{url}"},
+        )
+        assert isinstance(response, HttpResponse)
+        return response
+
+    logged_in = post("/accounts/login/?next=/", {"username": "carol", "password": secret})
+    assert logged_in.status_code == 302
+    assert logged_in["Location"] == "/"
+
+    written = post("/", {"text": "buy bread"})
+    assert written.status_code == 302
+    note = Note.objects.get(text="buy bread")
+    assert written["Location"] == f"/notes/{note.pk}/"
+    assert note.owner.username == "carol"
+    read = browser.get(written["Location"], secure=True).content.decode()
+    assert '<p id="text">buy bread</p>' in read
+
+
+@pytest.mark.django_db
+def test_the_migration_rows_load() -> None:
+    """`ci / migrations` loads this file at the base commit of every pull
+    request; a file that no longer loads fails here first."""
+    call_command("loaddata", str(ROWS), verbosity=0)
+    assert User.objects.count() == 2
+    assert Group.objects.get(name="editors").user_set.count() == 1
+    assert {n.owner.username for n in Note.objects.all()} == {"alice", "bob"}

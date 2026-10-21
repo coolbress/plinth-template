@@ -1,0 +1,41 @@
+[
+  {"model": "auth.group", "pk": 1, "fields": {"name": "editors", "permissions": []}},
+  {
+    "model": "auth.user",
+    "pk": 1,
+    "fields": {
+      "password": "!",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "alice",
+      "first_name": "",
+      "last_name": "",
+      "email": "",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2026-10-21T00:00:00Z",
+      "groups": [1],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 2,
+    "fields": {
+      "password": "!",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "bob",
+      "first_name": "",
+      "last_name": "",
+      "email": "",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2026-10-21T00:00:00Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {"model": "notes.note", "pk": 1, "fields": {"owner": 1, "text": "alice's first note", "created": "2026-10-21T00:00:00Z"}},
+  {"model": "notes.note", "pk": 2, "fields": {"owner": 2, "text": "bob's first note", "created": "2026-10-21T00:00:00Z"}}
+]

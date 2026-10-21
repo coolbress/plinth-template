@@ -1,0 +1,5 @@
+<!doctype html>
+<title>Note</title>
+<p id="text">{{ note.text }}</p>
+<form method="post">{% csrf_token %}<input name="text" value="{{ note.text }}" maxlength="200" required> <button>Save</button></form>
+<p><a href="{% url 'notes' %}">All notes</a></p>

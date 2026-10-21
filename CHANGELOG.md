@@ -37,6 +37,23 @@ means `copier update` on an instance needs hands.
   fresh render then passes `manage.py check --deploy --fail-level WARNING`.
   The README says how to turn either on, and to run `manage.py migrate`
   before the first start on a new database.
+- A `web` project carries a small app, `notes`, to show its access rules:
+  log in, write a note, read and change your own. Every view needs a
+  logged-in person unless it is marked public (Django's
+  `LoginRequiredMiddleware`), every route is marked public or for logged-in
+  people, and every query filters by the person, so another person's note
+  is not found. Its tests, inside `ci / test` and asked over HTTPS as the
+  host's proxy asks, show:
+  - an anonymous request goes to the log-in URL;
+  - another person's note answers 404, to reading and to changing;
+  - the log-in, write and read flow passes through the forms with CSRF
+    checked;
+  - an unmarked route fails, a rule that is plinth's proposal, not a
+    published standard.
+
+  `tests/migration_rows.json` holds two users, a group and a note for each.
+  `ci / migrations` reads these rows from the base commit, and a test loads
+  them, so a file that no longer loads fails first.
 
 ### Changed
 - The `plinth_sha` default moves from `033fbe3` (plinth v2.0.0) to

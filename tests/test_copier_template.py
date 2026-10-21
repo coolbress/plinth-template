@@ -300,6 +300,10 @@ def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backen
         "src/probe/asgi.py",
         "manage.py",
         "tests/conftest.py",
+        "src/probe/notes/models.py",
+        "src/probe/notes/migrations/0001_initial.py",
+        "tests/test_access.py",
+        "tests/migration_rows.json",
     )
     for name in django:
         assert (out / name).is_file(), f"{name} missing for the web archetype"
@@ -1169,6 +1173,12 @@ def test_no_unrendered_jinja_survives_into_an_instance(tmp_path: Path, archetype
     leaked = {}
     for f in sorted(out.rglob("*")):
         if not f.is_file() or ".git" in f.parts or f.suffix in {".lock", ".pyc"}:
+            continue
+        rel = f.relative_to(out).parts
+        # A Django template (the web archetype's pages) is written in Django's
+        # own `{% %}` and `{{ }}`; nothing else is an `.html` under `templates/`
+        # in `src/`.
+        if f.suffix == ".html" and rel[0] == "src" and "templates" in rel:
             continue
         try:
             body = f.read_text(encoding="utf-8")

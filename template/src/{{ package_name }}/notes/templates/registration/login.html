@@ -1,0 +1,4 @@
+<!doctype html>
+<title>Log in</title>
+<h1>Log in</h1>
+<form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="{{ next }}"><button>Log in</button></form>
