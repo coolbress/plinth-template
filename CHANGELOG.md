@@ -4,6 +4,34 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 versions follow [Semantic Versioning](https://semver.org/). A MAJOR version
 means `copier update` on an instance needs hands.
 
+## [1.22.0] - 2026-10-22
+
+The agent no longer stops for an approval at the start of every task. A
+rendered project's `.claude/settings.json` now allows the read and the
+worktree step that `AGENTS.md` asks for first, and a new
+`.claude/permissions.md` says which commands still ask and why: pushing,
+opening and merging a pull request, and removing a worktree, each a moment
+the person should see. `copier update` from 1.21.0 completed without hands
+on untouched cli instances on GitHub and GitLab and an untouched web
+instance on GitHub. It changes `.claude/settings.json` and `AGENTS.md`,
+adds `.claude/permissions.md`, and keeps each instance's own plinth pin;
+each updated instance equals a fresh render. Hand-edited instances were not
+updated.
+
+### Added
+- `.claude/permissions.md`: every command `AGENTS.md` and `CONTRIBUTING.md`
+  tell the agent to run either matches an allow rule or is listed there as
+  asking on purpose, with the reason (#94). A template test holds the two
+  documents and the list against each other on both hosts.
+
+### Changed
+- `.claude/settings.json` allows `git fetch origin` (that exact command),
+  `git worktree list` and `git worktree add --no-track -b`, the spelling
+  `AGENTS.md` gives. Measured on Claude Code 2.1.307: in a
+  `claude -p --setting-sources project,local` session the first two ran
+  with no denial, a rule without `:*` matched its own text only, and
+  `git worktree remove`, `git push` and `gh pr create` still asked.
+
 ## [1.21.0] - 2026-10-21
 
 A fresh render of any archetype calls plinth v2.6.0, the release that
