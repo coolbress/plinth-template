@@ -607,14 +607,18 @@ def test_settings_allow_the_checks_without_a_prompt(rendered: Path) -> None:
         "git status",
         "git diff",
         "git log",
+        "git fetch origin",
+        "git worktree list",
+        "git worktree add",
         "gh pr view",
         "gh pr checks",
         "gh issue list",
     ):
         assert any(a.startswith(f"Bash({cmd}") for a in allow), f"{cmd} would prompt: {allow}"
-    assert not any(a.startswith(("Bash(git push", "Bash(gh pr merge", "Bash(rm")) for a in allow), (
-        allow
-    )
+    assert not any(
+        a.startswith(("Bash(git push", "Bash(gh pr merge", "Bash(gh pr create", "Bash(rm"))
+        for a in allow
+    ), allow
 
 
 @pytest.mark.parametrize("heading", ["Reading the run", "Who you work as"])
@@ -647,6 +651,145 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, headi
         allowed = part in exact or any(part == p or part.startswith(f"{p} ") for p in prefixes)
         assert allowed, f"{part!r} would prompt: {allow}"
     assert not any(a.startswith(("Bash(gh api:", "Bash(glab api:")) for a in allow), allow
+
+
+#: A command the documents tell the agent to run starts with one of these.
+_TOLD = re.compile(r"^(?:git|gh|glab|uv) [a-z]")
+
+
+def _told_commands(text: str) -> list[str]:
+    """Every command a document tells the agent to run, as written: a part of a
+    fenced `bash` block, or an inline code span, that starts with one of the
+    binaries in `_TOLD`. A fenced line is joined across `\\`, cut at its `#`
+    comment and split at `&&`; a `$(...)` read inside an assignment counts as
+    its own command. A span whose second word is a flag (`gh --body`) describes
+    an option, not a command, and `gh` alone names the tool; neither is one."""
+    found: list[str] = []
+    for block in re.findall(r"```(?:bash|sh)\n(.*?)```", text, re.S):
+        for line in block.replace("\\\n", " ").splitlines():
+            for part in re.split(r"\s+#", line, maxsplit=1)[0].split("&&"):
+                part = " ".join(part.split())
+                inner = re.fullmatch(r'\w+="\$\((.*)\)"', part)
+                if inner:
+                    part = inner.group(1)
+                if _TOLD.match(part):
+                    found.append(part)
+    prose = re.sub(r"```.*?```", "", text, flags=re.S)
+    for span in re.findall(r"`([^`]+)`", prose):
+        span = " ".join(span.split())
+        if _TOLD.match(span):
+            found.append(span)
+    return found
+
+
+def _bash_rules(entries: object) -> tuple[set[str], list[str]]:
+    """`Bash(x)` matches the command text `x` and nothing longer; `Bash(x:*)`
+    matches `x` and `x <more>` (measured, plinth-template #94). A deny written
+    `Bash(x*)` is read as the prefix `x` too."""
+    assert isinstance(entries, list)
+    exact: set[str] = set()
+    prefixes: list[str] = []
+    for entry in entries:
+        if not entry.startswith("Bash("):
+            continue
+        body = entry[len("Bash(") : -1]
+        if body.endswith(":*"):
+            prefixes.append(body[:-2])
+        elif body.endswith("*"):
+            prefixes.append(body[:-1].rstrip())
+        else:
+            exact.add(body)
+    return exact, prefixes
+
+
+def _matches(command: str, exact: set[str], prefixes: list[str]) -> bool:
+    return command in exact or any(command == p or command.startswith(f"{p} ") for p in prefixes)
+
+
+def _asks_on_purpose(out: Path) -> list[str]:
+    """The commands `.claude/permissions.md` lists as asking on purpose or as
+    named only as what not to do: the first cell of each table row, one code
+    span each, read as a prefix (`git push` covers `git push origin HEAD:main`)."""
+    text = (out / ".claude" / "permissions.md").read_text(encoding="utf-8")
+    listed: list[str] = []
+    for heading in ("## Asks on purpose", "## Named only as what not to do"):
+        assert heading in text, f"permissions.md lost its section {heading!r}"
+        section = text.split(heading, 1)[1].split("\n## ", 1)[0]
+        for line in section.splitlines():
+            cell = line.split("|")[1] if line.startswith("| `") else ""
+            listed += re.findall(r"`([^`]+)`", cell)
+    return listed
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_every_command_the_documents_name_is_allowed_or_asks_on_purpose(
+    tmp_path: Path, host: str
+) -> None:
+    """A session whose mode is not `auto` waits for an approval on every command
+    `AGENTS.md` or `CONTRIBUTING.md` tells the agent to run that no allow rule
+    matches, and a non-interactive session is refused: `git fetch origin`, the
+    first command of every task, was refused that way (plinth-template #94).
+    Each such command matches an allow rule, is denied, or is in
+    `.claude/permissions.md` as asking on purpose, so an absent rule is a
+    decision the next reader can find and not an omission."""
+    out = render(tmp_path / host, host=host)
+    permissions = _settings(out)["permissions"]
+    assert isinstance(permissions, dict)
+    allow = _bash_rules(permissions["allow"])
+    deny = _bash_rules(permissions["deny"])
+    asks = _asks_on_purpose(out)
+    assert asks, "permissions.md lists no command"
+    told: dict[str, list[str]] = {}
+    for name in ("AGENTS.md", "CONTRIBUTING.md"):
+        told[name] = _told_commands((out / name).read_text(encoding="utf-8"))
+    # The parser finds what the documents are known to say; otherwise an empty
+    # result would pass.
+    known = {"git fetch origin", "git worktree list", "git worktree remove"}
+    assert known <= set(told["AGENTS.md"]), told
+    assert any(c.startswith("git worktree add ") for c in told["CONTRIBUTING.md"])
+    assert any(c.startswith(("gh pr merge ", "glab mr merge ")) for c in told["CONTRIBUTING.md"])
+    for name, commands in told.items():
+        for command in commands:
+            ok = (
+                _matches(command, *allow)
+                or _matches(command, *deny)
+                or _matches(command, set(), asks)
+            )
+            assert ok, (
+                f"{name} tells the agent to run {command!r}: no allow rule matches it"
+                f" and .claude/permissions.md does not say it asks. allow={allow}"
+            )
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_no_allow_rule_reaches_a_write_left_to_ask(tmp_path: Path, host: str) -> None:
+    """The rules are exact or below the subcommand: `git fetch origin` with no
+    `:*`, because a `git fetch` prefix also passes `--upload-pack=<program>`
+    and a refspec that rewrites local branches; `git worktree list:*` and
+    `git worktree add --no-track -b:*`, which cannot reach `remove`, nor
+    `add -B <branch>`, which resets an existing branch's tip (plinth-template
+    #94, and its review)."""
+    out = render(tmp_path / host, host=host)
+    permissions = _settings(out)["permissions"]
+    assert isinstance(permissions, dict)
+    exact, prefixes = _bash_rules(permissions["allow"])
+    assert "git fetch origin" in exact
+    assert "git worktree list" in prefixes
+    assert "git worktree add --no-track -b" in prefixes
+    writes = [
+        *_asks_on_purpose(out),
+        "git fetch",
+        "git fetch --upload-pack=/bin/sh origin",
+        "git fetch origin +refs/heads/main:refs/heads/main",
+        "git worktree remove .claude/worktrees/x",
+        "git worktree add -B main .claude/worktrees/x origin/main",
+        "git worktree add --no-track -B main .claude/worktrees/x origin/main",
+        "git worktree add .claude/worktrees/x",
+        "git worktree",
+        "git push origin HEAD:main",
+    ]
+    for write in writes:
+        assert not _matches(write, exact, prefixes), f"{write!r} is allowed: {exact}, {prefixes}"
 
 
 def test_gitlab_settings_do_not_allow_glab_ci_get(tmp_path: Path) -> None:
