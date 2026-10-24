@@ -1,0 +1,54 @@
+"""The package as a person gets it: built into a wheel, imported from that wheel.
+
+The package's own test imports the source tree. A module the wheel leaves out,
+or a public name that exists only in the source tree, passes there and fails
+here. The wheel is built with `uv build` (its build backend is fetched
+the first time, as the `uv build` check does) and imported from the file
+itself, ahead of the source tree on the path.
+
+When you change the public name or how the package is built, change this test
+with it.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# Runs in a fresh interpreter: the wheel goes first on the path, and the module
+# must come from it, not from the source tree the environment also holds.
+CALL = """
+import sys
+wheel = sys.argv[1]
+sys.path.insert(0, wheel)
+import {{ package_name }} as package
+assert package.__file__.startswith(wheel), package.__file__
+print(package.greet("world"))
+"""
+
+
+def test_the_public_name_works_from_the_built_wheel(tmp_path: Path) -> None:
+    uv = shutil.which("uv")
+    assert uv, "uv is not on PATH: this test builds the wheel with `uv build`"
+    built = subprocess.run(  # noqa: S603
+        [uv, "build", "--wheel", "--out-dir", str(tmp_path), str(ROOT)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, f"uv build failed\n{built.stdout}\n{built.stderr}"
+    (wheel,) = tmp_path.glob("*.whl")
+    done = subprocess.run(  # noqa: S603
+        [sys.executable, "-I", "-c", CALL, str(wheel)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+        timeout=60,
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert done.stdout == "Hello, world!\n"

@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Before a commit, clean up the change within its agreed behaviour, then run this repository's checks, the commands in AGENTS.md's code block.
+description: Before a commit, clean up the change within its agreed behaviour, then run this repository's checks, the commands in AGENTS.md's code block{% if archetype != 'web' %}, then the test that runs the program and report what it printed{% endif %}.
 ---
 
 # Verify
@@ -40,9 +40,50 @@ anywhere else.
   look, so a failure costs a commit instead of a merge request round.{% else %}- CI runs the same checks as required checks and is the gate. This is the
   early look, so a failure costs a commit instead of a pull request round.{% endif %}
 
+{% if archetype != 'web' -%}
+## 3. Run the program
+
+{% if archetype == 'library' -%}
+Run `tests/test_built_wheel.py` alone: the pytest command in `AGENTS.md`'s
+code block, with the file and `-v` after it. It builds the wheel and calls the
+package's public name from it, as a person who installs the package does, not
+from the source tree.
+{%- else -%}
+Run `tests/test_entry_point.py` alone: the pytest command in `AGENTS.md`'s
+code block, with the file and `-v` after it. It runs
+`python -m {{ package_name }}` as a person does, checks that it exits 0 and
+logs "started" with a greeting, and compares what it prints with
+`tests/entry_point.expected`.
+{%- endif %}
+Step 2's `pytest` ran it among the others; run alone, its result is its own.
+
+Put what you ran and saw in the report, not a summary of it:
+
+- the command, exactly as run;
+- its exit status;
+- the first lines of its output, up to 20, as printed;
+- the commit it ran on (`git rev-parse --short HEAD`), and whether the working
+  tree had changes not yet committed (`git status --short`).
+
+A failure here stops the commit like any other.
+{%- if archetype == 'library' %} A change to the public name or how
+the package is built changes this test with it, in the same change.
+{%- else %} A change to the entry point
+changes this test with it, in the same change. A diff in the failure means
+what the program prints changed: when that is the intended change, the new
+lines go into `tests/entry_point.expected` in the same change, and the report
+says so; the person approves the output by reading that diff.
+{%- endif %}
+
+This skill runs the checks and this one test of the program, not the app any
+further. It takes the place of Claude Code's bundled `/verify`, which builds
+and runs the app; to see the change working in the running app, use the
+bundled `/run`.
+{%- else -%}
 This skill runs the checks, not the app. It takes the place of Claude Code's
 bundled `/verify`, which builds and runs the app; to see the change working in
 the running app, use the bundled `/run`.
+{%- endif %}
 
 What you tell the person while you do this, from the first line after this
 skill loads to the report, is in the language they write in, not in this

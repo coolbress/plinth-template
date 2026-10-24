@@ -1,0 +1,73 @@
+"""The entry point as a person runs it, in its own process:
+
+    python -m {{ package_name }}
+
+The package's own test calls `greet` in this process; nothing there runs the
+program. This test does: it exits 0, its log line says "started" and carries
+a greeting, and what it prints matches `tests/entry_point.expected` (the
+greeting's value included).
+
+When you change the entry point, change this test and that file with it, in
+the same pull request. A changed output fails here with a diff; when the change
+is intended, copy the new lines into `tests/entry_point.expected`, so the
+reviewer sees the old and the new output side by side.
+"""
+
+from __future__ import annotations
+
+import difflib
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+EXPECTED = Path(__file__).with_name("entry_point.expected")
+
+#: Fields that change from run to run, left out of the comparison.
+VARYING = ("time",)
+
+
+def run() -> subprocess.CompletedProcess[str]:
+    # The interpreter running pytest, so the program sees the same environment.
+    return subprocess.run(
+        [sys.executable, "-m", "{{ package_name }}"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+
+def records(stdout: str) -> list[dict[str, Any]]:
+    """Each stdout line as the JSON object the entry point logs."""
+    return [json.loads(line) for line in stdout.splitlines() if line]
+
+
+def steady(record: dict[str, Any]) -> str:
+    """The record without the fields that vary, in the order it was logged."""
+    return json.dumps({k: v for k, v in record.items() if k not in VARYING}, ensure_ascii=False)
+
+
+def test_the_entry_point_runs_and_logs_that_it_started() -> None:
+    done = run()
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    logged = records(done.stdout)
+    started = [r for r in logged if r.get("message") == "started"]
+    assert started, f"no 'started' line in what it printed:\n{done.stdout}"
+    # Its value is the stored output's to hold, so an intended change is one file.
+    assert started[0].get("greeting"), f"the 'started' line carries no greeting: {started[0]}"
+
+
+def test_what_the_entry_point_prints_matches_the_stored_output() -> None:
+    done = run()
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    actual = [steady(r) for r in records(done.stdout)]
+    expected = EXPECTED.read_text(encoding="utf-8").splitlines()
+    diff = "\n".join(
+        difflib.unified_diff(expected, actual, str(EXPECTED.name), "printed now", lineterm="")
+    )
+    assert actual == expected, (
+        f"the entry point's output changed ({', '.join(VARYING)} left out):\n{diff}\n"
+        f"If the change is intended, put the new lines in tests/{EXPECTED.name}."
+    )

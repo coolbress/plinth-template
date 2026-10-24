@@ -4,6 +4,29 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 versions follow [Semantic Versioning](https://semver.org/). A MAJOR version
 means `copier update` on an instance needs hands.
 
+## [Unreleased]
+
+### Added
+- Each non-`web` project tests what a person runs, not only `greet`
+  (#109). A `cli`, `backend` or `data-ml` project's
+  `tests/test_entry_point.py` runs `python -m <package>` in its own
+  process: it exits 0, its JSON log line says "started" with a greeting,
+  and the line, without its time, matches `tests/entry_point.expected`.
+  A changed output fails with a diff; an intended change is approved by
+  updating that file in the same pull request. A `library` project's
+  `tests/test_built_wheel.py` builds the wheel with `uv build` and calls
+  the public name from it, not from the source tree.
+- A `cli` project now has the entry point the service archetypes have,
+  `src/<package>/__main__.py`: `copier update` on an existing `cli`
+  project adds this file, along with the test and its expected output.
+- The `verify` skill of a non-`web` project has a third step: it runs
+  that one test and writes into its report the command, the exit status,
+  the first lines of output and the commit. It is still one skill.
+
+### Changed
+- The `backend` and `data-ml` entry point's docstring names the test that
+  runs it. A `web` project renders the same as on 1.23.0.
+
 ## [1.23.0] - 2026-10-24
 
 A new `web` project's first deploy to Render no longer fails on its own,
