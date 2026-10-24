@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-10-24
+
+A non-`web` project now tests the program a person runs, not only one
+function. A `cli`, `backend` or `data-ml` project runs its entry point in a
+test and compares what it prints with a stored file; a `library` project
+calls its public name from the wheel it builds. The `verify` skill runs
+that test and reports what it saw. An existing `cli` project gains
+`src/<package>/__main__.py` on `copier update`; an untouched project of
+each archetype updated from 1.23.0 without conflicts.
+
 ### Added
 - Each non-`web` project tests what a person runs, not only `greet`
   (#109). A `cli`, `backend` or `data-ml` project's
