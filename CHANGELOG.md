@@ -4,7 +4,19 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 versions follow [Semantic Versioning](https://semver.org/). A MAJOR version
 means `copier update` on an instance needs hands.
 
-## [Unreleased]
+## [1.23.0] - 2026-10-24
+
+A new `web` project's first deploy to Render no longer fails on its own,
+and the app answers on the address Render gives it without anyone typing
+it. The pre-deploy step waits up to two minutes for the database the
+Blueprint is still creating, then migrates once; the settings read
+Render's own host name. The README now says how to make the first account
+and how to restore the database, with the window per workspace plan. All
+four come from the first live Render run (coolbress/plinth#607). An
+existing `web` project gets them with `/plinth:template-update`; with
+Auto Sync off, press Manual Sync once after that update is merged, so
+Render uses the new pre-deploy step. A cli project renders the same as on
+1.22.0.
 
 ### Added
 - A `web` project's pre-deploy step is `python -m <package>.predeploy`
