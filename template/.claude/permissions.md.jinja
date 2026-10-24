@@ -13,6 +13,7 @@ other, so a new command in either document changes this file or the list.
 | Command | Why it asks |
 | --- | --- |
 | `git worktree remove` | It deletes the worktree's ignored files, a local data file included, without a word. `AGENTS.md` asks for `git status --porcelain --ignored` in the worktree first, and a rule would run the removal before anyone read that list. |
+| `uv lock` | No document tells the agent to run it: `uv sync --locked` fails when the lockfile disagrees with `pyproject.toml`, and changing the lockfile is the person's call. The approval is also where an index option is seen; see the `uv` rules below. |
 | `git push` | It publishes the branch to the host, where other people can read it, and a project is public by default. The approval is the person seeing what leaves the machine. |
 {% if host == 'gitlab' %}| `glab mr create` | The same: it publishes a title and a description to the host. |
 | `glab mr merge` | It runs only on the person's word for that merge request, as `AGENTS.md` says; a rule would let a yes for one carry to the next. |
