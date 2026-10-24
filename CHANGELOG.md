@@ -6,6 +6,21 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A GitHub project's `.claude/settings.json` denies
+  `gh auth status --show-token` and `gh auth status -t`, which print the
+  everyday token as `gh auth token` does (#114); the GitLab render already
+  denied `glab`'s two spellings. `AGENTS.md` names them, and says a
+  spelling with the options reordered (`-t` after `--hostname`) matches no
+  rule and is stopped by the permission prompt.
+- The allow list holds `uv sync --locked` and `uv build` exactly, the
+  spellings the documents and CI use, in place of the `uv sync:*`,
+  `uv lock:*` and `uv build:*` prefixes (#115). A `uv` command with an
+  index option (`--index-url`, `--default-index`, `--index`,
+  `--extra-index-url`, `--find-links`) now asks before it sends a request
+  to the host it names, and `uv lock` asks; `.claude/permissions.md` says
+  why.
+
 ## [1.24.0] - 2026-10-24
 
 A non-`web` project now tests the program a person runs, not only one
