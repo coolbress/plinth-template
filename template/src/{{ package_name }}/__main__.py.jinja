@@ -3,7 +3,8 @@
 {% if archetype == 'web' -%}
 It serves the Django project with uvicorn on `$PORT` (default 8000), after
 checking that production's settings are in the environment: a start without a
-secret key, allowed hosts or a database URL is refused, not served with
+secret key, allowed hosts (`DJANGO_ALLOWED_HOSTS` or Render's
+`RENDER_EXTERNAL_HOSTNAME`) or a database URL is refused, not served with
 defaults.
 {%- else -%}
 No framework is chosen here; what serves the application is this project's
@@ -64,12 +65,18 @@ def configure(level: int = logging.INFO) -> None:
 
 
 {% if archetype == 'web' -%}
-REQUIRED = ("DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DATABASE_URL")
+# Each setting is met by any one of its names. The hosts come from
+# `DJANGO_ALLOWED_HOSTS` or from Render's own name for the service.
+REQUIRED = (
+    ("DJANGO_SECRET_KEY",),
+    ("DJANGO_ALLOWED_HOSTS", "RENDER_EXTERNAL_HOSTNAME"),
+    ("DATABASE_URL",),
+)
 
 
 def missing(environ: dict[str, str]) -> list[str]:
     """The production settings not set in `environ`."""
-    return [name for name in REQUIRED if not environ.get(name)]
+    return [" or ".join(names) for names in REQUIRED if not any(environ.get(n) for n in names)]
 
 
 def main() -> None:

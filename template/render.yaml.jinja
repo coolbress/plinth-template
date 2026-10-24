@@ -16,9 +16,11 @@ services:
     plan: 0.5c-512mb
     # Deploy a commit to the default branch only after its checks pass.
     autoDeployTrigger: checksPass
-    # Before each deploy, in the new image: a migration that fails stops the
-    # deploy, and the running version keeps serving.
-    preDeployCommand: python -m django migrate --no-input
+    # Before each deploy, in the new image: wait up to two minutes for the
+    # database (on the first deploy it is created alongside), then migrate
+    # once. A migration that fails stops the deploy, and the running version
+    # keeps serving.
+    preDeployCommand: python -m {{ package_name }}.predeploy
     # The one route exempt from the HTTPS redirect; it does not touch the database.
     healthCheckPath: /healthz
     envVars:
@@ -26,8 +28,9 @@ services:
         value: {{ package_name }}.settings
       - key: DJANGO_SECRET_KEY
         generateValue: true
-      # The service's onrender.com name, and a custom domain if you add one,
-      # comma separated: typed in the dashboard, never here.
+      # A custom domain, comma separated if more than one: typed in the
+      # dashboard, never here. The service's own onrender.com name needs no
+      # typing; the settings read it from Render's RENDER_EXTERNAL_HOSTNAME.
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
       - key: DATABASE_URL
