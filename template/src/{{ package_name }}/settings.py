@@ -1,8 +1,8 @@
 """Django settings, read from the environment.
 
-Nothing secret is written here. Production sets `DJANGO_SECRET_KEY`,
-`DJANGO_ALLOWED_HOSTS` and `DATABASE_URL` in the host's environment; the entry
-point (`__main__.py`) refuses to start without them. `DJANGO_DEBUG=1`
+Nothing secret is written here. Production sets `DJANGO_SECRET_KEY`, the
+allowed hosts and `DATABASE_URL` in the host's environment; the entry point
+(`__main__.py`) refuses to start without them. `DJANGO_DEBUG=1`
 turns debug on for local work only.
 """
 
@@ -24,6 +24,12 @@ DEBUG = os.environ.get("DJANGO_DEBUG") == "1"
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or get_random_secret_key()
 
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h]
+# Render sets this on a web service to the `onrender.com` name it gave the
+# service, which can differ from the one typed in the Blueprint form
+# (`<name>-ab12.onrender.com`). `DJANGO_ALLOWED_HOSTS` then only needs a
+# custom domain.
+if render_host := os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(render_host)
 if DEBUG:
     ALLOWED_HOSTS += ["localhost", "127.0.0.1"]
 

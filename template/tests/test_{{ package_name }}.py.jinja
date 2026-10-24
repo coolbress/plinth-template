@@ -1,14 +1,19 @@
 {% if archetype == 'web' %}from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.db.utils import OperationalError
 from django.test import Client
 
 from {{ package_name }} import greet
+from {{ package_name }} import settings as project_settings
 from {{ package_name }}.__main__ import missing
+from {{ package_name }}.predeploy import run
 from {{ package_name }}.settings import database
 
 
@@ -47,9 +52,91 @@ def test_the_migrations_apply_and_users_are_stored() -> None:
 
 
 def test_production_start_names_what_is_missing() -> None:
-    assert missing({}) == ["DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DATABASE_URL"]
+    hosts = "DJANGO_ALLOWED_HOSTS or RENDER_EXTERNAL_HOSTNAME"
+    assert missing({}) == ["DJANGO_SECRET_KEY", hosts, "DATABASE_URL"]
+    assert missing({"DJANGO_SECRET_KEY": "x", "DATABASE_URL": "u"}) == [hosts]
     present = {"DJANGO_SECRET_KEY": "x", "DJANGO_ALLOWED_HOSTS": "h", "DATABASE_URL": "u"}
     assert missing(present) == []
+    on_render = {"DJANGO_SECRET_KEY": "x", "RENDER_EXTERNAL_HOSTNAME": "h", "DATABASE_URL": "u"}
+    assert missing(on_render) == []
+
+
+def test_render_s_own_host_is_served_and_another_is_refused(
+    monkeypatch: pytest.MonkeyPatch, settings: Any, client: Client
+) -> None:
+    monkeypatch.delenv("DJANGO_ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("DJANGO_DEBUG", raising=False)
+    monkeypatch.setenv("RENDER_EXTERNAL_HOSTNAME", "app-ab12.onrender.com")
+    try:
+        hosts = importlib.reload(project_settings).ALLOWED_HOSTS
+    finally:
+        monkeypatch.undo()
+        importlib.reload(project_settings)
+    assert hosts == ["app-ab12.onrender.com"]
+    settings.ALLOWED_HOSTS = hosts
+    assert client.get("/healthz", HTTP_HOST="app-ab12.onrender.com").status_code == 200
+    assert client.get("/healthz", HTTP_HOST="app.onrender.com").status_code == 400
+
+
+class Database:
+    """Refuses the first `refusals` connections, then accepts; counts migrations."""
+
+    def __init__(self, refusals: int, migrate_error: Exception | None = None) -> None:
+        self.refusals = refusals
+        self.attempts = 0
+        self.migrations = 0
+        self.migrate_error = migrate_error
+        self.now = 0.0
+
+    def connect(self) -> None:
+        self.attempts += 1
+        if self.attempts <= self.refusals:
+            raise OperationalError(f"connection refused ({self.attempts})")
+
+    def migrate(self) -> None:
+        self.migrations += 1
+        if self.migrate_error:
+            raise self.migrate_error
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+    def clock(self) -> float:
+        return self.now
+
+    def run(self) -> int:
+        return run(self.connect, self.migrate, sleep=self.sleep, clock=self.clock)
+
+
+def test_pre_deploy_migrates_once_when_the_database_answers_at_once() -> None:
+    db = Database(refusals=0)
+    assert db.run() == 0
+    assert (db.attempts, db.migrations, db.now) == (1, 1, 0.0)
+
+
+def test_pre_deploy_waits_through_refusals_then_migrates_once() -> None:
+    db = Database(refusals=3)
+    assert db.run() == 0
+    assert (db.attempts, db.migrations) == (4, 1)
+    assert 0 < db.now < 120
+
+
+def test_pre_deploy_gives_up_after_two_minutes_without_migrating(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    db = Database(refusals=10_000)
+    assert db.run() != 0
+    assert db.migrations == 0
+    assert db.now == 120
+    assert f"connection refused ({db.attempts})" in caplog.text
+
+
+def test_pre_deploy_does_not_retry_a_failing_migration() -> None:
+    # The same error a refused connection raises: only the connection is retried.
+    db = Database(refusals=1, migrate_error=OperationalError("a migration failed"))
+    with pytest.raises(OperationalError, match="a migration failed"):
+        db.run()
+    assert (db.attempts, db.migrations) == (2, 1)
 
 
 def test_database_url_becomes_a_postgres_entry() -> None:

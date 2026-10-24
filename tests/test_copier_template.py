@@ -298,6 +298,7 @@ def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backen
         "src/probe/settings.py",
         "src/probe/urls.py",
         "src/probe/asgi.py",
+        "src/probe/predeploy.py",
         "manage.py",
         "tests/conftest.py",
         "src/probe/notes/models.py",
@@ -366,7 +367,7 @@ def test_web_render_yaml_deploys_after_checks_on_paid_plans(tmp_path: Path, rend
     assert db["ipAllowList"] == []
     assert web["autoDeployTrigger"] == "checksPass"
     assert web["healthCheckPath"] == "/healthz"
-    assert web["preDeployCommand"] == "python -m django migrate --no-input"
+    assert web["preDeployCommand"] == "python -m probe.predeploy"
     env = {e["key"]: e for e in web["envVars"]}
     assert env["DJANGO_SECRET_KEY"] == {"key": "DJANGO_SECRET_KEY", "generateValue": True}
     assert env["DJANGO_ALLOWED_HOSTS"]["sync"] is False
@@ -386,7 +387,8 @@ def test_web_render_yaml_names_stay_strings(tmp_path: Path) -> None:
 
 def test_web_pre_deploy_migrates_without_manage_py(tmp_path: Path) -> None:
     """The image's run stage has `src/` and the environment but no
-    `manage.py`; Render runs the pre-deploy command there."""
+    `manage.py`; Render runs the pre-deploy command there. The database
+    answers at once here; the wait is the instance's own tests (#105)."""
     out = render(tmp_path / "predeploy", archetype="web")
     subprocess.run(["uv", "sync", "--locked", "--no-dev", "--quiet"], cwd=out, check=True)  # noqa: S607
     elsewhere = tmp_path / "run-stage"
@@ -395,7 +397,7 @@ def test_web_pre_deploy_migrates_without_manage_py(tmp_path: Path) -> None:
     env["DJANGO_SETTINGS_MODULE"] = "probe.settings"
     python = str(out / ".venv" / "bin" / "python")
     done = subprocess.run(  # noqa: S603
-        [python, "-m", "django", "migrate", "--no-input"],
+        [python, "-m", "probe.predeploy"],
         cwd=elsewhere,
         env=env,
         capture_output=True,
@@ -1559,6 +1561,82 @@ def test_web_entry_point_refuses_then_serves(tmp_path: Path) -> None:
         server.wait(timeout=10)
         if server.stdout is not None:
             server.stdout.close()
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_web_entry_point_serves_render_s_own_host_only(tmp_path: Path) -> None:
+    """With `RENDER_EXTERNAL_HOSTNAME` and no `DJANGO_ALLOWED_HOSTS`, as on a
+    Render service whose form held a guessed host, the server starts, answers
+    on that host, and refuses another with 400 (#105)."""
+    import socket
+    import urllib.error
+    import urllib.request
+
+    out = render(tmp_path / "serve", archetype="web")
+    subprocess.run(["uv", "sync", "--locked", "--no-dev", "--quiet"], cwd=out, check=True)  # noqa: S607
+    python = str(out / ".venv" / "bin" / "python")
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    env |= {
+        "DJANGO_SECRET_KEY": os.urandom(32).hex(),
+        "RENDER_EXTERNAL_HOSTNAME": "probe-ab12.onrender.com",
+        "DATABASE_URL": "postgres://check@localhost:5432/none",
+        "PORT": str(port),
+    }
+
+    def status(host: str) -> int:
+        url = f"http://127.0.0.1:{port}/healthz"
+        request = urllib.request.Request(url, headers={"Host": host})
+        try:
+            with urllib.request.urlopen(request, timeout=2) as r:  # noqa: S310
+                return int(r.status)
+        except urllib.error.HTTPError as error:
+            return error.code
+
+    server = subprocess.Popen(  # noqa: S603
+        [python, "-m", "probe"], cwd=out, env=env, stdout=subprocess.PIPE, text=True
+    )
+    try:
+        assert server.stdout is not None
+        assert '"message": "started"' in server.stdout.readline()
+        answered = 0
+        for _ in range(60):
+            try:
+                answered = status("probe-ab12.onrender.com")
+                break
+            except OSError:
+                time.sleep(0.5)
+        assert answered == 200
+        assert status("probe.onrender.com") == 400
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+        if server.stdout is not None:
+            server.stdout.close()
+
+
+def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path) -> None:
+    """What the first live deploy had to find out by hand (#105): the first
+    account, the restore and its window, the wait and the real host."""
+    readme = (render(tmp_path / "readme", archetype="web") / "README.md").read_text("utf-8")
+    flat = " ".join(readme.split())
+    for fact in (
+        "**Shell**",
+        "`python -m django createsuperuser`",
+        "paste it",
+        "**Recovery**",
+        "**Restore Database**",
+        "at least ten minutes ago",
+        "`DATABASE_URL` to the new database's Internal Database URL",
+        "the past 3 days on Hobby, the past 7 days on Pro or higher",
+        "read 2026-10-24",
+        "waits up to two minutes",
+        "answers on the address Render actually gives it",
+    ):
+        assert fact in flat, fact
+    assert "createsuperuser" not in (backend / "README.md").read_text(encoding="utf-8")
 
 
 def _speaking(language: str) -> dict[str, str]:

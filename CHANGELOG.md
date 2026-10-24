@@ -4,6 +4,36 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 versions follow [Semantic Versioning](https://semver.org/). A MAJOR version
 means `copier update` on an instance needs hands.
 
+## [Unreleased]
+
+### Added
+- A `web` project's pre-deploy step is `python -m <package>.predeploy`
+  (#105). On the first Blueprint deploy Render creates the database and
+  the service together, and `migrate` could start before the database
+  accepted connections, failing the first deploy (coolbress/plinth #607).
+  The step now retries only the connection, every 5 seconds for up to two
+  minutes, then runs `migrate` once; a failing migration is not retried,
+  and a database that never answers still fails the deploy with the last
+  error. The instance's tests cover all four paths without waiting.
+- The `web` README says, in plain words, how to make the first account
+  (`python -m django createsuperuser` in the web service's own Shell, the
+  password pasted rather than typed blind) and how to get data back
+  (Recovery, Restore Database at least ten minutes ago into a new
+  database, then the web service's `DATABASE_URL`), with the window per
+  workspace plan from Render's backups page, read 2026-10-24: the past 3
+  days on Hobby, 7 on Pro or higher.
+
+### Changed
+- A `web` project's settings add Render's `RENDER_EXTERNAL_HOSTNAME` to
+  the allowed hosts, and the entry point starts with either it or
+  `DJANGO_ALLOWED_HOSTS` (#105). Render names a service
+  `<name>-<4 characters>.onrender.com`, so the host typed in the Blueprint
+  form before the service existed was refused with 400. Another host is
+  still refused, and the secret key and the database URL are still
+  required. `render.yaml` keeps its `DJANGO_ALLOWED_HOSTS` entry, now for
+  a custom domain, and changes its `preDeployCommand`: an instance with
+  Auto Sync off needs Manual Sync once after the update is merged.
+
 ## [1.22.0] - 2026-10-22
 
 The agent no longer stops for an approval at the start of every task. A
