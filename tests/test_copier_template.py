@@ -659,6 +659,45 @@ def test_settings_allow_the_checks_without_a_prompt(rendered: Path) -> None:
     ), allow
 
 
+def test_github_settings_deny_gh_auth_status_printing_the_token(rendered: Path) -> None:
+    """`gh auth status --show-token` and `-t` print the everyday token, as
+    `gh auth token` does, and no document uses them (plinth #642, Findings 2);
+    the GitLab render denies `glab`'s two spellings the same way. A prefix
+    deny does not reach the options in another order (`-t` after
+    `--hostname`); no allow rule does either, so the prompt stops that one."""
+    permissions = _settings(rendered)["permissions"]
+    assert isinstance(permissions, dict)
+    for rule in ("Bash(gh auth status --show-token*)", "Bash(gh auth status -t*)"):
+        assert rule in permissions["deny"], f"{rule} is not denied: {permissions['deny']}"
+    deny, allow = _bash_rules(permissions["deny"]), _bash_rules(permissions["allow"])
+    for cmd in ("gh auth status --show-token", "gh auth status -t --hostname github.com"):
+        assert _matches(cmd, *deny), f"{cmd!r} is not denied"
+    reordered = "gh auth status --hostname github.com -t"
+    assert not _matches(reordered, *deny), reordered
+    assert not _matches(reordered, *allow), reordered
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_settings_allow_uv_only_as_the_documents_spell_it(tmp_path: Path, host: str) -> None:
+    """A `uv sync:*`, `uv lock:*` or `uv build:*` prefix passed an index option
+    naming any host with no prompt (plinth #642): a request to a host chosen by
+    text the agent read. The rules are the documented spellings, exact, so any
+    index option asks; `uv lock` is told nowhere and asks."""
+    out = render(tmp_path / host, host=host)
+    permissions = _settings(out)["permissions"]
+    assert isinstance(permissions, dict)
+    uv = [a for a in permissions["allow"] if a.startswith("Bash(uv ") and "uv run " not in a]
+    assert sorted(uv) == ["Bash(uv build)", "Bash(uv sync --locked)"], uv
+    allow = _bash_rules(permissions["allow"])
+    options = ("--index-url", "--default-index", "--index", "--extra-index-url", "--find-links")
+    for option in options:
+        for cmd in ("uv sync --locked", "uv sync", "uv lock", "uv build"):
+            probe = f"{cmd} {option} https://example.invalid/x"
+            assert not _matches(probe, *allow), f"{probe!r} runs with no prompt"
+    assert not _matches("uv lock", *allow)
+    assert "| `uv lock` |" in (out / ".claude" / "permissions.md").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("heading", ["Reading the run", "Who you work as"])
 @pytest.mark.parametrize("host", ["github", "gitlab"])
 def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, heading: str) -> None:
@@ -2166,6 +2205,7 @@ def test_gitlab_settings_deny_glab_token_and_repo_delete(gitlab: Path) -> None:
     ):
         assert any(d.startswith(wanted) for d in deny), f"nothing denies {wanted}: {deny}"
     assert not [a for a in allow if a.startswith("Bash(gh ")], allow
+    assert not [d for d in deny if d.startswith("Bash(gh ")], deny
     assert "Bash(glab mr view:*)" in allow
 
 
