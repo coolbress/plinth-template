@@ -50,12 +50,11 @@ other, so a new command in either document changes this file or the list.
 - `Bash(uv sync --locked)` and `Bash(uv build)` are the exact spellings the
   documents and CI use, with no `:*`. A `uv sync:*`, `uv lock:*` or
   `uv build:*` prefix also passed an index option naming any host:
-  `uv sync --index-url <url>` ran with no prompt and sent its
-  requests to that host.
-  An index option (`--index-url`, `--default-index`, `--index`,
+  `uv sync --index-url <url>` ran with no prompt and sent its requests to
+  that host. An index option (`--index-url`, `--default-index`, `--index`,
   `--extra-index-url`, `--find-links`) sends a request to a host chosen by
   whatever text the agent read, with whatever the URL carries, so every one
   asks: the person sees the host before anything is fetched. The same holds
-  for an environment assignment in front, `UV_INDEX_URL=<url> uv sync --locked`
-  (measured on Claude Code 2.1.310). `uv lock` has no rule because no
-  document tells the agent to run it.
+  for an environment assignment in front,
+  `UV_INDEX_URL=<url> uv sync --locked` (measured on Claude Code 2.1.310).
+  `uv lock` has no rule because no document tells the agent to run it.
