@@ -44,7 +44,17 @@ _exclude:
   # alone is a stub.
   - "{% if archetype not in ['backend', 'data-ml', 'web'] %}Dockerfile{% endif %}"
   - "{% if archetype not in ['backend', 'data-ml', 'web'] %}.dockerignore{% endif %}"
-  - "{% if archetype not in ['backend', 'data-ml', 'web'] %}src/{{ package_name }}/__main__.py{% endif %}"
+  # The entry point is also what a `cli` project runs, without an image. A
+  # `library` has none: a person imports it. The condition is written as
+  # `==`, not `not in`, because plinth's floor checker reads the first
+  # `not in` list above as the image archetypes.
+  - "{% if archetype == 'library' %}src/{{ package_name }}/__main__.py{% endif %}"
+  # The test of that entry point and the output it is compared with; a
+  # `library` instead tests its public name imported from the built wheel.
+  # `web` tests its own entry point in `tests/test_<package>.py`.
+  - "{% if archetype in ['library', 'web'] %}tests/test_entry_point.py{% endif %}"
+  - "{% if archetype in ['library', 'web'] %}tests/entry_point.expected{% endif %}"
+  - "{% if archetype != 'library' %}tests/test_built_wheel.py{% endif %}"
   # The web archetype's Django project: its settings, routes, the ASGI
   # application the entry point serves, the pre-deploy step, and Django's
   # command line.

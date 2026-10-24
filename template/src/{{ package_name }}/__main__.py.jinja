@@ -1,4 +1,8 @@
+{% if archetype == 'cli' -%}
+"""The command's entry point: `python -m <package>`.
+{%- else -%}
 """The container's entry point: `python -m <package>`, what the Dockerfile's CMD runs.
+{%- endif %}
 
 {% if archetype == 'web' -%}
 It serves the Django project with uvicorn on `$PORT` (default 8000), after
@@ -6,15 +10,26 @@ checking that production's settings are in the environment: a start without a
 secret key, allowed hosts (`DJANGO_ALLOWED_HOSTS` or Render's
 `RENDER_EXTERNAL_HOSTNAME`) or a database URL is refused, not served with
 defaults.
+{%- elif archetype == 'cli' -%}
+Replace the body of `main()` with what the command does; the logging setup can
+stay. `tests/test_entry_point.py` runs this module and compares what it prints
+with `tests/entry_point.expected`: change them with it.
 {%- else -%}
 No framework is chosen here; what serves the application is this project's
 decision, and a `uvicorn` or `flask` planted here would be a stub in every
 project that does not use it. Replace the body of `main()` when a server
-arrives; the logging setup can stay.
+arrives; the logging setup can stay. `tests/test_entry_point.py` runs this
+module and compares what it prints with `tests/entry_point.expected`: change
+them with it.
 {%- endif %}
 
+{% if archetype == 'cli' -%}
+Logs are one JSON object per line on stdout, so another program reads them as
+is. Standard library only.
+{%- else -%}
 Logs are one JSON object per line on stdout, so a container's output is
-collected as is. Standard library only. Metrics, traces and SLOs live outside
+collected as is. Standard library only.
+{%- endif %} Metrics, traces and SLOs live outside
 the repository, in whatever the deployment uses.
 """
 

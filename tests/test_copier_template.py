@@ -100,8 +100,44 @@ def test_template_internals_do_not_ship(rendered: Path) -> None:
 
 def test_cli_archetype_omits_service_only_files(rendered: Path) -> None:
     """`.env.example` and the image belong to a running service. Not deleted: never written."""
-    for name in (".env.example", "Dockerfile", ".dockerignore", "src/probe/__main__.py"):
+    for name in (".env.example", "Dockerfile", ".dockerignore"):
         assert not (rendered / name).exists(), f"{name} rendered for the cli archetype"
+
+
+#: The test of what a person runs, per archetype (#109): the entry point and
+#: its stored output where there is an entry point, the built wheel for a
+#: library, and for web the tests in `tests/test_probe.py`.
+ENTRY_POINT_TESTS = {
+    "cli": {"src/probe/__main__.py", "tests/test_entry_point.py", "tests/entry_point.expected"},
+    "backend": {"src/probe/__main__.py", "tests/test_entry_point.py", "tests/entry_point.expected"},
+    "data-ml": {"src/probe/__main__.py", "tests/test_entry_point.py", "tests/entry_point.expected"},
+    "library": {"tests/test_built_wheel.py"},
+    "web": {"src/probe/__main__.py"},
+}
+
+
+@pytest.mark.parametrize("archetype", sorted(ENTRY_POINT_TESTS))
+def test_each_archetype_renders_the_test_of_what_a_person_runs(
+    tmp_path: Path, archetype: str
+) -> None:
+    out = render(tmp_path / archetype, archetype=archetype)
+    candidates = {f for files in ENTRY_POINT_TESTS.values() for f in files}
+    present = {f for f in candidates if (out / f).is_file()}
+    assert present == ENTRY_POINT_TESTS[archetype], present
+
+
+def test_the_stored_output_is_the_entry_point_s_log_line(rendered: Path) -> None:
+    """The expected file holds the line `main()` logs, without its time."""
+    line = (rendered / "tests" / "entry_point.expected").read_text(encoding="utf-8")
+    assert line.count("\n") == 1, repr(line)
+    assert line.endswith("}\n"), repr(line)
+    record = json.loads(line)
+    assert record == {
+        "level": "INFO",
+        "logger": "probe",
+        "message": "started",
+        "greeting": "Hello, world!",
+    }
 
 
 @pytest.mark.parametrize("archetype", ["backend", "data-ml", "web"])
@@ -1019,7 +1055,7 @@ def test_verify_skill_runs_the_checks_agents_md_lists(rendered: Path) -> None:
     # It replaces the bundled `/verify`, which runs the app; a person who types
     # `/verify` for that is sent to `/run` (plinth #476).
     flat = " ".join(body.split())
-    for phrase in ("runs the checks, not the app", "the bundled `/run`"):
+    for phrase in ("runs the checks and this one test of the program", "the bundled `/run`"):
         assert phrase in flat, f"the skill does not say: {phrase}"
     # Its own English is no reason to switch: without this line, 8 of 18
     # progress lines after it were English in Korean sessions (plinth #574).
@@ -1039,8 +1075,9 @@ def test_one_pre_commit_skill_cleans_up_then_runs_the_checks(rendered: Path) -> 
     assert re.search(r"^description: .*clean up.*checks", head, re.MULTILINE), head
     cleanup = body.find("## 1. Clean up the change")
     checks = body.find("## 2. Run the checks")
-    assert 0 <= cleanup < checks, "the cleanup step does not come before the checks step"
-    assert body.count("\n## ") == 2, "the checks step is not the skill's last step"
+    program = body.find("## 3. Run the program")
+    assert 0 <= cleanup < checks < program, "the steps are not cleanup, checks, program"
+    assert body.count("\n## ") == 3, "the program step is not the skill's last step"
     flat = " ".join(body[cleanup:checks].split())
     for phrase in (
         # the bounds of the pass
@@ -1061,9 +1098,52 @@ def test_one_pre_commit_skill_cleans_up_then_runs_the_checks(rendered: Path) -> 
         "answers a review finding, the pass covers only the lines that fix touches",
     ):
         assert phrase in flat, f"the cleanup step does not say: {phrase}"
-    flat = " ".join(body[checks:].split())
+    flat = " ".join(body[checks:program].split())
     for phrase in ("code block at the top of `AGENTS.md`", "fails stops the commit"):
         assert phrase in flat, f"the checks step does not say: {phrase}"
+
+
+@pytest.mark.parametrize(
+    ("archetype", "test_file"),
+    [
+        ("cli", "tests/test_entry_point.py"),
+        ("data-ml", "tests/test_entry_point.py"),
+        ("library", "tests/test_built_wheel.py"),
+    ],
+)
+def test_verify_runs_the_program_and_reports_what_it_saw(
+    tmp_path: Path, archetype: str, test_file: str
+) -> None:
+    """`verify` ran the checks, not the program (plinth #476). Its last step runs
+    the one test of what a person runs and writes the evidence into the report:
+    the command, the exit status, the first lines of output, the commit (#109).
+    Still one skill: #496 measured one as being run."""
+    out = render(tmp_path / archetype, archetype=archetype)
+    assert sorted(p.name for p in (out / ".claude" / "skills").iterdir()) == ["verify"]
+    body = _project_skill_body(out, "verify")
+    step = " ".join(body[body.find("## 3. Run the program") :].split())
+    assert f"Run `{test_file}` alone: the pytest command in `AGENTS.md`'s code block" in step, step
+    assert (out / test_file).is_file(), f"verify runs {test_file}, which is not rendered"
+    for phrase in (
+        "the command, exactly as run",
+        "its exit status",
+        "the first lines of its output",
+        "`git rev-parse --short HEAD`",
+        "changes this test with it",
+    ):
+        assert phrase in step, f"the program step does not say: {phrase}"
+    skill = (out / ".claude/skills/verify/SKILL.md").read_text(encoding="utf-8")
+    _, head, _ = skill.split("---", 2)
+    assert "the test that runs the program" in head, head
+
+
+def test_web_verify_is_the_checks_alone(tmp_path: Path) -> None:
+    """The web archetype has no single entry-point test here: its skill is the
+    two steps it was, word for word."""
+    out = render(tmp_path / "web", archetype="web")
+    body = _project_skill_body(out, "verify")
+    assert body.count("\n## ") == 2, "web's verify gained a step"
+    assert "runs the checks, not the app" in " ".join(body.split())
 
 
 # ── the document set ──────────────────────────────────────────────────────
@@ -1291,7 +1371,7 @@ def test_the_old_shape_is_gone(rendered: Path, backend: Path) -> None:
     tests is a package smoke test and tree hygiene."""
     for out in (rendered, backend):
         names = sorted(p.name for p in (out / "tests").glob("*.py"))
-        assert names == ["test_probe.py", "test_tree_hygiene.py"], names
+        assert names == ["test_entry_point.py", "test_probe.py", "test_tree_hygiene.py"], names
         assert not (out / "src" / "probe" / "_logging.py").exists()
 
 
@@ -1469,7 +1549,7 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
 #: `archetype not in ['backend', 'data-ml', 'web']` and the Django files
 #: `archetype != 'web'`, so there are three sets: {cli, library}, {backend,
 #: data-ml} and {web}. One representative each covers them.
-E2E_ARCHETYPES = ("cli", "backend", "web")
+E2E_ARCHETYPES = ("cli", "library", "backend", "web")
 
 
 def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> None:
