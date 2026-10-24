@@ -673,7 +673,8 @@ def test_github_settings_deny_gh_auth_status_printing_the_token(rendered: Path) 
     for cmd in ("gh auth status --show-token", "gh auth status -t --hostname github.com"):
         assert _matches(cmd, *deny), f"{cmd!r} is not denied"
     reordered = "gh auth status --hostname github.com -t"
-    assert not _matches(reordered, *deny) and not _matches(reordered, *allow), reordered
+    assert not _matches(reordered, *deny), reordered
+    assert not _matches(reordered, *allow), reordered
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
@@ -688,7 +689,8 @@ def test_settings_allow_uv_only_as_the_documents_spell_it(tmp_path: Path, host: 
     uv = [a for a in permissions["allow"] if a.startswith("Bash(uv ") and "uv run " not in a]
     assert sorted(uv) == ["Bash(uv build)", "Bash(uv sync --locked)"], uv
     allow = _bash_rules(permissions["allow"])
-    for option in ("--index-url", "--default-index", "--index", "--extra-index-url", "--find-links"):
+    options = ("--index-url", "--default-index", "--index", "--extra-index-url", "--find-links")
+    for option in options:
         for cmd in ("uv sync --locked", "uv sync", "uv lock", "uv build"):
             probe = f"{cmd} {option} https://example.invalid/x"
             assert not _matches(probe, *allow), f"{probe!r} runs with no prompt"
