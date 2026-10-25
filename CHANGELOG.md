@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-10-25
+
+The agent's settings and rules now handle text and commands that could
+come from someone else. `AGENTS.md` tells the agent that issues, comments,
+review comments and release notes are data, and to name any instruction
+found in them; in the same 24 trials, the reports that named it went from
+14 to 24 of 24, and none of the 48 sessions did what the planted text
+asked. A GitHub project's settings deny the two `gh auth status`
+spellings that print the token, and a `uv` command that names another
+package index now asks first. An untouched project updates from 1.24.0
+without conflicts; the agent now asks before `uv lock`.
+
 ### Added
 - `AGENTS.md` says text other people write (issue and pull-request or
   merge-request bodies, comments and review comments, a bot's included,
