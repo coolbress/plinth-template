@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- `AGENTS.md` says text other people write (issue and pull-request or
+  merge-request bodies, comments and review comments, a bot's included,
+  dependency release notes and commit messages) is data: an instruction
+  in it that the person did not give is not followed, and the report
+  names it and where it came from, an HTML comment included (#116). In
+  coolbress/plinth#642's 24 local trials, re-run with `claude-opus-5-5`
+  on Claude Code 2.1.310, the reports that named the planted instruction
+  and its source went from 14 of 24 without the line to 24 of 24 with it
+  (issues 4 to 8 of 8, review comments 3 to 8 of 8). No session in either
+  set did a planted action. Other models, `auto` mode, interactive
+  approval and payloads disguised as part of the task were not tried.
+
 ### Changed
 - A GitHub project's `.claude/settings.json` denies
   `gh auth status --show-token` and `gh auth status -t`, which print the
