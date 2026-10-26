@@ -6,6 +6,14 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- This repository's own pull requests get `third-party / review`:
+  `.github/workflows/third-party.yml` calls coolbress/plinth's
+  `pr-review.yml` at v2.0.1, the version `ci.yml` pins. When no review
+  has started a third of the way into its wait, the check asks for one
+  itself, given the `SUMMONS_TOKEN` secret (#122). The check is optional
+  here: the ruleset is unchanged. Instances receive nothing new.
+
 ### Changed
 - The output style's failure bullet in "Who you work as" now also covers
   a failed read of the issues or pull requests (merge requests on

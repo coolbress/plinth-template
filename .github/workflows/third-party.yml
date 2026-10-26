@@ -1,0 +1,50 @@
+# Did an accepted reviewer account leave a review signal on this commit? This
+# repository's call of coolbress/plinth's reusable pr-review.yml; the check is
+# `third-party / review`. It is evidence of participation, not a verdict and
+# not proof that the findings were handled; see plinth's
+# docs/how-to/configure-the-third-party-reviewer.md.
+#
+# Optional here: the ruleset does not require it, so a reviewer that never
+# comes leaves a red check, not a locked pull request. Requiring it is a
+# separate decision, made with plinth's scripts/upgrade-ruleset.sh.
+#
+# Why its own file and not ci.yml: this check must also run on
+# `pull_request_review`, because the review arrives asynchronously and the
+# check has to turn green the moment it does. Putting that trigger in ci.yml
+# would re-run the whole CI on every review.
+#
+# Pinned like ci.yml: a commit SHA with the version beside it, which
+# Dependabot's `github-actions` entry raises together with the other pins.
+#
+# No `branches:` filter: stacked pull requests pass through this too.
+name: third-party
+
+on:
+  pull_request:
+    # `ready_for_review`: a draft is never sent for review; the first review
+    # happens the moment the pull request is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: read    # the summons, when posted, goes out with summons-token, never with this token
+
+# One run at a time per pull request; a waiting job that overlaps only burns
+# minutes. Never cancel: a review arriving starts a `pull_request_review` run,
+# and cancelling the waiting one would read as red (measured on plinth).
+concurrency:
+  group: third-party-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  third-party:
+    uses: coolbress/plinth/.github/workflows/pr-review.yml@9427c066cad8a5f9df801e05c1a7e73d6d965da4 # v2.0.1
+    secrets:
+      # A fine-grained token of the repository owner's, this repository only,
+      # with an expiry and Pull requests: Read and write, for the summons the
+      # check posts when no review has started a third of the way into its
+      # wait. Unset, it is empty: the check reads reviews and posts nothing.
+      # A fork's run and Dependabot's get no Actions secrets either.
+      summons-token: ${{ secrets.SUMMONS_TOKEN }}
