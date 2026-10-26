@@ -6,10 +6,23 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-10-26
+
+A project's agent no longer reports "there is no issue or pull request"
+when it simply could not read them: the output style now says a failed
+read is reported as not read, with the error. In the same three tasks
+re-run with `gh` signed out, the reports that said there were none went
+from 5 of 9 to 1 of 9, and every decision kept for the person still
+reached them. An untouched project updates from 1.25.0 without
+conflicts; only its output style changes. This repository's own pull
+requests also get `third-party / review`, which asks for a review when
+none has started, and its own CI now calls plinth v2.7.1.
+
 ### Added
 - This repository's own pull requests get `third-party / review`:
   `.github/workflows/third-party.yml` calls coolbress/plinth's
-  `pr-review.yml` at v2.0.1, the version `ci.yml` pins. When no review
+  `pr-review.yml` at the version `ci.yml` pins (v2.7.1 since #125,
+  Dependabot's first raise of it). When no review
   has started a third of the way into its wait, the check asks for one
   itself, given the `SUMMONS_TOKEN` secret (#122). The check is optional
   here: the ruleset is unchanged. Instances receive nothing new.
