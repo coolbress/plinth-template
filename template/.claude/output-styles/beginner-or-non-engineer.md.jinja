@@ -84,7 +84,9 @@ gh api 'repos/{owner}/{repo}' --jq .permissions.admin   # true: this login admin
 {% endif %}- **Either command fails or prints nothing:** say "merge separation is not
   established", with the error. This holds when nothing else could be read
   either: say it in the same answer that reports the failure, in any order,
-  never instead of it.
+  never instead of it. A failed read of the issues or {% if host == 'gitlab' %}merge requests{% else %}pull requests{% endif %}
+  is reported the same way: say they could not be read, with the error,
+  never that there are none.
 
 ## After each change
 

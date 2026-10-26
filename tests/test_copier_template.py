@@ -1063,6 +1063,17 @@ def test_one_reporting_contract_states_the_identity(tmp_path: Path, host: str) -
             "GitLab still refuses a merge while the pipeline fails",
         ),
     }
+    # A failed read of the record is not an empty one: in plinth #646's runs
+    # with `gh` signed out, "there is no issue or pull request" was the most
+    # frequent unsupported claim. The sentence widens the failure bullet
+    # rather than adding one (#120).
+    record = "merge requests" if host == "gitlab" else "pull requests"
+    assert (
+        "never instead of it. A failed read of the issues or "
+        f"{record} is reported the same way: say they could not be read, "
+        "with the error, never that there are none."
+    ) in flat
+    assert style.count("- **Either command fails or prints nothing:**") == 1
     for part in commands[host]:
         assert part in flat, part
     other = "gitlab" if host == "github" else "github"
