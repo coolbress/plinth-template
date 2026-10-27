@@ -547,6 +547,38 @@ def test_render_is_what_a_web_project_had_before_the_question(tmp_path: Path) ->
     assert "Production is Render's" in (chosen / "AGENTS.md").read_text(encoding="utf-8")
 
 
+def test_render_readme_says_what_the_how_to_s_render_section_says(tmp_path: Path) -> None:
+    """The three sentences a cold read stumbled on (coolbress/plinth#679),
+    word for word as coolbress/plinth's `docs/how-to/choose-where-a-web-app-runs.md`
+    has them at f83eda2 (after coolbress/plinth#690), so a Render project reads
+    the same as the page that recommends it (#130)."""
+    out = render(tmp_path / "render", archetype="web", hosting="render")
+    flat = " ".join((out / "README.md").read_text(encoding="utf-8").split())
+    for sentence in (
+        # The restore window: 4 of 12 readers could not parse the old one.
+        "Render can make a new database holding your data as it was at any moment"
+        " from 3 days ago (7 on Pro or higher) up to 10 minutes ago; the last 10"
+        " minutes cannot be chosen",
+        # The first address: 4 of 12 asked how to know one that does not exist yet.
+        "Type the app's address in `DJANGO_ALLOWED_HOSTS` when it asks. If you do not"
+        " know it yet, type your best guess and correct it in the service's Environment"
+        " settings once Render shows the address.",
+        # Auto Sync: 3 of 12 read "No" as turning updates off.
+        "set Auto Sync to No, so a change to `render.yaml` waits for the checks like any"
+        " other. This does not stop new versions of the app: they still go out after"
+        " their checks pass.",
+        "read 2026-10-27",
+    ):
+        assert sentence in flat, sentence
+    for old in (
+        "Pick a time at least ten minutes ago",
+        "the past 3 days on Hobby",
+        "Type the `onrender.com` name you expect",
+        "read 2026-10-24",
+    ):
+        assert old not in flat, old
+
+
 def test_somewhere_else_needs_the_place(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="hosting_elsewhere"):
         render(tmp_path / "unnamed", archetype="web", hosting="elsewhere")
@@ -2016,12 +2048,12 @@ def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path
         "paste it",
         "**Recovery**",
         "**Restore Database**",
-        "at least ten minutes ago",
+        "up to 10 minutes ago; the last 10 minutes cannot be chosen",
         "`DATABASE_URL` to the new database's Internal Database URL",
-        "the past 3 days on Hobby, the past 7 days on Pro or higher",
-        "read 2026-10-24",
+        "from 3 days ago (7 on Pro or higher)",
+        "read 2026-10-27",
         "waits up to two minutes",
-        "answers on the address Render actually gives it",
+        "the service also answers on the address Render gives it",
     ):
         assert fact in flat, fact
     assert "createsuperuser" not in (backend / "README.md").read_text(encoding="utf-8")

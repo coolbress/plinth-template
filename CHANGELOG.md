@@ -28,6 +28,20 @@ means `copier update` on an instance needs hands.
   conflicts and records `hosting: render`; other archetypes update with no
   change.
 
+### Changed
+- A Render project's README now says three things more plainly, in the
+  words of plinth's how-to "Choose where a web app runs" after a cold read
+  (coolbress/plinth#679, #690; #130): how far back the data can be brought
+  back ("any moment from 3 days ago (7 on Pro or higher) up to 10 minutes
+  ago", Render's backups page read 2026-10-27); what to type as the app's
+  address before Render has shown it (a best guess, corrected once Render
+  shows the real one); and that setting Auto Sync to No does not stop new
+  versions of the app. The steps and their order are the same. A project
+  already on Render gets the new wording through `/plinth:template-update`;
+  the update changes only `README.md` and `.copier-answers.yml`, so
+  `ci / diff-size` does not list it as a change to the checks and asks for
+  no admin's approval. Projects that run elsewhere are unchanged.
+
 ## [1.26.0] - 2026-10-26
 
 A project's agent no longer reports "there is no issue or pull request"

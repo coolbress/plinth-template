@@ -54,16 +54,20 @@ block of `settings.py`, and each comes off `SILENCED_SYSTEM_CHECKS` when set:
 {% if hosting == 'render' -%}
 To deploy, create the service and its database once from `render.yaml` in
 Render's dashboard (New > Blueprint, this repository). Then, in the
-Blueprint's Settings, set Auto Sync to No. Render deploys each commit to the
+Blueprint's Settings, set Auto Sync to No, so a change to `render.yaml` waits
+for the checks like any other. This does not stop new versions of the app:
+they still go out after their checks pass. Render deploys each commit to the
 default branch after its checks pass, and runs the migrations first. A change
 to `render.yaml` itself is the exception: with Auto Sync on, Render applies it
 on push, before any check. With it off, press Manual Sync once that change is
 merged and its checks have passed.
 
 - **The address.** The form asks for `DJANGO_ALLOWED_HOSTS` before the service
-  exists. Type the `onrender.com` name you expect, or your own domain if you
-  have one. Either way the service answers on the address Render actually
-  gives it, which can have a few extra characters (`<name>-ab12.onrender.com`).
+  exists. Type the app's address in `DJANGO_ALLOWED_HOSTS` when it asks. If
+  you do not know it yet, type your best guess and correct it in the
+  service's Environment settings once Render shows the address. Whatever you
+  typed, the service also answers on the address Render gives it, which can
+  have a few extra characters (`<name>-ab12.onrender.com`).
 - **The first deploy waits for the database.** Render creates the database and
   the service together, and the database can take a minute or two to start.
   The step before each deploy waits up to two minutes for it, then applies the
@@ -75,15 +79,14 @@ merged and its checks have passed.
   asked and later at the log-in page. Typed blind, it can come out different
   from what you meant.
 - **Getting data back.** On the database's page in Render, open **Recovery**
-  and choose **Restore Database**. Pick a time at least ten minutes ago: Render
-  makes a new database as it was then, and the old one stays as it is. Then,
-  on the web service's **Environment** page, set `DATABASE_URL` to the new
-  database's Internal Database URL (on the new database's page) and save it,
-  so the service is deployed again on the new database. How far back you can go depends on the workspace
-  plan: the past 3 days on Hobby, the past 7 days on Pro or higher. Render's
-  backups page (<https://render.com/docs/postgresql-backups>, read 2026-10-24)
-  also says: "You can't restore to a time that's within ten minutes of the
-  current time."
+  and choose **Restore Database**. Render can make a new database holding
+  your data as it was at any moment from 3 days ago (7 on Pro or higher) up to
+  10 minutes ago; the last 10 minutes cannot be chosen
+  ([Postgres backups](https://render.com/docs/postgresql-backups), read
+  2026-10-27). The old database stays as it is. Then, on the web service's
+  **Environment** page, set `DATABASE_URL` to the new database's Internal
+  Database URL (on the new database's page) and save it, so the service is
+  deployed again on the new database.
 {%- else -%}
 {%- set place = {'railway': 'Railway', 'digitalocean': 'DigitalOcean App Platform', 'fly': 'Fly.io', 'vps': 'a rented server', 'home': 'a computer at home'}[hosting_elsewhere] -%}
 {%- set howto = 'https://github.com/coolbress/plinth/blob/f83eda25d0a56e5155bd8d1818e7f119c7465581/docs/how-to/choose-where-a-web-app-runs.md' -%}
