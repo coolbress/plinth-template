@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- The change forms ask what should happen and what is not decided yet
+  (#111). GitHub's `feature.yml` and `task.yml` and GitLab's `Feature.md`
+  and `Task.md` get two optional fields with one example each: "What
+  should happen", one "When I …, then I see …" line per thing a person can
+  try, and "Not sure yet". `AGENTS.md` says to read both first when the
+  issue has them, ask about each "Not sure yet" item before writing code,
+  and name in the pull or merge request which line each test covers. An
+  owner's own forms (`owner_has_issue_forms`) still get no form from the
+  template. An untouched 1.27.0 `cli` or `web` GitHub project and a `cli`
+  GitLab project update without conflicts: the two forms or templates,
+  `AGENTS.md` and `_commit` change.
+
 ## [1.27.0] - 2026-10-27
 
 A `web` project is now asked where it will run. Render stays first and
