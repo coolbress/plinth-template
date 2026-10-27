@@ -12,6 +12,14 @@
 
 - [ ]
 
+## What should happen
+
+<!-- One line for each thing a person can try, written as "When I …, then I see …". Each line becomes a test, so keep each one small. For example: When I save a note with no title, then I see "Add a title first" and the note is not saved. -->
+
+## Not sure yet
+
+<!-- Anything you have not decided. Write it here instead of guessing: it is asked about before any code is written. For example: Should a note with no title be kept as a draft, or not saved at all? -->
+
 ## Not building
 
 <!-- What this task deliberately leaves out, so nobody adds it back in review. -->

@@ -26,6 +26,30 @@ body:
       required: false
 
   - type: textarea
+    id: what-should-happen
+    attributes:
+      label: What should happen
+      description: |
+        One line for each thing a person can try, written as "When I …, then
+        I see …". Each line becomes a test, so keep each one small.
+      placeholder: |
+        When I save a note with no title, then I see "Add a title first" and the note is not saved.
+    validations:
+      required: false
+
+  - type: textarea
+    id: not-sure-yet
+    attributes:
+      label: Not sure yet
+      description: |
+        Anything you have not decided. Write it here instead of guessing: it is
+        asked about before any code is written.
+      placeholder: |
+        Should a note with no title be kept as a draft, or not saved at all?
+    validations:
+      required: false
+
+  - type: textarea
     id: alternatives
     attributes:
       label: What you tried instead
