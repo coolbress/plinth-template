@@ -1655,6 +1655,53 @@ def test_task_form_asks_what_done_means(rendered: Path) -> None:
     assert "- [ ]" in field
 
 
+@pytest.mark.parametrize("name", ["feature", "task"])
+def test_change_forms_ask_what_should_happen_and_what_is_not_decided(
+    rendered: Path, name: str
+) -> None:
+    """A change form has "What should happen" ("When I …, then I see …" lines
+    the agent turns into tests) and "Not sure yet" (asked before code), one
+    example each, as optional textareas GitHub accepts (#111)."""
+    form = yaml.safe_load(
+        (rendered / ".github" / "ISSUE_TEMPLATE" / f"{name}.yml").read_text(encoding="utf-8")
+    )
+    fields = {f.get("id"): f for f in form["body"]}
+    happen = fields["what-should-happen"]
+    unsure = fields["not-sure-yet"]
+    for field, label in ((happen, "What should happen"), (unsure, "Not sure yet")):
+        assert field["type"] == "textarea"
+        assert field["attributes"]["label"] == label
+        assert field["attributes"]["placeholder"].strip(), f"{label} has no example"
+        assert field["validations"]["required"] is False
+    assert "When I …, then" in happen["attributes"]["description"]
+    assert happen["attributes"]["placeholder"].startswith("When I ")
+    assert "then I see" in happen["attributes"]["placeholder"]
+    assert "before any code is written" in unsure["attributes"]["description"]
+
+
+def test_agents_md_reads_the_two_fields_first(rendered: Path) -> None:
+    """The agent reads both fields when the issue has them, asks about each
+    "Not sure yet" item before code, and ties each test to a line (#111)."""
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    line = [ln for ln in agents.splitlines() if '"Not sure yet"' in ln]
+    assert len(line) == 1, "the two-fields rule is not one line of AGENTS.md"
+    for must in (
+        'When the issue has "What should happen" and "Not sure yet" fields, read both first',
+        "before writing code",
+        'say in the pull request which "When … then …" line each test covers',
+    ):
+        assert must in line[0], f"AGENTS.md's two-fields rule no longer says: {must}"
+
+
+def test_owner_issue_forms_leave_the_two_fields_to_the_owner(tmp_path: Path) -> None:
+    """With the owner's own forms the template writes none, so the two fields
+    exist only when that issue has them, which is how AGENTS.md says it (#111)."""
+    out = render(tmp_path / "p", owner="someone", owner_has_issue_forms=True)
+    # The exclude leaves the folder itself, empty: git does not commit it.
+    assert not [p for p in (out / ".github").rglob("*") if "ISSUE_TEMPLATE" in p.parts[:-1]]
+    assert "When the issue has" in (out / "AGENTS.md").read_text(encoding="utf-8")
+
+
 def test_pr_template_ties_each_criterion_to_a_test(rendered: Path) -> None:
     """The description names, for each criterion the pull request meets, the
     test that checks it, or why none does (plinth #299)."""
@@ -2347,6 +2394,21 @@ def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
 @pytest.fixture(scope="module")
 def gitlab(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return render(tmp_path_factory.mktemp("gitlab"), host="gitlab", owner="someone")
+
+
+@pytest.mark.parametrize("name", ["Feature", "Task"])
+def test_gitlab_change_templates_have_the_two_fields(gitlab: Path, name: str) -> None:
+    """The GitLab templates carry the same two fields as the GitHub forms (#111),
+    and AGENTS.md names the merge request instead of the pull request."""
+    text = (gitlab / ".gitlab" / "issue_templates" / f"{name}.md").read_text(encoding="utf-8")
+    happen = text.split("## What should happen\n", 1)[1].split("## ", 1)[0]
+    unsure = text.split("## Not sure yet\n", 1)[1].split("## ", 1)[0]
+    assert "For example: When I " in happen
+    assert "then I see" in happen
+    assert "For example: " in unsure
+    assert "before any code is written" in unsure
+    agents = (gitlab / "AGENTS.md").read_text(encoding="utf-8")
+    assert 'say in the merge request which "When … then …" line each test covers' in agents
 
 
 @pytest.fixture(scope="module")
