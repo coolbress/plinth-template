@@ -6,6 +6,28 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `web` project is asked where it will run (#128, from
+  coolbress/plinth#639). `hosting`: `render` (the default, recommended) or
+  `elsewhere`; with `elsewhere`, `hosting_elsewhere`: `railway`,
+  `digitalocean`, `fly`, `vps` (a rented server) or `home` (a computer at
+  home), with no default. `render` renders what a `web` project had before,
+  byte for byte. Any other answer leaves out `render.yaml`, and the README's
+  deploy part becomes that place's section from plinth's how-to "Choose
+  where a web app runs", in the wording a cold read settled on
+  (coolbress/plinth#679, #690): what it costs and when that was read
+  (2026-10-27), what it gives compared with Render, the steps, the first
+  account, what the person takes on and how to turn it off, saying plainly
+  that plinth does not deploy there and has not checked it. A rented
+  server's and a home computer's README also say what a port and a proxy
+  are, and never to open the app's port without a proxy in front, nor the
+  database's port. The questions' help is #679's final wording. `AGENTS.md`'s production line says the same instead of
+  naming Render. Neither question is `when: false`, so both answers are
+  recorded and kept by `copier update`; on any other archetype neither is
+  asked or recorded. An untouched 1.26.0 `web` project updates without
+  conflicts and records `hosting: render`; other archetypes update with no
+  change.
+
 ## [1.26.0] - 2026-10-26
 
 A project's agent no longer reports "there is no issue or pull request"

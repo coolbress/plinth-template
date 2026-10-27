@@ -465,6 +465,246 @@ def test_the_web_choice_states_its_cost() -> None:
 def test_web_archetype_is_refused_on_gitlab(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="GitHub only"):
         render(tmp_path / "gl-web", archetype="web", host="gitlab")
+    with pytest.raises(ValueError, match="GitHub only"):
+        render(tmp_path / "gl-web-else", archetype="web", host="gitlab", hosting="elsewhere")
+
+
+# ── where a web app runs (#128, coolbress/plinth #639) ────────────────────
+
+#: `hosting_elsewhere`'s answers and the name each README gives the place.
+ELSEWHERE = {
+    "railway": "Railway",
+    "digitalocean": "DigitalOcean App Platform",
+    "fly": "Fly.io",
+    "vps": "a rented server",
+    "home": "a computer at home",
+}
+
+#: The warning a rented server's and a home computer's README must carry.
+PORT_WARNING = (
+    "A port is a numbered door through which the internet reaches one program",
+    "A proxy is a program that takes every visitor's connection first",
+    "**Never open these ports to the internet:**",
+    "**The app's own port (8000 by default), without a proxy in front.**",
+    "trusts the `X-Forwarded-Proto` header",
+    "**The database's port (5432 for Postgres), ever.**",
+)
+
+
+def _answers(out: Path) -> dict[str, object]:
+    answers = yaml.safe_load((out / ".copier-answers.yml").read_text(encoding="utf-8"))
+    assert isinstance(answers, dict)
+    return answers
+
+
+def _tree(out: Path) -> dict[str, bytes]:
+    """Every file's bytes; `_commit` aside, which copier makes anew for each
+    render of a working tree with uncommitted changes."""
+    return {
+        f.relative_to(out).as_posix(): re.sub(rb"(?m)^_commit: .*$", b"", f.read_bytes())
+        for f in sorted(out.rglob("*"))
+        if f.is_file() and ".git" not in f.relative_to(out).parts
+    }
+
+
+def test_the_hosting_questions_are_asked_so_their_answers_are_recorded() -> None:
+    """copier does not record an answer it did not ask, and `--data` cannot
+    reach one at an update: `when: false` would lose the choice (#22)."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    hosting, where = cfg["hosting"], cfg["hosting_elsewhere"]
+    assert hosting["when"] == "{{ archetype == 'web' }}"
+    assert where["when"] == "{{ archetype == 'web' and hosting == 'elsewhere' }}"
+    assert hosting["default"] == "render"
+    assert sorted(hosting["choices"].values()) == ["elsewhere", "render"]
+    assert sorted(where["choices"].values()) == sorted(ELSEWHERE)
+    assert "default" not in where, "an unchecked place is never chosen by pressing Enter"
+    # The wording a cold read settled on (coolbress/plinth#679's Findings).
+    asked = " ".join(hosting["help"].split()) + " " + " ".join(where["help"].split())
+    for words in (
+        "a secure https:// address (the padlock in the browser)",
+        "only after the project's automatic tests pass",
+        "at any moment from 3 days ago up to 10 minutes ago",
+        "some put out a new version even when its tests fail",
+        "from about €6 a month",
+        "the riskiest choice",
+    ):
+        assert words in asked, words
+
+
+def test_render_is_what_a_web_project_had_before_the_question(tmp_path: Path) -> None:
+    """An instance from before the question takes the default at its next
+    update; the default and the explicit answer render the same tree."""
+    unasked = render(tmp_path / "unasked", archetype="web")
+    chosen = render(tmp_path / "render", archetype="web", hosting="render")
+    assert _tree(unasked) == _tree(chosen)
+    assert (chosen / "render.yaml").is_file()
+    answers = _answers(chosen)
+    assert answers["hosting"] == "render"
+    assert "hosting_elsewhere" not in answers
+    readme = (chosen / "README.md").read_text(encoding="utf-8")
+    assert "New > Blueprint" in readme
+    assert "## Where it runs" not in readme
+    assert "Production is Render's" in (chosen / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_somewhere_else_needs_the_place(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="hosting_elsewhere"):
+        render(tmp_path / "unnamed", archetype="web", hosting="elsewhere")
+    with pytest.raises(ValueError, match="Invalid choice"):
+        render(tmp_path / "heroku", archetype="web", hosting="elsewhere", hosting_elsewhere="x")
+
+
+@pytest.mark.parametrize("where", sorted(ELSEWHERE))
+def test_somewhere_else_names_the_place_and_says_plinth_did_not_check_it(
+    tmp_path: Path, where: str
+) -> None:
+    out = render(tmp_path / where, archetype="web", hosting="elsewhere", hosting_elsewhere=where)
+    assert not (out / "render.yaml").exists()
+    assert _answers(out)["hosting"] == "elsewhere"
+    assert _answers(out)["hosting_elsewhere"] == where
+    flat = " ".join((out / "README.md").read_text(encoding="utf-8").split())
+    for fact in (
+        f"This project was made to run on {ELSEWHERE[where]}.",
+        "**plinth does not deploy there and has not checked it**: it is listed, not built.",
+        "**What it costs.**",
+        "read 2026-10-27",
+        "**Steps",
+        "**What you take on.**",
+        "**Turning it off.**",
+        "python -m probe.predeploy",
+        "**The first account.**",
+        "`python -m django createsuperuser`",
+        # The cold read's wording (coolbress/plinth#679, how-to #690).
+        "the browser shows a padlock",
+        "the checks are the automatic tests the project runs on every change",
+        "your AI helper can carry them out with you",
+    ):
+        assert fact in flat, fact
+    assert "<package>" not in flat
+    assert "New > Blueprint" not in flat, "Render's steps were left in"
+    for line in PORT_WARNING:
+        assert (line in flat) == (where in {"vps", "home"}), line
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Production is Render's" not in agents
+    assert "plinth does not deploy to and has not checked" in agents
+
+
+@pytest.mark.parametrize(
+    ("archetype", "host"),
+    [(a, "github") for a in sorted(SERVABLE - {"web"})]
+    + [("cli", "gitlab"), ("backend", "gitlab")],
+)
+def test_other_archetypes_neither_ask_nor_record_where_it_runs(
+    tmp_path: Path, archetype: str, host: str
+) -> None:
+    """Given anyway, the answers are not asked, so not recorded, and change nothing."""
+    plain = render(tmp_path / "plain", archetype=archetype, host=host)
+    given = render(
+        tmp_path / "given",
+        archetype=archetype,
+        host=host,
+        hosting="elsewhere",
+        hosting_elsewhere="vps",
+    )
+    for out in (plain, given):
+        answers = _answers(out)
+        assert "hosting" not in answers
+        assert "hosting_elsewhere" not in answers
+    assert _tree(plain) == _tree(given)
+    assert not (given / "render.yaml").exists()
+
+
+def test_data_strings_render_the_place_as_the_door_passes_them(tmp_path: Path) -> None:
+    """`/plinth:new-project` passes answers as `--data key=value` strings."""
+    by_cli = tmp_path / "cli"
+    answers = ("project_name=probe", "archetype=web", "hosting=elsewhere", "hosting_elsewhere=home")
+    argv = [sys.executable, "-m", "copier", "copy", "--defaults", "--quiet", "--vcs-ref", "HEAD"]
+    for answer in answers:
+        argv += ["--data", answer]
+    done = subprocess.run(  # noqa: S603
+        [*argv, str(TEMPLATE_ROOT), str(by_cli)], capture_output=True, text=True, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    by_api = render(
+        tmp_path / "api", archetype="web", hosting="elsewhere", hosting_elsewhere="home"
+    )
+    assert _tree(by_cli) == _tree(by_api)
+
+
+def test_an_update_keeps_the_place_and_can_change_it(tmp_path: Path) -> None:
+    """Render -> a home computer -> Render, each at an update: `render.yaml`
+    goes and comes back, the README section is replaced, and each answer is
+    recorded."""
+    import copier
+
+    tpl = tmp_path / "tpl"
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    _git(tpl, "init", "-q", "-b", "main", ".")
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-qm", "the template")
+    for tag in ("v9.0.0", "v9.1.0", "v9.2.0"):
+        _git(tpl, "commit", "-q", "--allow-empty", "-m", tag)
+        _git(tpl, "tag", "-a", "-m", tag, tag)
+
+    proj = tmp_path / "proj"
+    data = {"project_name": "probe", "license": "MIT", "archetype": "web", "owner": "someone"}
+    copier.run_copy(
+        str(tpl), str(proj), data=data, defaults=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    assert (proj / "render.yaml").is_file()
+
+    def update(ref: str, answers: dict[str, str]) -> str:
+        copier.run_update(
+            str(proj),
+            data=answers,
+            defaults=True,
+            overwrite=True,
+            quiet=True,
+            unsafe=False,
+            vcs_ref=ref,
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],  # noqa: S607
+            cwd=proj,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert not [ln for ln in status.splitlines() if ln[:2] in {"UU", "AA", "DU", "UD"}], status
+        assert "<<<<<<<" not in (proj / "README.md").read_text(encoding="utf-8")
+        _git(proj, "add", "-A")
+        _git(proj, "commit", "-qm", f"update to {ref}")
+        return status
+
+    status = update("v9.1.0", {})
+    assert _answers(proj)["hosting"] == "render", "an update without the answer lost it"
+    assert (proj / "render.yaml").is_file()
+    assert "render.yaml" not in status
+
+    update("v9.2.0", {"hosting": "elsewhere", "hosting_elsewhere": "home"})
+    assert not (proj / "render.yaml").exists()
+    readme = (proj / "README.md").read_text(encoding="utf-8")
+    assert "This project was made to run on a computer at home." in readme
+    assert "New > Blueprint" not in readme
+    assert (_answers(proj)["hosting"], _answers(proj)["hosting_elsewhere"]) == ("elsewhere", "home")
+
+    update("v9.2.0", {"hosting": "render"})
+    assert (proj / "render.yaml").is_file()
+    readme = (proj / "README.md").read_text(encoding="utf-8")
+    assert "New > Blueprint" in readme
+    assert "## Where it runs" not in readme
+    assert _answers(proj)["hosting"] == "render"
+    assert "hosting_elsewhere" not in _answers(proj)
 
 
 def test_service_archetype_dependabot_leaves_the_python_minor_alone(backend: Path) -> None:
