@@ -482,6 +482,8 @@ ELSEWHERE = {
 
 #: The warning a rented server's and a home computer's README must carry.
 PORT_WARNING = (
+    "A port is a numbered door through which the internet reaches one program",
+    "A proxy is a program that takes every visitor's connection first",
     "**Never open these ports to the internet:**",
     "**The app's own port (8000 by default), without a proxy in front.**",
     "trusts the `X-Forwarded-Proto` header",
@@ -516,6 +518,17 @@ def test_the_hosting_questions_are_asked_so_their_answers_are_recorded() -> None
     assert sorted(hosting["choices"].values()) == ["elsewhere", "render"]
     assert sorted(where["choices"].values()) == sorted(ELSEWHERE)
     assert "default" not in where, "an unchecked place is never chosen by pressing Enter"
+    # The wording a cold read settled on (coolbress/plinth#679's Findings).
+    asked = " ".join(hosting["help"].split()) + " " + " ".join(where["help"].split())
+    for words in (
+        "a secure https:// address (the padlock in the browser)",
+        "only after the project's automatic tests pass",
+        "at any moment from 3 days ago up to 10 minutes ago",
+        "some put out a new version even when its tests fail",
+        "from about €6 a month",
+        "the riskiest choice",
+    ):
+        assert words in asked, words
 
 
 def test_render_is_what_a_web_project_had_before_the_question(tmp_path: Path) -> None:
@@ -559,6 +572,12 @@ def test_somewhere_else_names_the_place_and_says_plinth_did_not_check_it(
         "**What you take on.**",
         "**Turning it off.**",
         "python -m probe.predeploy",
+        "**The first account.**",
+        "`python -m django createsuperuser`",
+        # The cold read's wording (coolbress/plinth#679, how-to #690).
+        "the browser shows a padlock",
+        "the checks are the automatic tests the project runs on every change",
+        "your AI helper can carry them out with you",
     ):
         assert fact in flat, fact
     assert "<package>" not in flat

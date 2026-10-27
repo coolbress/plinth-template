@@ -86,7 +86,7 @@ merged and its checks have passed.
   current time."
 {%- else -%}
 {%- set place = {'railway': 'Railway', 'digitalocean': 'DigitalOcean App Platform', 'fly': 'Fly.io', 'vps': 'a rented server', 'home': 'a computer at home'}[hosting_elsewhere] -%}
-{%- set howto = 'https://github.com/coolbress/plinth/blob/7922e7c328e85a01ea608cb77dbc7228a74db263/docs/how-to/choose-where-a-web-app-runs.md' -%}
+{%- set howto = 'https://github.com/coolbress/plinth/blob/f83eda25d0a56e5155bd8d1818e7f119c7465581/docs/how-to/choose-where-a-web-app-runs.md' -%}
 ## Where it runs: {{ place[0] | upper }}{{ place[1:] }}
 
 This project was made to run on {{ place }}.
@@ -111,19 +111,32 @@ version, the step `python -m {{ package_name }}.predeploy` waits for the
 database and applies the migrations once; a migration that fails should stop
 the new version, so the old one keeps serving.
 
+**The first account.** Nobody can log in until you make one: run
+`python -m django createsuperuser` once inside the running app, with its
+production settings. On a hosting service, that is the app's own console or
+shell in its dashboard; on your own server or computer,
+`docker exec -it <container> python -m django createsuperuser`. The password
+is not shown as you type it, so write it somewhere first and paste it, both
+times it is asked and later at the log-in page.
+
 Five things decide whether you can trust where it runs. plinth checked them
 on Render, not here; check each one yourself:
 
-1. **HTTPS**: the address starts with `https://`, and its certificate renews
-   by itself.
-2. **A new version only after the checks pass**: a pull request that fails
-   its checks never reaches the people using the app.
+1. **HTTPS**: the address starts with `https://` and the browser shows a
+   padlock, so what visitors send is encrypted; its certificate, the proof
+   behind the padlock, renews by itself.
+2. **A new version only after the checks pass**: the checks are the
+   automatic tests the project runs on every change. A change whose checks
+   fail never reaches the people using the app.
 3. **Backups, and a restore you have tried**: you have brought the data back
    once, into a new database, before you need to.
 4. **Secrets kept out of the repository**: the secret key and the database
    password live in the place's own settings, never in a file you commit.
 5. **Updates, and turning it off**: who keeps the system up to date, and what
    you delete to stop paying.
+
+The steps below use the words the providers' own pages use; your AI helper
+can carry them out with you.
 {% if hosting_elsewhere == 'railway' %}
 A trial of Railway is planned in plinth's
 [#680](https://github.com/coolbress/plinth/issues/680).
@@ -363,6 +376,10 @@ router. This is the riskiest choice.
 5. Then either start a tunnel to the proxy's address, or open only ports 80
    and 443 on your router to that computer.
 {%- endif %}
+
+A port is a numbered door through which the internet reaches one program on
+the computer. A proxy is a program that takes every visitor's connection
+first, handles HTTPS, and passes the visit on to the app.
 
 **Never open these ports to the internet:**
 

@@ -228,13 +228,14 @@ hosting:
   type: str
   when: "{{ archetype == 'web' }}"
   help: |
-    Where the web app will run.
-    Render (recommended): about US $13 a month. It puts your app online with
-    HTTPS, updates it only after the checks pass, and can bring your data back
-    from any moment in the last 3 days. plinth has tried every step of this.
+    Where will your app run?
+    Render (recommended): about $13 a month. It puts your app online at a
+    secure https:// address (the padlock in the browser), puts out a new
+    version only after the project's automatic tests pass, and can bring your
+    data back as it was at any moment from 3 days ago up to 10 minutes ago.
+    plinth has tried every step of this.
     Somewhere else: another hosting service, a server you rent or a computer
-    at home. plinth lists them but has not tried them, and does not deploy
-    there.
+    at home. plinth has not tried them, and does not deploy there.
   default: render
   choices:
     Render (recommended): render
@@ -246,13 +247,14 @@ hosting_elsewhere:
   type: str
   when: "{{ archetype == 'web' and hosting == 'elsewhere' }}"
   help: |
-    Where else, from least to most work for you. plinth has not tried any of
-    these, and does not deploy there.
+    Where else, from least to most work for you. plinth does not deploy to
+    any of these.
     Another hosting service (Railway, DigitalOcean, Fly.io): from about $10 to
-    $42 a month. Similar to Render, but some do not wait for the checks, and
-    on some, backups stay off until you switch them on.
-    A server you rent: from about 6 euros a month for more power, but keeping
-    it updated, secure and backed up is your job every month.
+    $42 a month. Similar, but plinth has not tried them: some put out a new
+    version even when its tests fail, and on some, backups stay off until you
+    switch them on.
+    A server you rent: from about €6 a month for more power, but keeping it
+    updated, secure and backed up is your job every month.
     A computer at home: free to try on your own network. Putting it on the
     internet is the riskiest choice: anyone can reach it, a flaw can lead into
     your home network, and your data is only as safe as the backups you make
