@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-10-27
+
+A `web` project is now asked where it will run. Render stays first and
+recommended, and choosing it renders exactly what a `web` project got
+before. Choosing another place (Railway, DigitalOcean, Fly.io, a rented
+server or a computer at home) leaves out `render.yaml` and puts that
+place's steps in the README, saying plainly that plinth does not deploy
+there and has not checked it. Both answers are recorded, so
+`copier update` keeps them. An untouched 1.26.0 `web` project updates
+without conflicts and records `hosting: render`; other archetypes update
+with no change. A Render project's README also explains the restore
+window, the first app address and Auto Sync in plainer words.
+
 ### Added
 - A `web` project is asked where it will run (#128, from
   coolbress/plinth#639). `hosting`: `render` (the default, recommended) or
