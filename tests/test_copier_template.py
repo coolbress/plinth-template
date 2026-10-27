@@ -1522,6 +1522,37 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
     assert "when planning" not in text.lower(), "the planning block moved out of AGENTS.md"
 
 
+def _every_agents_md_render() -> list[dict[str, str]]:
+    """Every archetype on each host it allows, and `web` for `render` and for
+    one `elsewhere` answer. The fixture above is a GitHub `cli` only, and a
+    GitHub `web` passed 60 lines without a failing test (#134)."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    cases = []
+    for host in cfg["host"]["choices"].values():
+        for archetype in cfg["archetype"]["choices"].values():
+            if archetype != "web":
+                cases.append({"host": host, "archetype": archetype})
+            elif host == "github":  # `host`'s validator refuses a GitLab `web`
+                cases.append({"host": host, "archetype": "web", "hosting": "render"})
+                cases.append(
+                    {
+                        "host": host,
+                        "archetype": "web",
+                        "hosting": "elsewhere",
+                        "hosting_elsewhere": "home",
+                    }
+                )
+    return cases
+
+
+@pytest.mark.parametrize("answers", _every_agents_md_render(), ids=lambda a: "-".join(a.values()))
+def test_every_agents_md_stays_within_60_lines(tmp_path: Path, answers: dict[str, str]) -> None:
+    lines = (render(tmp_path, **answers) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(lines) <= 60, (
+        f"AGENTS.md is {len(lines)} lines; everything in it is loaded every turn"
+    )
+
+
 #: The `mattpocock-skills` skills plinth lists but does not install (plinth #593);
 #: `claude plugin install mattpocock-skills-extra@plinth` adds them.
 LISTED_SKILLS = (

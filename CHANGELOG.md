@@ -19,6 +19,17 @@ means `copier update` on an instance needs hands.
   GitLab project update without conflicts: the two forms or templates,
   `AGENTS.md` and `_commit` change.
 
+### Fixed
+- A `web` project's `AGENTS.md` is 60 lines again (#134). It had reached
+  61, because the 60-line test read only a GitHub `cli` render. The test
+  now renders every archetype on each host it allows, and `web` with
+  `hosting=render` and with `hosting=elsewhere`. The `web`-only
+  "Production is …" rule now ends the deny-list rule above it instead of
+  being a line of its own; its words are the same apart from a short note
+  on what production is. Every other archetype's `AGENTS.md` is unchanged.
+  An untouched 1.27.0 `web` project (Render, and a computer at home) and a
+  `cli` project update without conflicts.
+
 ## [1.27.0] - 2026-10-27
 
 A `web` project is now asked where it will run. Render stays first and
