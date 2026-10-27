@@ -67,7 +67,8 @@ _exclude:
   - "{% if archetype != 'web' %}src/{{ package_name }}/notes{% endif %}"
   - "{% if archetype != 'web' %}tests/test_access.py{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
-  - "{% if archetype != 'web' %}render.yaml{% endif %}"
+  # Render's Blueprint, only where the app runs on Render (`hosting` below).
+  - "{% if archetype != 'web' or hosting != 'render' %}render.yaml{% endif %}"
   # The owner's shared community-health files, when they publish them. GitHub
   # applies `owner/.github`'s copy to a repository that has none of its own, so
   # writing ours would silently replace the owner's convention. The door answers
@@ -212,6 +213,56 @@ host:
     The web archetype is GitHub only: its deployment and checks are built for
     GitHub. Choose GitHub, or another archetype for GitLab.
     {%- endif -%}
+
+# Where a `web` app runs (coolbress/plinth #639). plinth builds and checks one
+# place, Render; the others are listed, not built: they leave out
+# `render.yaml`, and the README carries the chosen place's steps and what the
+# person takes on, from plinth's how-to "Choose where a web app runs".
+#
+# Neither question is `when: false`, and neither may become it. copier does
+# not record an answer it did not ask, and a later `--data` cannot reach one:
+# an instance would lose its choice at the first `copier update` (#22). The
+# first is asked whenever the archetype is `web`, the second whenever the
+# first is `elsewhere`. On any other archetype neither is asked or recorded.
+hosting:
+  type: str
+  when: "{{ archetype == 'web' }}"
+  help: |
+    Where the web app will run.
+    Render (recommended): about US $13 a month. It puts your app online with
+    HTTPS, updates it only after the checks pass, and can bring your data back
+    from any moment in the last 3 days. plinth has tried every step of this.
+    Somewhere else: another hosting service, a server you rent or a computer
+    at home. plinth lists them but has not tried them, and does not deploy
+    there.
+  default: render
+  choices:
+    Render (recommended): render
+    Somewhere else: elsewhere
+
+# No default: a place plinth has not checked is never chosen by pressing
+# Enter or by leaving the answer out of `--data`.
+hosting_elsewhere:
+  type: str
+  when: "{{ archetype == 'web' and hosting == 'elsewhere' }}"
+  help: |
+    Where else, from least to most work for you. plinth has not tried any of
+    these, and does not deploy there.
+    Another hosting service (Railway, DigitalOcean, Fly.io): from about $10 to
+    $42 a month. Similar to Render, but some do not wait for the checks, and
+    on some, backups stay off until you switch them on.
+    A server you rent: from about 6 euros a month for more power, but keeping
+    it updated, secure and backed up is your job every month.
+    A computer at home: free to try on your own network. Putting it on the
+    internet is the riskiest choice: anyone can reach it, a flaw can lead into
+    your home network, and your data is only as safe as the backups you make
+    yourself.
+  choices:
+    Railway: railway
+    DigitalOcean App Platform: digitalocean
+    Fly.io: fly
+    A server you rent: vps
+    A computer at home: home
 
 # The SHA-256 of plinth's `gitlab/python-ci.yml` at `plinth_sha`, base64, for
 # the include's `integrity:`: GitLab refuses an included file whose bytes
