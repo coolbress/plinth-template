@@ -822,18 +822,20 @@ RELEASE_HOWTO = Path("docs") / "how-to" / "publish-a-release.md"
     [
         ("cli", "github", True),
         ("library", "github", True),
-        ("backend", "github", False),
+        ("backend", "github", True),
         ("data-ml", "github", False),
         ("web", "github", False),
         ("cli", "gitlab", False),
         ("library", "gitlab", False),
+        ("backend", "gitlab", False),
     ],
 )
-def test_release_workflow_and_its_how_to_render_for_packages_on_github_only(
+def test_release_workflow_and_its_how_to_render_for_packages_and_backend_on_github_only(
     tmp_path: Path, archetype: str, host: str, ships: bool
 ) -> None:
-    """What a `cli` or `library` ships is a package; a service ships an image
-    or a running app. GitLab gets no `.github/`, and so no how-to for a
+    """What a `cli` or `library` ships is a package, and a `backend` its image
+    (coolbress/plinth#706); `web` deploys on green and what `data-ml` outputs
+    is undecided. GitLab gets no `.github/`, and so no how-to for a
     workflow it does not have. Never written, rather than written and empty:
     no `docs/how-to/` directory is left behind either."""
     out = render(tmp_path, archetype=archetype, host=host)
@@ -893,21 +895,23 @@ def test_release_checks_the_version_before_it_builds(rendered: Path) -> None:
     assert version < on_main < names.index("uv build")
 
 
-def _step_script(out: Path, name: str) -> str:
-    steps = _release(out)["jobs"]["build"]["steps"]
+def _step_script(out: Path, name: str, job: str = "build") -> str:
+    steps = _release(out)["jobs"][job]["steps"]
     (step,) = [s for s in steps if s.get("name") == name]
     script = step["run"]
     assert isinstance(script, str)
     return script
 
 
-def _run_step(out: Path, name: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_step(
+    out: Path, name: str, env: dict[str, str], job: str = "build"
+) -> subprocess.CompletedProcess[str]:
     """The step's script as rendered, run with bash in the instance. The
     interpreter running the tests goes first on PATH: the script's `python3`
     needs `tomllib`, which the runner's has."""
     path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
     return subprocess.run(  # noqa: S603
-        ["bash", "-c", _step_script(out, name)],  # noqa: S607
+        ["bash", "-c", _step_script(out, name, job)],  # noqa: S607
         cwd=out,
         env={**os.environ, "PATH": path, **env},
         capture_output=True,
@@ -1013,6 +1017,206 @@ def test_the_how_to_without_an_owner_says_whose_account(tmp_path: Path) -> None:
     out = render(tmp_path, archetype="cli")
     howto = (out / RELEASE_HOWTO).read_text(encoding="utf-8")
     assert "   | Owner | `<your GitHub account>` |" in howto
+
+
+# ── releasing a backend's image (coolbress/plinth#706) ────────────────────
+
+
+def test_backend_release_pushes_its_image_on_a_tag_only(backend: Path) -> None:
+    """The acceptance lines of #706 that a reading can hold: a tag and nothing
+    else starts it, nothing is granted by default, only the image job may
+    push a package or ask for an identity token, no job is skipped with `if:`
+    or named `ci`, no stored secret is read, and every action is pinned."""
+    text = (backend / RELEASE).read_text(encoding="utf-8")
+    data = _release(backend)
+    assert data[True] == {"push": {"tags": ["v*"]}}
+    assert data["permissions"] == {}
+    jobs = data["jobs"]
+    assert set(jobs) == {"image", "github-release"}
+    for name, job in jobs.items():
+        assert "if" not in job, f"job {name} is skipped with if:"
+    assert jobs["github-release"]["needs"] == "image"
+    assert jobs["image"]["permissions"] == {
+        "contents": "read",
+        "packages": "write",
+        "id-token": "write",
+        "attestations": "write",
+    }
+    assert jobs["github-release"]["permissions"] == {"contents": "write"}
+    assert "secrets." not in text
+    assert "password:" not in text
+    for ref in re.findall(r"uses:\s*(\S+)", text):
+        assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
+    assert "pypa/" not in text, "a backend publishes no package to PyPI"
+
+
+def _image_steps(out: Path) -> list[dict[str, Any]]:
+    steps = _release(out)["jobs"]["image"]["steps"]
+    assert isinstance(steps, list)
+    return steps
+
+
+def test_backend_release_checks_runs_then_pushes(backend: Path) -> None:
+    """Both checks before the build, the image run before anything is pushed,
+    and the pushed image fetched back and run before it is signed."""
+    steps = _image_steps(backend)
+    names = [s.get("name") or s.get("uses") for s in steps]
+    order = [
+        "Check the tag against pyproject.toml's version",
+        "Check the tagged commit is on main",
+        "Build the image",
+        "Run the image and read its first log line",
+        "Push the image",
+        "Pull the pushed image and read its first log line",
+        "Sign a record of how the image was built",
+        "Say what was published",
+    ]
+    assert [n for n in names if n in order] == order
+    by_name = {s.get("name"): s for s in steps}
+    build, push = by_name["Build the image"], by_name["Push the image"]
+    assert build["with"]["load"] is True
+    assert "push" not in build["with"]
+    assert push["with"]["push"] is True
+    assert push["with"]["tags"] == "${{ steps.name.outputs.ref }}"
+    source = "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+    assert build["with"]["labels"] == push["with"]["labels"] == source
+
+
+def test_backend_release_runs_the_image_as_the_image_check_does(backend: Path) -> None:
+    """The same first-log-line test as `image` in ci.yml, before the push and
+    on the pushed image: what passes the check on a pull request is what is
+    asked of the published image."""
+    ci = yaml.safe_load((backend / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    (check,) = [s for s in ci["jobs"]["image"]["steps"] if "first log line" in s.get("name", "")]
+    last = check["run"].strip().splitlines()[-1]
+    assert last == 'printf \'%s\\n\' "$out" | head -1 | grep -F \'"message": "started"\''
+    by_name = {s.get("name"): s for s in _image_steps(backend)}
+    before = by_name["Run the image and read its first log line"]["run"]
+    after = by_name["Pull the pushed image and read its first log line"]
+    assert before.strip() == check["run"].strip()
+    assert 'docker run --rm --pull always "$PUSHED"' in after["run"]
+    assert after["run"].strip().splitlines()[-1] == last
+    assert after["env"]["PUSHED"] == (
+        "${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}"
+    )
+
+
+def test_backend_release_attests_and_a_private_repository_does_not_fail(backend: Path) -> None:
+    """A failed signature fails a public repository's run; a private one's
+    goes on, and the next step says why in plain words, as a notice."""
+    by_name = {s.get("name"): s for s in _image_steps(backend)}
+    attest = by_name["Sign a record of how the image was built"]
+    assert attest["uses"].startswith("actions/attest@")
+    assert attest["continue-on-error"] == "${{ github.event.repository.private }}"
+    # A personal account's private repository is refused by GitHub outright,
+    # so it is not asked: the step is skipped, not failed, and no red error
+    # line sits on a green run.
+    assert attest["if"] == (
+        "${{ !(github.event.repository.private && github.event.repository.owner.type == 'User') }}"
+    )
+    assert attest["with"] == {
+        "subject-name": "${{ steps.name.outputs.image }}",
+        "subject-digest": "${{ steps.push.outputs.digest }}",
+    }
+    said = by_name["Say what was published"]
+    assert said["env"]["ATTESTED"] == "${{ steps.attest.outcome }}"
+    assert "if" not in said
+    assert "::notice title=Published without a signed record::" in said["run"]
+    assert "not available for a private repository on this plan" in said["run"]
+    assert "Nothing failed." in said["run"]
+
+
+def _run_say(out: Path, attested: str) -> tuple[subprocess.CompletedProcess[str], str]:
+    summary = out / "summary.md"
+    summary.unlink(missing_ok=True)
+    done = _run_step(
+        out,
+        "Say what was published",
+        {
+            "REF": "ghcr.io/someone/backend:0.1.0",
+            "DIGEST": "sha256:" + "0" * 64,
+            "ATTESTED": attested,
+            "GITHUB_REPOSITORY": "someone/backend",
+            "GITHUB_STEP_SUMMARY": str(summary),
+        },
+        job="image",
+    )
+    return done, summary.read_text(encoding="utf-8")
+
+
+def test_backend_release_says_what_it_published(backend: Path) -> None:
+    done, summary = _run_say(backend, "success")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "::notice" not in done.stdout
+    assert "docker pull ghcr.io/someone/backend:0.1.0" in summary
+    verify = "gh attestation verify oci://ghcr.io/someone/backend:0.1.0 --repo someone/backend"
+    assert verify in summary
+    for outcome in ("failure", ""):
+        done, summary = _run_say(backend, outcome)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert "::notice title=Published without a signed record::" in done.stdout
+        assert "only on the GitHub Enterprise Cloud plan" in summary
+        assert "gh attestation verify" not in summary
+
+
+def test_backend_release_checks_the_tag_against_the_version(backend: Path) -> None:
+    name = "Check the tag against pyproject.toml's version"
+    same = _run_step(backend, name, {"GITHUB_REF_NAME": "v0.1.0"}, job="image")
+    assert same.returncode == 0, same.stdout + same.stderr
+    other = _run_step(backend, name, {"GITHUB_REF_NAME": "v0.2.0"}, job="image")
+    assert other.returncode == 1
+    assert "::error title=The tag and the version differ::" in other.stdout
+    assert _step_script(backend, name, "image") == _step_script(_render_cli(backend), name)
+
+
+def _render_cli(near: Path) -> Path:
+    out = near.parent / "cli-for-comparison"
+    if not out.exists():
+        render(out)
+    return out
+
+
+def test_backend_release_names_the_image_in_lower_case(backend: Path) -> None:
+    """GHCR refuses an upper-case name; GitHub keeps the owner's case."""
+    script = _step_script(backend, "Name the image", "image")
+    out = backend / "outputs"
+    out.unlink(missing_ok=True)
+    done = subprocess.run(  # noqa: S603
+        ["bash", "-c", script],  # noqa: S607
+        env={
+            **os.environ,
+            "GITHUB_REPOSITORY": "SomeOne/My-Service",
+            "GITHUB_REF_NAME": "v1.2.3",
+            "GITHUB_OUTPUT": str(out),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert out.read_text(encoding="utf-8").splitlines() == [
+        "image=ghcr.io/someone/my-service",
+        "ref=ghcr.io/someone/my-service:1.2.3",
+    ]
+
+
+def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
+    """Where the person reads the release steps: the free storage a private
+    image counts against, that the package starts private, and the command
+    that fetches this render's image."""
+    howto = (backend / RELEASE_HOWTO).read_text(encoding="utf-8")
+    assert howto.startswith("# Publish a release as a container image\n")
+    assert "| GitHub Free (a personal account or an organization) | 500 MB | 1 GB |" in howto
+    assert "| GitHub Pro, GitHub Team | 2 GB | 10 GB |" in howto
+    assert "read 2026-10-29" in howto
+    assert "takes the\nrepository's visibility" in howto
+    assert "docker pull ghcr.io/someone/probe:0.2.0" in howto
+    assert "gh attestation verify oci://ghcr.io/someone/probe:0.2.0 --repo someone/probe" in howto
+    assert "PyPI" not in howto
+    readme = (backend / "README.md").read_text(encoding="utf-8")
+    assert "## Releasing" in readme
+    assert "container registry" in readme
+    assert "PyPI" not in readme.split("## Releasing", 1)[1].split("\n## ", 1)[0]
 
 
 def test_dependabot_watches_the_reusable_workflow_pin(rendered: Path) -> None:
@@ -2092,7 +2296,9 @@ ANSWER_VARS = (
     "plinth_sha",
     "_copier",
 )
-UNRENDERED = re.compile(r"\{%|" + r"\{\{[^}]*(?:" + "|".join(ANSWER_VARS) + r")[^}]*\}\}")
+# `${{ … }}` is a GitHub Actions expression, never jinja: the backend's
+# release.yml reads `github.event.repository.owner.type` (coolbress/plinth#706).
+UNRENDERED = re.compile(r"\{%|" + r"(?<!\$)\{\{[^}]*(?:" + "|".join(ANSWER_VARS) + r")[^}]*\}\}")
 
 
 @pytest.mark.parametrize("archetype", sorted(SERVABLE))
@@ -2177,9 +2383,12 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
 # ── end to end ────────────────────────────────────────────────────────────
 
 #: The archetypes whose file sets differ. The service conditions are
-#: `archetype not in ['backend', 'data-ml', 'web']` and the Django files
-#: `archetype != 'web'`, so there are three sets: {cli, library}, {backend,
-#: data-ml} and {web}. One representative each covers them.
+#: `archetype not in ['backend', 'data-ml', 'web']`, the Django files
+#: `archetype != 'web'`, and the release workflow is left out for `data-ml`
+#: and `web` (coolbress/plinth#706), so the sets are {cli, library},
+#: {backend}, {data-ml} and {web}. `data-ml`'s is `backend`'s without the
+#: release files, so `backend` covers it; one representative each covers the
+#: rest.
 E2E_ARCHETYPES = ("cli", "library", "backend", "web")
 
 
@@ -2195,9 +2404,16 @@ def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> 
     groups: dict[frozenset[str], list[str]] = {}
     for archetype, files in sets.items():
         groups.setdefault(files, []).append(archetype)
-    assert len(groups) == len(E2E_ARCHETYPES), [sorted(v) for v in groups.values()]
-    for reps in groups.values():
-        assert any(r in E2E_ARCHETYPES for r in reps), f"no representative for {reps}"
+    for files, reps in groups.items():
+        covered = any(r in E2E_ARCHETYPES for r in reps) or any(
+            files < sets[r] for r in E2E_ARCHETYPES
+        )
+        assert covered, f"no representative for {reps}"
+    assert sets["data-ml"] < sets["backend"]
+    assert sets["backend"] - sets["data-ml"] == {
+        ".github/workflows/release.yml",
+        "docs/how-to/publish-a-release.md",
+    }
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")

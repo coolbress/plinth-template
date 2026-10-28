@@ -1,0 +1,304 @@
+{%- if archetype == 'backend' %}{% raw %}# Publishes this service's container image to GitHub's container registry
+# (GHCR) when a version tag (`v1.2.3`) is pushed, as
+# ghcr.io/<owner>/<repository>:1.2.3, then makes a GitHub Release with
+# generated notes. What the person does around it, and what keeping a
+# private image costs: docs/how-to/publish-a-release.md.
+#
+# Not a required check and not part of `ci`: it runs on a tag, never on a pull
+# request, so no ruleset waits for it. No job is skipped with `if:`; each job
+# runs or fails, so a red run says which step stopped.
+#
+# No stored secret. The push uses this run's own token (`packages: write`),
+# which GitHub makes for the run and which stops working when it ends. On a
+# public repository the image also gets a signed record of the workflow and
+# commit that built it (an attestation). GitHub signs these for private
+# repositories only on GitHub Enterprise Cloud, so a private repository on
+# another plan gets the image without the record, and the run says so.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Nothing by default; each job asks for what it uses.
+permissions: {}
+
+# Two tags pushed together publish one after the other, never at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Checks, then the image built and run before anything leaves the
+  # repository: a tag that fails a check or an image that does not start
+  # pushes nothing.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write       # push the image to this repository's package
+      id-token: write       # the attestation: a short-lived signing certificate
+      attestations: write   # the attestation: store it on GitHub
+    outputs:
+      ref: ${{ steps.name.outputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, to tell whether the tagged commit is on main.
+          fetch-depth: 0
+          persist-credentials: false   # nothing here pushes to git
+      - name: Check the tag against pyproject.toml's version
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            exit 1
+          fi
+          echo "The tag $tag matches pyproject.toml's version $version."
+      - name: Check the tagged commit is on main
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME is on main."
+      - name: Name the image
+        id: name
+        run: |
+          set -euo pipefail
+          # GHCR takes lower-case names only; GitHub keeps the owner's case.
+          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "image=$image"
+            echo "ref=$image:${GITHUB_REF_NAME#v}"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # The label links the package to this repository, so the package takes
+      # the repository's access rules and this workflow may push to it.
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: image-under-test
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      # The same check as `image` in ci.yml: no framework is chosen yet, so
+      # the one request is a run to completion, answered by its first log
+      # line. Never `docker run … | head`: under `pipefail`, `head` closing
+      # the pipe first fails a healthy image with exit 141 (plinth #151).
+      - name: Run the image and read its first log line
+        run: |
+          set -euo pipefail
+          out="$(docker run --rm image-under-test)"
+          printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+      - name: Log in to GHCR with this run's token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: printf '%s\n' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      # The same build again: every layer comes from the build above.
+      - name: Push the image
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.name.outputs.ref }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      - name: Pull the pushed image and read its first log line
+        env:
+          PUSHED: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          out="$(docker run --rm --pull always "$PUSHED")"
+          printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+      # On a public repository a failed signature fails the run. A private
+      # one owned by a personal account is not asked: GitHub refuses it there
+      # ("Feature not available for user-owned private repositories"). A
+      # private one owned by an organization is asked, and gets the record
+      # only on GitHub Enterprise Cloud. Either way the next step says so
+      # instead of failing.
+      - name: Sign a record of how the image was built
+        id: attest
+        if: ${{ !(github.event.repository.private && github.event.repository.owner.type == 'User') }}
+        continue-on-error: ${{ github.event.repository.private }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+      - name: Say what was published
+        env:
+          REF: ${{ steps.name.outputs.ref }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          ATTESTED: ${{ steps.attest.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Published $REF"
+            echo
+            echo "Fetch it with \`docker pull $REF\` (digest \`$DIGEST\`)."
+            echo
+            if [ "$ATTESTED" = success ]; then
+              echo "It has a signed record of the workflow and commit that built it. Check it with \`gh attestation verify oci://$REF --repo $GITHUB_REPOSITORY\`."
+            else
+              echo "It has no signed record of how it was built: GitHub signs these for private repositories only on the GitHub Enterprise Cloud plan. The image itself is published and works. To get the record, make the repository public, or move it to an organization on that plan."
+            fi
+            echo
+            echo "Who can fetch it, and what a private image costs to keep: docs/how-to/publish-a-release.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ATTESTED" != success ]; then
+            echo "::notice title=Published without a signed record::$REF is published. A signed record of how it was built is not available for a private repository on this plan (GitHub signs them for private repositories only on GitHub Enterprise Cloud). Nothing failed. The run summary says more."
+          fi
+
+  # The release page on GitHub, once the image is in the registry.
+  github-release:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.image.outputs.ref }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+            --notes "The image: \`docker pull $REF\`"
+{% endraw %}{%- else %}{% raw %}# Publishes this package to PyPI when a version tag (`v1.2.3`) is pushed, then
+# makes a GitHub Release with generated notes. The steps a person takes once
+# before the first tag: docs/how-to/publish-a-release.md.
+#
+# Not a required check and not part of `ci`: it runs on a tag, never on a pull
+# request, so no ruleset waits for it. No job is skipped with `if:`; each job
+# runs or fails, so a red run says which step stopped.
+#
+# No stored secret. PyPI trusts this workflow through Trusted Publishing: the
+# publish job asks GitHub for a short-lived identity token (`id-token: write`)
+# and PyPI accepts it only from the repository, workflow file and environment
+# registered as the project's publisher. The action also signs what it
+# uploads (attestations), and PyPI shows that on the project page.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Nothing by default; each job asks for what it uses.
+permissions: {}
+
+# Two tags pushed together publish one after the other, never at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Checks before anything leaves the repository, then builds. A tag that
+  # fails here uploads nothing.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, to tell whether the tagged commit is on main.
+          fetch-depth: 0
+          persist-credentials: false   # nothing here pushes
+      - name: Check the tag against pyproject.toml's version
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            exit 1
+          fi
+          echo "The tag $tag matches pyproject.toml's version $version."
+      - name: Check the tagged commit is on main
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME is on main."
+      - name: Install uv (official release, SHA256 verified)
+        env:
+          UV_VERSION: "0.12.9"
+          UV_SHA256: "ec7a99cd05e0cd7f80243f135ce1361c76835cb0ee60055d14d20eba8eba1460"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/uv"; mkdir -p "$d"
+          f="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/$f"
+          echo "${UV_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
+          echo "$d" >> "$GITHUB_PATH"
+      - run: uv build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # The only job that can speak for this repository to PyPI, and it runs no
+  # code from the repository: it uploads what `build` made.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The environment PyPI's publisher names. Its protection rules (who may
+    # approve, which tags) are set in the repository's settings.
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          # PyPI unless the repository variable PYPI_REPOSITORY_URL says
+          # otherwise; https://test.pypi.org/legacy/ rehearses on TestPyPI.
+          repository-url: ${{ vars.PYPI_REPOSITORY_URL || 'https://upload.pypi.org/legacy/' }}
+          attestations: true
+      - name: Say why PyPI refused, in plain words
+        if: failure()
+        run: |
+          {
+            echo "### PyPI did not accept this release"
+            echo
+            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then delete the tag and push it again."
+            echo
+            echo "If it says the file already exists, this version was published before: PyPI never takes a version twice. Raise the version in pyproject.toml and tag again."
+            echo
+            echo "The steps, in order: docs/how-to/publish-a-release.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=PyPI did not accept this release::Read the run summary for what to check. The steps: docs/how-to/publish-a-release.md."
+
+  # The release page on GitHub, once PyPI has the files.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*
+{% endraw %}{%- endif %}

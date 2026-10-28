@@ -67,16 +67,18 @@ _exclude:
   - "{% if archetype != 'web' %}src/{{ package_name }}/notes{% endif %}"
   - "{% if archetype != 'web' %}tests/test_access.py{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
-  # Publishing to PyPI on a version tag, and the person's steps before the
-  # first one (coolbress/plinth#703): what a `cli` or `library` ships is a
-  # package. A service ships an image or a running app instead. Written
-  # `in`, not `not in`, for the floor checker's sake (above). On GitLab the
-  # workflow is already out with `.github`, and its how-to goes with it.
-  - "{% if archetype in ['backend', 'data-ml', 'web'] or host == 'gitlab' %}.github/workflows/release.yml{% endif %}"
-  - "{% if archetype in ['backend', 'data-ml', 'web'] or host == 'gitlab' %}docs/how-to/publish-a-release.md{% endif %}"
+  # Publishing on a version tag, and the person's steps around it: a `cli` or
+  # `library` publishes its package to PyPI (coolbress/plinth#703), a
+  # `backend` its image to GHCR (coolbress/plinth#706); the file branches on
+  # the archetype. `data-ml` and `web` have none: what `data-ml` outputs is
+  # undecided, and `web` deploys on green. Written `in`, not `not in`, for
+  # the floor checker's sake (above). On GitLab the workflow is already out
+  # with `.github`, and its how-to goes with it.
+  - "{% if archetype in ['data-ml', 'web'] or host == 'gitlab' %}.github/workflows/release.yml{% endif %}"
+  - "{% if archetype in ['data-ml', 'web'] or host == 'gitlab' %}docs/how-to/publish-a-release.md{% endif %}"
   # The directory too, while that page is all it holds: excluding only the
   # file leaves an empty directory.
-  - "{% if archetype in ['backend', 'data-ml', 'web'] or host == 'gitlab' %}docs/how-to{% endif %}"
+  - "{% if archetype in ['data-ml', 'web'] or host == 'gitlab' %}docs/how-to{% endif %}"
   # Render's Blueprint, only where the app runs on Render (`hosting` below).
   - "{% if archetype != 'web' or hosting != 'render' %}render.yaml{% endif %}"
   # The owner's shared community-health files, when they publish them. GitHub

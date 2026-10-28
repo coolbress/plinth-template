@@ -1,3 +1,139 @@
+{%- if archetype == 'backend' -%}
+{%- set image = 'ghcr.io/' ~ (owner | lower if owner else '<your-github-account>') ~ '/' ~ (project_name | lower) -%}
+# Publish a release as a container image
+
+A container image is this service packed with everything it needs to run.
+GitHub's container registry (GHCR, at `ghcr.io`) is a shelf for images:
+once a version is there, a server or a hosting service can fetch and run
+exactly that version, for example `docker pull {{ image }}:0.2.0`. This page
+is the steps, in order, for every release.
+
+How it works, in one paragraph: you push a version tag, such as `v0.2.0`.
+The workflow `.github/workflows/release.yml` then checks the tag, builds the
+image, runs it once the way the `image` check does, pushes it to
+`{{ image }}:0.2.0`, fetches it back and runs it again, and makes a release
+page on GitHub. No password or token is stored anywhere: the push uses the
+run's own token, which GitHub makes for that run and which stops working
+when it ends.
+
+Nothing has to be set up before the first tag. The first push creates the
+package (GitHub's name for the image and its versions) under the account
+that owns this repository.
+
+## 1. Publish
+
+1. Set the version. The version is written in `pyproject.toml`
+   (`version = "0.1.0"` to start). For a new release, ask the agent to raise
+   it in a pull request, for example "raise the version to 0.2.0 with
+   `uv version 0.2.0`", and add what changed to `CHANGELOG.md`. Merge it when
+   its checks are green.
+2. Push the tag. The tag is the version with a `v` in front, on the merged
+   `main`. In a terminal, in this repository:
+
+   ```bash
+   git fetch origin
+   git tag v0.2.0 origin/main
+   git push origin v0.2.0
+   ```
+
+   You push the tag yourself, not the agent: letting a version out is a
+   person's decision.
+3. Open the repository's **Actions** tab and the run named **Release**. When
+   it is green, its summary names the image and the command to fetch it, and
+   a release page is under **Releases** on GitHub.
+
+## 2. Who can fetch the image
+
+The image is linked to this repository and, on its first push, takes the
+repository's visibility: from a public repository anyone can fetch it, from
+a private one only people who can read the repository. (GitHub's
+documentation says a new package starts private; a trial on 2026-10-29 got
+a public package from a public repository.) Check it once: open the
+repository's main page, **Packages** in the right-hand column, and read
+whether the package says **Public** or **Private**.
+
+- **To fetch a private image** from your own machine, log in once with a
+  personal access token (classic) that has only the `read:packages` scope:
+  `docker login ghcr.io --username <your GitHub account>`, and paste the
+  token when it asks for a password. Never paste the token into the chat.
+- **To let anyone fetch a private repository's image:** on the package's
+  page, **Package settings** > **Danger Zone** > **Change visibility** >
+  **Public**. Anyone can then read the code inside the image. This cannot be
+  undone: a public package never becomes private again.
+
+## 3. What a private image costs to keep
+
+A public image is free to keep and to fetch. A private one counts against
+what the account's plan includes. GitHub's figures, read 2026-10-29
+(<https://docs.github.com/en/billing/concepts/product-billing/github-packages>):
+
+| Plan | Storage included | Fetching included, per month |
+|---|---|---|
+| GitHub Free (a personal account or an organization) | 500 MB | 1 GB |
+| GitHub Pro, GitHub Team | 2 GB | 10 GB |
+
+- The storage is shared with the files GitHub Actions runs keep (artifacts).
+- Every version stays until you delete it, so each release adds its whole
+  size. This project's image as the template makes it is about 45 MB (a
+  trial on 2026-10-29) and grows with each dependency: on GitHub Free, about
+  ten such versions fill the 500 MB.
+- Fetching from a workflow in this repository does not count; fetching
+  from your machine or a server does.
+- The same page says the container registry is *currently* free of charge
+  for storage and fetching, and that GitHub will say so at least a month
+  before that changes. Plan for the limits above anyway.
+- Past what is included: with no payment method on the account, GitHub
+  blocks further use; with one, it bills the extra, up to any budget set in
+  the account's billing settings. GitHub emails at 90% and 100% of what is
+  included.
+
+To delete an old version: on the package's page, under "Recent Versions",
+**View and manage all versions**, then the **⋯** next to a version >
+**Delete version**.
+
+## 4. The signed record of how it was built
+
+On a **public** repository, each image gets a signed record (an
+*attestation*) saying which workflow, in which repository, built it from
+which commit. Anyone can check it:
+
+```bash
+gh attestation verify oci://{{ image }}:0.2.0 --repo {{ owner if owner else '<your GitHub account>' }}/{{ project_name }}
+```
+
+On a **private** repository, GitHub makes these records only on its
+GitHub Enterprise Cloud plan. On any other plan the run publishes the image
+without one, does not fail, and says so in its summary: "Published without a
+signed record".
+
+## When a release fails
+
+Nothing is pushed until the checks before it have passed. The run says
+which step stopped.
+
+- **"The tag and the version differ."** The tag says one version,
+  `pyproject.toml` another. Decide which one is right. If the file is right,
+  delete the tag and push the right one. If the tag is right, change the
+  version in a pull request first, merge it, then delete the tag and push it
+  again. To delete a tag: `git push origin --delete v0.2.0`, then
+  `git tag -d v0.2.0`.
+- **"The tag is not on main."** The tag points at a commit that never went
+  through a pull request. Delete it and tag `origin/main` as in step 1.
+- **"Run the image and read its first log line" failed.** The image builds
+  but does not start. The `image` check on pull requests runs the same
+  check, so the cause is usually something that changed outside one, such as
+  a base image. Ask the agent to run `docker build` and `docker run` on it.
+- **The push says `denied` or `permission_denied`.** A package with this
+  name already exists under the account and is not linked to this
+  repository. On the package's page, **Package settings** > **Manage Actions
+  access** > **Add repository**, choose this repository with the **Write**
+  role, then delete the tag and push it again.
+
+Pushing the same tag again replaces the image under that version; the
+earlier one stays in the package, without a version, until you delete it.
+Deleting a tag turns its release page into a draft, so after pushing it
+again, delete the draft under **Releases**.
+{% else -%}
 {%- set owner_name = owner if owner else '<your GitHub account>' -%}
 # Publish a release to PyPI
 
@@ -136,3 +272,4 @@ says which step stopped, in its summary.
 To take a broken release out of reach without breaking anyone who already
 pinned it, *yank* it on PyPI (the project's **Manage** > **Releases** >
 **Options** > **Yank**) and publish a fixed version.
+{% endif %}

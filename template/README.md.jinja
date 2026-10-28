@@ -458,6 +458,16 @@ things are set up once, by a person, in a web browser before the first tag;
 the steps, in plain words, are in
 [`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
 
+{% elif archetype == 'backend' and host != 'gitlab' %}## Releasing
+
+A version tag (`v0.1.0`) publishes this service's container image to
+GitHub's container registry, as `ghcr.io/<owner>/<repository>:0.1.0`, and
+makes a GitHub Release, through
+[`.github/workflows/release.yml`](.github/workflows/release.yml). No password
+or token is stored: the push uses the run's own token. Who can fetch the
+image, and what a private one costs to keep, are in
+[`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
+
 {% endif %}## Working with Claude Code
 
 `.claude/settings.json` turns on the `Beginner or non-engineer` output style
