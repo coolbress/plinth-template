@@ -1,0 +1,132 @@
+# Publishes this package to PyPI when a version tag (`v1.2.3`) is pushed, then
+# makes a GitHub Release with generated notes. The steps a person takes once
+# before the first tag: docs/how-to/publish-a-release.md.
+#
+# Not a required check and not part of `ci`: it runs on a tag, never on a pull
+# request, so no ruleset waits for it. No job is skipped with `if:`; each job
+# runs or fails, so a red run says which step stopped.
+#
+# No stored secret. PyPI trusts this workflow through Trusted Publishing: the
+# publish job asks GitHub for a short-lived identity token (`id-token: write`)
+# and PyPI accepts it only from the repository, workflow file and environment
+# registered as the project's publisher. The action also signs what it
+# uploads (attestations), and PyPI shows that on the project page.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Nothing by default; each job asks for what it uses.
+permissions: {}
+
+# Two tags pushed together publish one after the other, never at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Checks before anything leaves the repository, then builds. A tag that
+  # fails here uploads nothing.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, to tell whether the tagged commit is on main.
+          fetch-depth: 0
+          persist-credentials: false   # nothing here pushes
+      - name: Check the tag against pyproject.toml's version
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            exit 1
+          fi
+          echo "The tag $tag matches pyproject.toml's version $version."
+      - name: Check the tagged commit is on main
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME is on main."
+      - name: Install uv (official release, SHA256 verified)
+        env:
+          UV_VERSION: "0.12.9"
+          UV_SHA256: "ec7a99cd05e0cd7f80243f135ce1361c76835cb0ee60055d14d20eba8eba1460"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/uv"; mkdir -p "$d"
+          f="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/$f"
+          echo "${UV_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
+          echo "$d" >> "$GITHUB_PATH"
+      - run: uv build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # The only job that can speak for this repository to PyPI, and it runs no
+  # code from the repository: it uploads what `build` made.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The environment PyPI's publisher names. Its protection rules (who may
+    # approve, which tags) are set in the repository's settings.
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          # PyPI unless the repository variable PYPI_REPOSITORY_URL says
+          # otherwise; https://test.pypi.org/legacy/ rehearses on TestPyPI.
+          repository-url: ${{ vars.PYPI_REPOSITORY_URL || 'https://upload.pypi.org/legacy/' }}
+          attestations: true
+      - name: Say why PyPI refused, in plain words
+        if: failure()
+        run: |
+          {
+            echo "### PyPI did not accept this release"
+            echo
+            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then delete the tag and push it again."
+            echo
+            echo "If it says the file already exists, this version was published before: PyPI never takes a version twice. Raise the version in pyproject.toml and tag again."
+            echo
+            echo "The steps, in order: docs/how-to/publish-a-release.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=PyPI did not accept this release::Read the run summary for what to check. The steps: docs/how-to/publish-a-release.md."
+
+  # The release page on GitHub, once PyPI has the files.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*
