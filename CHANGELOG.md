@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-10-28
+
+A `cli` or `library` project on GitHub can now publish to PyPI by pushing
+a version tag, with no stored password or token: the release workflow
+checks the tag against `pyproject.toml`, builds, uploads through Trusted
+Publishing and makes a GitHub Release. A how-to walks a person through the
+one-time PyPI and GitHub steps. The project's Claude Code settings also
+give the skill list more room, so tool descriptions are no longer cut on a
+200k-context model.
+
 ### Added
 - A `cli` or `library` project on GitHub publishes to PyPI on a version
   tag (coolbress/plinth#703). `.github/workflows/release.yml` runs only on
