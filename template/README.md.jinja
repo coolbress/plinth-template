@@ -474,6 +474,13 @@ Delete that line to have the style again.
 A choice in your own `~/.claude/settings.json` does not turn it off: the
 project's setting takes precedence over it.
 
+`skillListingBudgetFraction` gives the list of skills the agent can pick from
+1.5% of the model's context instead of 1%. On a model with 200k tokens of
+context, 1% shortened some skill descriptions to about their name, so the
+agent could not tell when to use them; at 1.5% none were shortened, and the
+list grew by about 200 tokens in every session. On a 1M model nothing
+changed.
+
 ## Contributing
 
 [`CONTRIBUTING.md`](CONTRIBUTING.md), in particular the test policy. `main` is

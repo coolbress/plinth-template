@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- `.claude/settings.json` sets `skillListingBudgetFraction` to 0.015
+  (plinth #704). Measured on Claude Code 2.1.312 with plinth's default set
+  installed: on `claude-haiku-4-5` (200k) the default 1% cut the
+  descriptions of `code-review` and `design-taste-frontend` to under 20
+  tokens; with 0.015 in the rendered repository's settings none were cut,
+  and 0.02 and 0.025 gave the same listing. The listing grew from about
+  2.0k to 2.2k tokens on that model (2.4k with plinth's extra Matt Pocock
+  skills installed). At 1M (`claude-opus-5-5`) it did not change. The
+  README's "Working with Claude Code" says what the line does.
+
 ## [1.28.0] - 2026-10-28
 
 A project's issue forms now ask two more things in plain words: what
