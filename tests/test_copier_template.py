@@ -844,6 +844,14 @@ def test_settings_suggest_the_plinth_marketplace(rendered: Path) -> None:
     assert plinth == {"source": {"source": "github", "repo": "coolbress/plinth"}}, plinth
 
 
+def test_settings_raise_the_skill_listing_budget(rendered: Path) -> None:
+    """Measured for plinth #704 (Claude Code 2.1.312): on a 200k model the
+    default 1% budget cut the descriptions of `code-review` and
+    `design-taste-frontend` to under 20 tokens; 0.015 in this file, read from
+    the repository, left none cut. At 1M the listing did not change."""
+    assert _settings(rendered)["skillListingBudgetFraction"] == 0.015
+
+
 def test_settings_deny_what_the_checks_cannot_undo(rendered: Path) -> None:
     permissions = _settings(rendered)["permissions"]
     assert isinstance(permissions, dict)
