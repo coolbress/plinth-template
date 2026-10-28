@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-10-28
+
+A project's issue forms now ask two more things in plain words: what
+should happen, as "When I …, then I see …" lines a person can try, and
+what is not decided yet. The agent reads both first, asks about anything
+not decided before writing code, and says in the pull request which line
+each test covers. A `web` project's `AGENTS.md` is back within its 60
+lines, and the test that holds it now checks every kind of project, not
+only `cli`. An untouched 1.27.0 project updates without conflicts.
+
 ### Added
 - The change forms ask what should happen and what is not decided yet
   (#111). GitHub's `feature.yml` and `task.yml` and GitLab's `Feature.md`
