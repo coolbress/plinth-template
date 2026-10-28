@@ -6,6 +6,27 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `cli` or `library` project on GitHub publishes to PyPI on a version
+  tag (coolbress/plinth#703). `.github/workflows/release.yml` runs only on
+  a pushed `v*` tag. Before anything is uploaded it checks that the tag is
+  `v` plus `pyproject.toml`'s version, saying in plain words which one to
+  change when they differ, and that the tagged commit is on `main`. It
+  then builds with `uv build`, publishes with `pypa/gh-action-pypi-publish`
+  (pinned to a commit) from the GitHub environment `pypi` with
+  `id-token: write` and no stored secret (Trusted Publishing), keeps the
+  action's attestations on, and makes a GitHub Release with generated
+  notes. When PyPI refuses the upload, the run summary says what to check,
+  `invalid-publisher` first. The repository variable `PYPI_REPOSITORY_URL`
+  sends a release to TestPyPI instead, for a practice run. It is not a
+  required check and no job is skipped with `if:`.
+  `docs/how-to/publish-a-release.md` gives a person's steps in plain
+  words: a PyPI (or TestPyPI) account with two-factor authentication, the
+  pending publisher with the five values filled in for this project, the
+  `pypi` environment and its protection, the tag, and what each failure
+  means. The README links it. Other archetypes and GitLab projects get
+  neither file.
+
 ### Changed
 - `.claude/settings.json` sets `skillListingBudgetFraction` to 0.015
   (plinth #704). Measured on Claude Code 2.1.312 with plinth's default set

@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -808,6 +809,210 @@ def test_third_party_review_is_offered_but_off(rendered: Path) -> None:
     live = [ln for ln in ci.splitlines() if not ln.lstrip().startswith("#")]
     assert not any("pr-review.yml" in ln for ln in live), "pr-review.yml is called for real"
     assert not (rendered / ".github" / "workflows" / "third-party.yml").exists()
+
+
+# ── releasing a package (coolbress/plinth#703) ────────────────────────────
+
+RELEASE = Path(".github") / "workflows" / "release.yml"
+RELEASE_HOWTO = Path("docs") / "how-to" / "publish-a-release.md"
+
+
+@pytest.mark.parametrize(
+    ("archetype", "host", "ships"),
+    [
+        ("cli", "github", True),
+        ("library", "github", True),
+        ("backend", "github", False),
+        ("data-ml", "github", False),
+        ("web", "github", False),
+        ("cli", "gitlab", False),
+        ("library", "gitlab", False),
+    ],
+)
+def test_release_workflow_and_its_how_to_render_for_packages_on_github_only(
+    tmp_path: Path, archetype: str, host: str, ships: bool
+) -> None:
+    """What a `cli` or `library` ships is a package; a service ships an image
+    or a running app. GitLab gets no `.github/`, and so no how-to for a
+    workflow it does not have. Never written, rather than written and empty:
+    no `docs/how-to/` directory is left behind either."""
+    out = render(tmp_path, archetype=archetype, host=host)
+    assert (out / RELEASE).is_file() is ships
+    assert (out / RELEASE_HOWTO).is_file() is ships
+    assert (out / "docs" / "how-to").exists() is ships
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert ("## Releasing" in readme) is ships
+    if ships:
+        assert "](docs/how-to/publish-a-release.md)" in readme
+
+
+def _release(out: Path) -> dict[Any, Any]:
+    data = yaml.safe_load((out / RELEASE).read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    return data
+
+
+def test_release_runs_only_on_a_version_tag_and_stores_no_secret(rendered: Path) -> None:
+    """The acceptance lines of #703 that a reading can hold: a tag and nothing
+    else starts it (PyYAML reads the `on:` key as True), no job is skipped
+    with `if:`, no job is named `ci` (it is no required check), nothing is
+    granted by default, only the publish job may ask for an identity token
+    and it runs in the `pypi` environment PyPI's publisher names, attestations
+    stay on, and no stored secret is read."""
+    text = (rendered / RELEASE).read_text(encoding="utf-8")
+    data = _release(rendered)
+    assert data[True] == {"push": {"tags": ["v*"]}}
+    assert data["permissions"] == {}
+    jobs = data["jobs"]
+    assert set(jobs) == {"build", "publish", "github-release"}
+    for name, job in jobs.items():
+        assert "if" not in job, f"job {name} is skipped with if:"
+    assert jobs["publish"]["needs"] == "build"
+    assert jobs["github-release"]["needs"] == "publish"
+    assert jobs["publish"]["environment"] == "pypi"
+    assert jobs["publish"]["permissions"] == {"id-token": "write"}
+    assert all("id-token" not in jobs[n]["permissions"] for n in ("build", "github-release"))
+    publish = [
+        s for s in jobs["publish"]["steps"] if "pypa/gh-action-pypi-publish" in s.get("uses", "")
+    ]
+    assert len(publish) == 1
+    assert publish[0]["with"]["attestations"] is True
+    assert "password" not in publish[0]["with"]
+    assert "secrets." not in text
+    for ref in re.findall(r"uses:\s*(\S+)", text):
+        assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
+
+
+def test_release_checks_the_version_before_it_builds(rendered: Path) -> None:
+    """The checks come before the build, and the build job is the one the
+    upload needs: a failed check uploads nothing."""
+    steps = _release(rendered)["jobs"]["build"]["steps"]
+    names = [s.get("name") or s.get("run") or s.get("uses") for s in steps]
+    version = names.index("Check the tag against pyproject.toml's version")
+    on_main = names.index("Check the tagged commit is on main")
+    assert version < on_main < names.index("uv build")
+
+
+def _step_script(out: Path, name: str) -> str:
+    steps = _release(out)["jobs"]["build"]["steps"]
+    (step,) = [s for s in steps if s.get("name") == name]
+    script = step["run"]
+    assert isinstance(script, str)
+    return script
+
+
+def _run_step(out: Path, name: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """The step's script as rendered, run with bash in the instance. The
+    interpreter running the tests goes first on PATH: the script's `python3`
+    needs `tomllib`, which the runner's has."""
+    path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    return subprocess.run(  # noqa: S603
+        ["bash", "-c", _step_script(out, name)],  # noqa: S607
+        cwd=out,
+        env={**os.environ, "PATH": path, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_a_tag_that_differs_from_pyproject_fails_and_says_which_to_change(
+    rendered: Path,
+) -> None:
+    name = "Check the tag against pyproject.toml's version"
+    same = _run_step(rendered, name, {"GITHUB_REF_NAME": "v0.1.0"})
+    assert same.returncode == 0, same.stdout + same.stderr
+    for tag in ("v0.2.0", "0.1.0", "v0.1.0-rc1"):
+        other = _run_step(rendered, name, {"GITHUB_REF_NAME": tag})
+        assert other.returncode == 1, tag
+        said = other.stdout
+        assert "::error title=The tag and the version differ::" in said
+        assert f'The tag is {tag}, but pyproject.toml says version = "0.1.0"' in said
+        assert "Nothing was uploaded." in said
+        assert "push v0.1.0 instead" in said
+        assert "change version in pyproject.toml" in said
+
+
+def test_a_tag_off_main_fails_before_the_build(tmp_path: Path) -> None:
+    out = render(tmp_path / "probe")
+
+    def git(*args: str) -> str:
+        return subprocess.run(  # noqa: S603
+            ["git", *args],  # noqa: S607
+            cwd=out,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "on main",
+    )
+    on_main = git("rev-parse", "HEAD")
+    git("update-ref", "refs/remotes/origin/main", on_main)
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "off main",
+    )
+    off_main = git("rev-parse", "HEAD")
+    name = "Check the tagged commit is on main"
+    ok = _run_step(out, name, {"GITHUB_SHA": on_main, "GITHUB_REF_NAME": "v0.1.0"})
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    refused = _run_step(out, name, {"GITHUB_SHA": off_main, "GITHUB_REF_NAME": "v0.1.0"})
+    assert refused.returncode == 1
+    assert (
+        "::error title=The tag is not on main::v0.1.0 points at a commit that is not on main"
+        in refused.stdout
+    )
+
+
+def test_the_how_to_names_what_the_workflow_uses(tmp_path: Path) -> None:
+    """The pending publisher's fields are checked by PyPI letter for letter:
+    the how-to's table names the workflow file, the environment, the
+    repository and the package exactly as this render has them."""
+    out = render(tmp_path, archetype="library", owner="someone", project_name="my-lib")
+    howto = (out / RELEASE_HOWTO).read_text(encoding="utf-8")
+    data = _release(out)
+    rows = dict(re.findall(r"^ *\| ([A-Za-z ]+) \| `([^`]+)` \|$", howto, re.M))
+    assert rows == {
+        "PyPI Project Name": "my_lib",
+        "Owner": "someone",
+        "Repository name": "my-lib",
+        "Workflow name": RELEASE.name,
+        "Environment name": data["jobs"]["publish"]["environment"],
+    }
+    pyproject = (out / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'name = "my_lib"' in pyproject
+    # The refusal step names the same two values.
+    refusal = [s for s in data["jobs"]["publish"]["steps"] if s.get("if") == "failure()"]
+    assert len(refusal) == 1
+    # The backticks are escaped: the text is inside double quotes in bash.
+    assert "\\`release.yml\\`" in refusal[0]["run"]
+    assert "\\`pypi\\`" in refusal[0]["run"]
+    assert "invalid-publisher" in refusal[0]["run"]
+    assert "invalid-publisher" in howto
+
+
+def test_the_how_to_without_an_owner_says_whose_account(tmp_path: Path) -> None:
+    out = render(tmp_path, archetype="cli")
+    howto = (out / RELEASE_HOWTO).read_text(encoding="utf-8")
+    assert "   | Owner | `<your GitHub account>` |" in howto
 
 
 def test_dependabot_watches_the_reusable_workflow_pin(rendered: Path) -> None:

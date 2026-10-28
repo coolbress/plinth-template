@@ -449,6 +449,15 @@ your data.
 {%- endif %}
 {%- endif %}
 
+{% endif %}{% if archetype in ['cli', 'library'] and host != 'gitlab' %}## Releasing
+
+A version tag (`v0.1.0`) publishes this package to PyPI and makes a GitHub
+Release, through [`.github/workflows/release.yml`](.github/workflows/release.yml).
+No password or token is stored: PyPI trusts the workflow itself. Three
+things are set up once, by a person, in a web browser before the first tag;
+the steps, in plain words, are in
+[`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
+
 {% endif %}## Working with Claude Code
 
 `.claude/settings.json` turns on the `Beginner or non-engineer` output style
