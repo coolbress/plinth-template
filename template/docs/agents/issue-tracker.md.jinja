@@ -20,7 +20,7 @@ template, and they are yours to change — a team that settles on a different
 shape edits this file and the templates together, and is not in violation of
 anything. Writing into someone else's repository, use theirs.
 
-## Three kinds of issue
+## Four kinds of issue
 
 The templates are in `.gitlab/issue_templates/`. Each ends in a `/label` quick
 action that adds its label when the issue is created; written by hand, keep the
@@ -30,6 +30,7 @@ headings and add the label yourself.
 | --- | --- | --- |
 | A request from anyone | Bug (`bug`), Feature (`enhancement`) | The template's headings: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried |
 | A task, one thing to build | Task (`task`) | `## Parent`, `## What to build`, `## Acceptance criteria`, `## Not building`, `## Blocked by`; while open, decisions go under `## Decisions` (dated) and the result under `## Outcome` |
+| The end of the project, or handing it over | End-or-hand-over (`task`) | The steps as a checklist (data, keys, users, package, image and service, repository), `## Not needed` for those that do not apply, and three questions: what went well, what the agent kept getting wrong, which rule or check to add |
 | A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, or `spec`, plus the triage label while open | `## Question`, `## Findings`, `## Decision`, `## Used by` for research; the map and the spec keep their own shape |
 
 The body is the record and stays canonical; comments are conversation, and
@@ -123,7 +124,7 @@ template, and they are yours to change — a team that settles on a different
 shape edits this file and the forms together, and is not in violation of
 anything. Writing into someone else's repository, use theirs.
 
-## Three kinds of issue
+## Four kinds of issue
 
 The forms are in `.github/ISSUE_TEMPLATE`. The CLI does not render a form, so
 from `gh` write the body under the form's field labels as headings and add the
@@ -133,6 +134,7 @@ form's label yourself.
 | --- | --- | --- |
 | A request from anyone | Bug (`bug`), Feature request (`enhancement`) | The form's fields: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried |
 | A task, one thing to build | Task (`task`) | `## Parent`, `## What to build`, `## Acceptance criteria`, `## Not building`, `## Blocked by`; while open, decisions go under `## Decisions` (dated) and the result under `## Outcome` |
+| The end of the project, or handing it over | End or hand over this project (`task`) | The steps as a checklist (data, keys, users, package, image and service, repository), `## Not needed` for those that do not apply, and three questions: what went well, what the agent kept getting wrong, which rule or check to add |
 | A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, or `spec` (`/plinth:new-project` creates them), plus the triage label while open | `## Question`, `## Findings`, `## Decision`, `## Used by` for research; the map and the spec keep their own shape |
 
 The body is the record and stays canonical; comments are conversation, and

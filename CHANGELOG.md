@@ -6,6 +6,27 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- An issue form for ending a project or handing it over
+  (coolbress/plinth#702): `.github/ISSUE_TEMPLATE/end-or-hand-over.yml` on
+  GitHub, `.gitlab/issue_templates/End-or-hand-over.md` on GitLab, labelled
+  `task`. It lists six steps as a checklist in plain words: the data
+  deleted or handed over, keys revoked, users told, the package yanked or
+  deprecated, the image and service deleted, the repository archived (last,
+  after the issue closes); a "Not needed" field for the steps a project
+  does not have; and three questions: what went well, what the agent kept
+  getting wrong, and which rule or check to add. An owner with their own
+  shared issue forms still gets none of ours. plinth's floor check does not
+  require it. `docs/agents/issue-tracker.md` lists it as a fourth kind of
+  issue.
+  On GitHub the form comes only with a new project, never with
+  `copier update`: an update cannot tell whether the owner shares their
+  own issue forms, and that one file would hide all of them. An existing
+  GitHub project adds it by hand, from this template's
+  `template/.github/ISSUE_TEMPLATE/end-or-hand-over.yml`, until
+  coolbress/plinth#726 lets the update know. A GitLab project gets its
+  template with the update.
+
 ## [1.29.0] - 2026-10-28
 
 A `cli` or `library` project on GitHub can now publish to PyPI by pushing
