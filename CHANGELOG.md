@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-10-29
+
+A `data-ml` project now has a defined output: `python -m <package> train`
+writes a skops model, its metrics and a model card, and pushing a version
+tag publishes the three to a GitHub Release, never as a pickle. The owner's
+answers about shared issue forms and a pull-request template are recorded,
+so an existing GitHub project gets the end-or-hand-over form by update
+without hiding the owner's shared forms. A `web` project's pages pass
+axe-core.
+
 ### Added
 - A `data-ml` project has a defined output (coolbress/plinth#716).
   `python -m <package> train` (`src/<package>/train.py`) trains a small
