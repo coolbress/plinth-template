@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+- axe-core finds no violation on a `web` project's pages: each page says it
+  is in English, its content sits inside `<main>`, and the note field has a
+  visible label (#145). A new test, `tests/test_pages.py`, fails if any of
+  the three goes missing.
+
 ## [1.30.0] - 2026-10-29
 
 A `backend` project on GitHub can now publish its container image by
