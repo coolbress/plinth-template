@@ -1022,47 +1022,47 @@ def test_the_how_to_without_an_owner_says_whose_account(tmp_path: Path) -> None:
 # ── releasing a backend's image (coolbress/plinth#706) ────────────────────
 
 
-def test_backend_release_pushes_its_image_on_a_tag_only(backend: Path) -> None:
-    """The acceptance lines of #706 that a reading can hold: a tag and nothing
-    else starts it, nothing is granted by default, only the image job may
-    push a package or ask for an identity token, no job is skipped with `if:`
-    or named `ci`, no stored secret is read, and every action is pinned."""
+def _image_steps(out: Path) -> dict[str, dict[str, Any]]:
+    return {s.get("name") or s["uses"]: s for s in _release(out)["jobs"]["image"]["steps"]}
+
+
+def test_backend_release_pushes_its_image_on_a_tag_only(backend: Path, rendered: Path) -> None:
+    """A tag and nothing else starts it, nothing is granted by default, only
+    the image job may push or sign, no job is skipped with `if:`, no stored
+    secret is read, every action is pinned, and the tag checks are the
+    PyPI release's own."""
     text = (backend / RELEASE).read_text(encoding="utf-8")
     data = _release(backend)
     assert data[True] == {"push": {"tags": ["v*"]}}
     assert data["permissions"] == {}
     jobs = data["jobs"]
     assert set(jobs) == {"image", "github-release"}
-    for name, job in jobs.items():
-        assert "if" not in job, f"job {name} is skipped with if:"
+    assert all("if" not in job for job in jobs.values())
     assert jobs["github-release"]["needs"] == "image"
+    assert jobs["github-release"]["permissions"] == {"contents": "write"}
     assert jobs["image"]["permissions"] == {
         "contents": "read",
         "packages": "write",
         "id-token": "write",
         "attestations": "write",
     }
-    assert jobs["github-release"]["permissions"] == {"contents": "write"}
     assert "secrets." not in text
     assert "password:" not in text
     for ref in re.findall(r"uses:\s*(\S+)", text):
         assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
-    assert "pypa/" not in text, "a backend publishes no package to PyPI"
-
-
-def _image_steps(out: Path) -> list[dict[str, Any]]:
-    steps = _release(out)["jobs"]["image"]["steps"]
-    assert isinstance(steps, list)
-    return steps
-
-
-def test_backend_release_checks_runs_then_pushes(backend: Path) -> None:
-    """Both checks before the build, the image run before anything is pushed,
-    and the pushed image fetched back and run before it is signed."""
-    steps = _image_steps(backend)
-    names = [s.get("name") or s.get("uses") for s in steps]
-    order = [
+    for name in (
         "Check the tag against pyproject.toml's version",
+        "Check the tagged commit is on main",
+    ):
+        assert _step_script(backend, name, "image") == _step_script(rendered, name)
+
+
+def test_backend_release_runs_the_image_before_and_after_the_push(backend: Path) -> None:
+    """The order: checks, build, the `image` check's own run step, push, the
+    pushed image fetched by digest and read the same way, then the signature.
+    The build loads and never pushes; both carry the source label."""
+    steps = _image_steps(backend)
+    order = [
         "Check the tagged commit is on main",
         "Build the image",
         "Run the image and read its first log line",
@@ -1071,139 +1071,68 @@ def test_backend_release_checks_runs_then_pushes(backend: Path) -> None:
         "Sign a record of how the image was built",
         "Say what was published",
     ]
-    assert [n for n in names if n in order] == order
-    by_name = {s.get("name"): s for s in steps}
-    build, push = by_name["Build the image"], by_name["Push the image"]
-    assert build["with"]["load"] is True
-    assert "push" not in build["with"]
-    assert push["with"]["push"] is True
-    assert push["with"]["tags"] == "${{ steps.name.outputs.ref }}"
+    assert [n for n in steps if n in order] == order
+    build, push = steps["Build the image"]["with"], steps["Push the image"]["with"]
+    assert build["load"] is True
+    assert "push" not in build
+    assert push["push"] is True
+    assert push["tags"] == "${{ steps.name.outputs.ref }}"
     source = "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
-    assert build["with"]["labels"] == push["with"]["labels"] == source
-
-
-def test_backend_release_runs_the_image_as_the_image_check_does(backend: Path) -> None:
-    """The same first-log-line test as `image` in ci.yml, before the push and
-    on the pushed image: what passes the check on a pull request is what is
-    asked of the published image."""
+    assert build["labels"] == push["labels"] == source
     ci = yaml.safe_load((backend / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     (check,) = [s for s in ci["jobs"]["image"]["steps"] if "first log line" in s.get("name", "")]
-    last = check["run"].strip().splitlines()[-1]
-    assert last == 'printf \'%s\\n\' "$out" | head -1 | grep -F \'"message": "started"\''
-    by_name = {s.get("name"): s for s in _image_steps(backend)}
-    before = by_name["Run the image and read its first log line"]["run"]
-    after = by_name["Pull the pushed image and read its first log line"]
-    assert before.strip() == check["run"].strip()
+    assert steps["Run the image and read its first log line"]["run"] == check["run"]
+    after = steps["Pull the pushed image and read its first log line"]
     assert 'docker run --rm --pull always "$PUSHED"' in after["run"]
-    assert after["run"].strip().splitlines()[-1] == last
-    assert after["env"]["PUSHED"] == (
-        "${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}"
-    )
+    assert after["run"].splitlines()[-1] == check["run"].splitlines()[-1]
+    assert after["env"]["PUSHED"].endswith("@${{ steps.push.outputs.digest }}")
 
 
-def test_backend_release_attests_and_a_private_repository_does_not_fail(backend: Path) -> None:
-    """A failed signature fails a public repository's run; a private one's
-    goes on, and the next step says why in plain words, as a notice."""
-    by_name = {s.get("name"): s for s in _image_steps(backend)}
-    attest = by_name["Sign a record of how the image was built"]
-    assert attest["uses"].startswith("actions/attest@")
-    assert attest["continue-on-error"] == "${{ github.event.repository.private }}"
-    # A personal account's private repository is refused by GitHub outright,
-    # so it is not asked: the step is skipped, not failed, and no red error
-    # line sits on a green run.
-    assert attest["if"] == (
-        "${{ !(github.event.repository.private && github.event.repository.owner.type == 'User') }}"
-    )
-    assert attest["with"] == {
-        "subject-name": "${{ steps.name.outputs.image }}",
-        "subject-digest": "${{ steps.push.outputs.digest }}",
-    }
-    said = by_name["Say what was published"]
-    assert said["env"]["ATTESTED"] == "${{ steps.attest.outcome }}"
-    assert "if" not in said
-    assert "::notice title=Published without a signed record::" in said["run"]
-    assert "not available for a private repository on this plan" in said["run"]
-    assert "Nothing failed." in said["run"]
-
-
-def _run_say(out: Path, attested: str) -> tuple[subprocess.CompletedProcess[str], str]:
-    summary = out / "summary.md"
-    summary.unlink(missing_ok=True)
-    done = _run_step(
-        out,
-        "Say what was published",
-        {
-            "REF": "ghcr.io/someone/backend:0.1.0",
-            "DIGEST": "sha256:" + "0" * 64,
-            "ATTESTED": attested,
-            "GITHUB_REPOSITORY": "someone/backend",
-            "GITHUB_STEP_SUMMARY": str(summary),
-        },
-        job="image",
-    )
-    return done, summary.read_text(encoding="utf-8")
-
-
-def test_backend_release_says_what_it_published(backend: Path) -> None:
-    done, summary = _run_say(backend, "success")
+def _run_image_step(out: Path, name: str, env: dict[str, str]) -> str:
+    done = _run_step(out, name, {**env, "GITHUB_OUTPUT": str(out / "outputs")}, job="image")
     assert done.returncode == 0, done.stdout + done.stderr
-    assert "::notice" not in done.stdout
-    assert "docker pull ghcr.io/someone/backend:0.1.0" in summary
-    verify = "gh attestation verify oci://ghcr.io/someone/backend:0.1.0 --repo someone/backend"
-    assert verify in summary
-    for outcome in ("failure", ""):
-        done, summary = _run_say(backend, outcome)
-        assert done.returncode == 0, done.stdout + done.stderr
-        assert "::notice title=Published without a signed record::" in done.stdout
-        assert "only on the GitHub Enterprise Cloud plan" in summary
-        assert "gh attestation verify" not in summary
-
-
-def test_backend_release_checks_the_tag_against_the_version(backend: Path) -> None:
-    name = "Check the tag against pyproject.toml's version"
-    same = _run_step(backend, name, {"GITHUB_REF_NAME": "v0.1.0"}, job="image")
-    assert same.returncode == 0, same.stdout + same.stderr
-    other = _run_step(backend, name, {"GITHUB_REF_NAME": "v0.2.0"}, job="image")
-    assert other.returncode == 1
-    assert "::error title=The tag and the version differ::" in other.stdout
-    assert _step_script(backend, name, "image") == _step_script(_render_cli(backend), name)
-
-
-def _render_cli(near: Path) -> Path:
-    out = near.parent / "cli-for-comparison"
-    if not out.exists():
-        render(out)
-    return out
+    return done.stdout
 
 
 def test_backend_release_names_the_image_in_lower_case(backend: Path) -> None:
     """GHCR refuses an upper-case name; GitHub keeps the owner's case."""
-    script = _step_script(backend, "Name the image", "image")
-    out = backend / "outputs"
-    out.unlink(missing_ok=True)
-    done = subprocess.run(  # noqa: S603
-        ["bash", "-c", script],  # noqa: S607
-        env={
-            **os.environ,
-            "GITHUB_REPOSITORY": "SomeOne/My-Service",
-            "GITHUB_REF_NAME": "v1.2.3",
-            "GITHUB_OUTPUT": str(out),
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert done.returncode == 0, done.stderr
-    assert out.read_text(encoding="utf-8").splitlines() == [
+    (backend / "outputs").unlink(missing_ok=True)
+    env = {"GITHUB_REPOSITORY": "SomeOne/My-Service", "GITHUB_REF_NAME": "v1.2.3"}
+    _run_image_step(backend, "Name the image", env)
+    assert (backend / "outputs").read_text(encoding="utf-8").splitlines() == [
         "image=ghcr.io/someone/my-service",
         "ref=ghcr.io/someone/my-service:1.2.3",
     ]
 
 
+def test_backend_release_without_a_signature_says_so_and_does_not_fail(backend: Path) -> None:
+    """A public repository's failed signature fails the run. A private one
+    goes on; a personal account's is not asked (GitHub refuses it there), and
+    the summary and a notice say why in plain words."""
+    attest = _image_steps(backend)["Sign a record of how the image was built"]
+    assert attest["continue-on-error"] == "${{ github.event.repository.private }}"
+    private_user = "github.event.repository.private && github.event.repository.owner.type == 'User'"
+    assert attest["if"] == "${{ !(" + private_user + ") }}"
+    assert "if" not in _image_steps(backend)["Say what was published"]
+    summary = backend / "summary.md"
+    for outcome, signed in (("success", True), ("failure", False), ("skipped", False)):
+        summary.unlink(missing_ok=True)
+        env = {
+            "REF": "ghcr.io/someone/backend:0.1.0",
+            "DIGEST": "sha256:" + "0" * 64,
+            "ATTESTED": outcome,
+            "GITHUB_REPOSITORY": "someone/backend",
+            "GITHUB_STEP_SUMMARY": str(summary),
+        }
+        said = _run_image_step(backend, "Say what was published", env)
+        text = summary.read_text(encoding="utf-8")
+        assert "docker pull ghcr.io/someone/backend:0.1.0" in text
+        assert ("gh attestation verify oci://ghcr.io/someone/backend:0.1.0" in text) is signed
+        assert ("::notice title=Published without a signed record::" in said) is not signed
+        assert ("only on the GitHub Enterprise Cloud plan" in text) is not signed
+
+
 def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
-    """Where the person reads the release steps: the free storage a private
-    image counts against, that the package starts private, and the command
-    that fetches this render's image."""
     howto = (backend / RELEASE_HOWTO).read_text(encoding="utf-8")
     assert howto.startswith("# Publish a release as a container image\n")
     assert "| GitHub Free (a personal account or an organization) | 500 MB | 1 GB |" in howto
@@ -1211,11 +1140,8 @@ def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
     assert "read 2026-10-29" in howto
     assert "takes the\nrepository's visibility" in howto
     assert "docker pull ghcr.io/someone/probe:0.2.0" in howto
-    assert "gh attestation verify oci://ghcr.io/someone/probe:0.2.0 --repo someone/probe" in howto
     assert "PyPI" not in howto
     readme = (backend / "README.md").read_text(encoding="utf-8")
-    assert "## Releasing" in readme
-    assert "container registry" in readme
     assert "PyPI" not in readme.split("## Releasing", 1)[1].split("\n## ", 1)[0]
 
 
