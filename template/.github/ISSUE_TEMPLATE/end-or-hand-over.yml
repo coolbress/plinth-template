@@ -1,0 +1,88 @@
+name: End or hand over this project
+description: Stop the project, or give it to someone else, without leaving data, keys or users behind.
+labels: ["task"]
+# One issue for the last moment of a project (plinth #702): the things that
+# keep running or keep costing after people stop looking, then three questions
+# for next time. A form, not a skill: nobody has to remember it exists.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when you stop working on the project, or when someone else
+        takes it over. Tick each step when it is done. A step that does not
+        apply to this project (no users, no package, no server) gets a line
+        under "Not needed" instead of a tick.
+
+  - type: dropdown
+    id: ending
+    attributes:
+      label: What happens to the project
+      options:
+        - It stops for good
+        - Someone else takes it over
+    validations:
+      required: true
+
+  - type: input
+    id: new-owner
+    attributes:
+      label: Who takes it over
+      description: Their account or name. Leave empty when the project stops for good.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: Steps
+      description: Tick each one when it is done.
+      options:
+        - label: The data is deleted, or handed to the new owner.
+        - label: Keys, tokens and passwords the project used are revoked, or handed over and then changed.
+        - label: The people who use it are told what is happening and when.
+        - label: The package is yanked or marked deprecated, or handed over, on the registry it was published to.
+        - label: The container image and the running service are deleted, or handed over, so nothing keeps costing money.
+        - label: The repository is archived, or moved to the new owner. Archive last, after closing this issue; an archived repository's issues cannot be changed.
+
+  - type: textarea
+    id: not-needed
+    attributes:
+      label: Not needed
+      description: Each step that does not apply to this project, and why, one line each.
+      placeholder: |
+        Package: it was never published.
+    validations:
+      required: false
+
+  - type: textarea
+    id: went-well
+    attributes:
+      label: What went well
+      description: What you would do the same way in the next project.
+    validations:
+      required: true
+
+  - type: textarea
+    id: agent-kept-getting-wrong
+    attributes:
+      label: What the agent kept getting wrong
+      description: Mistakes the coding agent made more than once, even after being told.
+    validations:
+      required: true
+
+  - type: textarea
+    id: rule-or-check-to-add
+    attributes:
+      label: A rule or check to add next time
+      description: |
+        For each mistake above, the line in `AGENTS.md` or the check in CI that
+        would have caught it. A check that fails is stronger than a rule that
+        asks.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        When this closes, write the ending under `## Outcome`: which steps were
+        done, which were not needed, and anything left open with why.
