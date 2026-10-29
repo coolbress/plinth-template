@@ -98,13 +98,6 @@ _exclude:
   # The issue folder needs `/**`: a bare directory name matches nothing here.
   - "{% if owner_has_pr_template | string | lower == 'true' %}.github/PULL_REQUEST_TEMPLATE.md{% endif %}"
   - "{% if owner_has_issue_forms | string | lower == 'true' %}.github/ISSUE_TEMPLATE/**{% endif %}"
-  # A form added after the answer above was first given reaches an instance
-  # only when it is made, never at `copier update`. The answer is not in
-  # `.copier-answers.yml` (`when: false`) and the update line does not pass
-  # it, so an update reads it as false: an owner with organisation-wide
-  # forms would get this one file, and that one local file hides their whole
-  # shared set. Until the update carries the answer (coolbress/plinth#726).
-  - "{% if _copier_operation == 'update' %}.github/ISSUE_TEMPLATE/end-or-hand-over.yml{% endif %}"
   # One host's files only. On GitLab nothing under `.github/` is written: no
   # workflow, Dependabot, issue form or pull-request template, which GitLab
   # would not read. On GitHub no `.gitlab-ci.yml` or `.gitlab/`.
@@ -320,12 +313,30 @@ plinth_gitlab_integrity:
 # the template's own copies rather than a repository with no forms at all. A
 # lookup that failed is not an answer -- the door stops and asks rather than
 # passing a guess.
+#
+# Asked, not `when: false`, for the reason `plinth_sha` is: copier records
+# only an answer it asked. While these were `when: false`, `.copier-answers.yml`
+# had neither, so a `copier update` that did not pass them read both as false,
+# and a form added to the template later reached an instance of an owner with
+# shared forms as one local file, which hides the whole shared set
+# (coolbress/plinth#726). Recorded, an update keeps the answer; plinth's update
+# line also looks again and passes it, for an instance made before this and
+# for an owner whose `.github` changed since. Asked on GitHub only: on GitLab
+# nothing under `.github/` is written, whatever the answer.
 owner_has_pr_template:
   type: bool
-  when: false
+  when: "{{ host != 'gitlab' }}"
+  help: |
+    Does the owner's public .github repository publish a pull-request
+    template? Then this project writes none, so the owner's applies.
+    Press Enter for no: this project writes its own.
   default: false
 
 owner_has_issue_forms:
   type: bool
-  when: false
+  when: "{{ host != 'gitlab' }}"
+  help: |
+    Does the owner's public .github repository publish issue forms in
+    .github/ISSUE_TEMPLATE? Then this project writes none: one local form
+    hides every shared one. Press Enter for no: this project writes its own.
   default: false
