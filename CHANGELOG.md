@@ -6,12 +6,22 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-10-29
+
+A `backend` project on GitHub can now publish its container image by
+pushing a version tag: the release workflow checks the tag, builds and
+runs the image, pushes it to GitHub's container registry with no stored
+password, runs the pushed copy again and makes a GitHub Release. A new
+issue form walks a person through ending a project or handing it over,
+from deleting data and revoking keys to archiving the repository last.
+
 ### Added
 - A `backend` project on GitHub publishes its container image to GHCR on a
   version tag (coolbress/plinth#706), as `ghcr.io/<owner>/<repository>:<version>`.
   `.github/workflows/release.yml`, now rendered for `backend` as well as
-  `cli` and `library` (the file branches on the archetype; the `cli` and
-  `library` render is unchanged), runs only on a pushed `v*` tag and makes
+  `cli` and `library` (from a separate template file for `backend`; the
+  `cli` and `library` render is unchanged), runs only on a pushed `v*`
+  tag and makes
   the same two checks as the PyPI release before anything is pushed: the
   tag is `v` plus `pyproject.toml`'s version, and the tagged commit is on
   `main`. It builds with `docker/build-push-action` (pinned to a commit)
