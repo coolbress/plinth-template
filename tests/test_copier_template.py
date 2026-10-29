@@ -1697,7 +1697,7 @@ def test_floor_documents_are_present(rendered: Path) -> None:
         ".gitattributes",
     ):
         assert (rendered / name).is_file(), f"{name} is not in the instance"
-    for form in ("bug", "feature", "task", "config"):
+    for form in ("bug", "feature", "task", "end-or-hand-over", "config"):
         assert (rendered / ".github" / "ISSUE_TEMPLATE" / f"{form}.yml").is_file(), (
             f"{form}.yml missing"
         )
@@ -1944,6 +1944,182 @@ def test_owner_issue_forms_leave_the_two_fields_to_the_owner(tmp_path: Path) -> 
     # The exclude leaves the folder itself, empty: git does not commit it.
     assert not [p for p in (out / ".github").rglob("*") if "ISSUE_TEMPLATE" in p.parts[:-1]]
     assert "When the issue has" in (out / "AGENTS.md").read_text(encoding="utf-8")
+
+
+# What GitHub's issue-form syntax accepts, from its documentation: the body's
+# element types, and an `id` of letters, digits, `-` and `_`.
+FORM_TYPES = {"markdown", "textarea", "input", "dropdown", "checkboxes"}
+FORM_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+@pytest.mark.parametrize("name", ["bug", "feature", "task", "end-or-hand-over"])
+def test_issue_forms_follow_githubs_form_syntax(rendered: Path, name: str) -> None:
+    """GitHub refuses a whole form for one bad element and offers nothing in
+    its place, so each rendered form is checked against the syntax rules a
+    form can break: top-level keys, element types, unique ids and labels,
+    non-empty options."""
+    form = yaml.safe_load(
+        (rendered / ".github" / "ISSUE_TEMPLATE" / f"{name}.yml").read_text(encoding="utf-8")
+    )
+    for key in ("name", "description"):
+        assert isinstance(form.get(key), str), f"{name}: no {key}"
+        assert form[key].strip(), f"{name}: empty {key}"
+    assert isinstance(form.get("body"), list), f"{name}: body is not a list"
+    assert form["body"], f"{name}: empty body"
+    ids, labels = [], []
+    for element in form["body"]:
+        assert element["type"] in FORM_TYPES, f"{name}: unknown type {element['type']}"
+        attributes = element["attributes"]
+        if element["type"] == "markdown":
+            assert attributes["value"].strip()
+            continue
+        assert attributes["label"].strip()
+        labels.append(attributes["label"])
+        if "id" in element:
+            assert FORM_ID.match(element["id"]), f"{name}: id {element['id']!r}"
+            ids.append(element["id"])
+        if element["type"] in ("dropdown", "checkboxes"):
+            options = attributes["options"]
+            assert options, f"{name}: {attributes['label']} has no options"
+            texts = [o["label"] if element["type"] == "checkboxes" else o for o in options]
+            assert all(str(o).strip() for o in texts)
+            assert len(set(texts)) == len(texts), f"{name}: repeated option"
+    assert len(set(ids)) == len(ids), f"{name}: repeated id"
+    assert len(set(labels)) == len(labels), f"{name}: repeated label"
+
+
+# The end of a project (plinth #702): the six steps and three questions, the
+# same on both hosts. Matched by a word each, not by the sentence.
+END_STEPS = ("data", "Keys", "told", "yanked", "image", "archived")
+END_QUESTIONS = (
+    "What went well",
+    "What the agent kept getting wrong",
+    "A rule or check to add next time",
+)
+
+
+def test_end_or_hand_over_form_lists_the_steps_and_asks_three_questions(
+    rendered: Path,
+) -> None:
+    """Every step is a checkbox, none required (a project with no package
+    ticks no package), and the retrospective is three textareas."""
+    form = yaml.safe_load(
+        (rendered / ".github" / "ISSUE_TEMPLATE" / "end-or-hand-over.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert form["labels"] == ["task"], "a label /plinth:new-project does not create"
+    fields = {f.get("id"): f for f in form["body"]}
+    steps = [o["label"] for o in fields["steps"]["attributes"]["options"]]
+    assert len(steps) == len(END_STEPS)
+    for step, word in zip(steps, END_STEPS, strict=True):
+        assert word in step, f"step {word!r} is missing or out of order: {step}"
+    assert not any(o.get("required") for o in fields["steps"]["attributes"]["options"])
+    asked = [f["attributes"]["label"] for f in form["body"] if f["type"] == "textarea"]
+    for question in END_QUESTIONS:
+        assert question in asked, question
+
+
+def test_gitlab_end_or_hand_over_template_matches_the_github_form(
+    rendered: Path, gitlab: Path
+) -> None:
+    """The GitLab template carries the GitHub form's steps word for word, its
+    three questions as headings, and the same label."""
+    text = (gitlab / ".gitlab" / "issue_templates" / "End-or-hand-over.md").read_text(
+        encoding="utf-8"
+    )
+    form = yaml.safe_load(
+        (rendered / ".github" / "ISSUE_TEMPLATE" / "end-or-hand-over.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    steps = next(f for f in form["body"] if f.get("id") == "steps")
+    for option in steps["attributes"]["options"]:
+        # One word differs: GitLab has projects, not repositories, with issues.
+        line = option["label"].replace("repository's issues", "project's issues")
+        assert f"- [ ] {line}\n" in text, line
+    for question in END_QUESTIONS:
+        assert f"\n## {question}\n" in text, question
+    assert text.rstrip().endswith("/label ~task")
+
+
+def test_a_new_project_gets_the_end_or_hand_over_form(rendered: Path) -> None:
+    """Made with `copier copy` and no owner forms, the instance has the form;
+    with the owner's forms it has none (the test above checks the folder)."""
+    assert (rendered / ".github" / "ISSUE_TEMPLATE" / "end-or-hand-over.yml").is_file()
+
+
+END_FORM = "template/.github/ISSUE_TEMPLATE/end-or-hand-over.yml"
+HOLD_BACK = (
+    "  - \"{% if _copier_operation == 'update' %}"
+    '.github/ISSUE_TEMPLATE/end-or-hand-over.yml{% endif %}"\n'
+)
+
+
+def _forms_after_an_update(tmp_path: Path, *, hold_back: bool) -> list[str]:
+    """An instance of an owner with organisation-wide forms, made before the
+    form existed (v1.29.0's shape: no form, no hold-back), updated to this
+    tree. `/plinth:template-update` passes no `owner_has_issue_forms`, and
+    the answers file does not have it, so the update does not either."""
+    import copier
+
+    tpl = tmp_path / "tpl"
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    config = tpl / "copier.yml"
+    now = config.read_text(encoding="utf-8")
+    assert HOLD_BACK in now, "the hold-back line changed; update this test with it"
+    form = (tpl / END_FORM).read_bytes()
+    config.write_text(now.replace(HOLD_BACK, ""), encoding="utf-8")
+    (tpl / END_FORM).unlink()
+    _git(tpl, "init", "-q", "-b", "main", ".")
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-qm", "before the form")
+    _git(tpl, "tag", "-a", "-m", "before", "v9.0.0")
+    (tpl / END_FORM).write_bytes(form)
+    config.write_text(now if hold_back else now.replace(HOLD_BACK, ""), encoding="utf-8")
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-qm", "the form")
+    _git(tpl, "tag", "-a", "-m", "after", "v9.1.0")
+
+    proj = tmp_path / "proj"
+    data = {"project_name": "probe", "license": "MIT", "archetype": "cli", "owner": "someone"}
+    copier.run_copy(
+        str(tpl),
+        str(proj),
+        data={**data, "owner_has_issue_forms": True},
+        defaults=True,
+        quiet=True,
+        unsafe=False,
+        vcs_ref="v9.0.0",
+    )
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.1.0"
+    )
+    folder = proj / ".github" / "ISSUE_TEMPLATE"
+    return sorted(p.name for p in folder.rglob("*") if p.is_file())
+
+
+def test_an_update_never_writes_a_form_for_an_owner_with_their_own(tmp_path: Path) -> None:
+    """One local file under `.github/ISSUE_TEMPLATE/` hides every form the
+    owner shares from `owner/.github`. The update reads `owner_has_issue_forms`
+    as false, so the new form is held back at every update."""
+    assert _forms_after_an_update(tmp_path, hold_back=True) == []
+
+
+def test_without_the_hold_back_the_update_writes_the_form(tmp_path: Path) -> None:
+    """The test above fails without the `_copier_operation` line: the
+    update itself does not keep the form out."""
+    assert _forms_after_an_update(tmp_path, hold_back=False) == ["end-or-hand-over.yml"]
 
 
 def test_pr_template_ties_each_criterion_to_a_test(rendered: Path) -> None:
@@ -2675,7 +2851,7 @@ def test_gitlab_renders_its_own_files_and_nothing_under_github(gitlab: Path) -> 
     )
     assert (gitlab / ".gitlab-ci.yml").is_file()
     assert (gitlab / ".gitlab" / "merge_request_templates" / "Default.md").is_file()
-    for name in ("Bug", "Feature", "Task"):
+    for name in ("Bug", "Feature", "Task", "End-or-hand-over"):
         assert (gitlab / ".gitlab" / "issue_templates" / f"{name}.md").is_file(), name
 
 
