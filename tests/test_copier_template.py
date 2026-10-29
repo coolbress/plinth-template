@@ -824,19 +824,20 @@ RELEASE_HOWTO = Path("docs") / "how-to" / "publish-a-release.md"
         ("cli", "github", True),
         ("library", "github", True),
         ("backend", "github", True),
-        ("data-ml", "github", False),
+        ("data-ml", "github", True),
         ("web", "github", False),
         ("cli", "gitlab", False),
         ("library", "gitlab", False),
         ("backend", "gitlab", False),
+        ("data-ml", "gitlab", False),
     ],
 )
-def test_release_workflow_and_its_how_to_render_for_packages_and_backend_on_github_only(
+def test_release_workflow_and_its_how_to_render_for_all_but_web_on_github_only(
     tmp_path: Path, archetype: str, host: str, ships: bool
 ) -> None:
     """What a `cli` or `library` ships is a package, and a `backend` its image
-    (coolbress/plinth#706); `web` deploys on green and what `data-ml` outputs
-    is undecided. GitLab gets no `.github/`, and so no how-to for a
+    (coolbress/plinth#706), a `data-ml` its model (coolbress/plinth#716);
+    `web` deploys on green. GitLab gets no `.github/`, and so no how-to for a
     workflow it does not have. Never written, rather than written and empty:
     no `docs/how-to/` directory is left behind either."""
     out = render(tmp_path, archetype=archetype, host=host)
@@ -1174,6 +1175,173 @@ def test_data_ml_gets_the_model_on_either_host(tmp_path: Path, host: str) -> Non
     assert (out / "MODEL_CARD.md").is_file()
     assert (out / "src" / "probe" / "train.py").is_file()
     assert "## The model" in (out / "README.md").read_text(encoding="utf-8")
+
+
+# ── releasing a data-ml model (coolbress/plinth#716) ──────────────────────
+
+#: Formats that run code when they are loaded. No release carries one.
+PICKLES = (".pkl", ".pickle", ".joblib", ".pt")
+
+
+@pytest.fixture(scope="module")
+def data_ml(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return render(tmp_path_factory.mktemp("data-ml"), archetype="data-ml", owner="someone")
+
+
+def _steps(out: Path, job: str) -> dict[str, dict[str, Any]]:
+    return {s.get("name") or s["uses"]: s for s in _release(out)["jobs"][job]["steps"]}
+
+
+def test_data_ml_release_runs_on_a_tag_only_and_uploads_no_pickle(
+    data_ml: Path, rendered: Path
+) -> None:
+    """A tag and nothing else starts it, nothing is granted by default, only
+    `publish` may write or sign, no job is skipped with `if:`, no stored
+    secret is read, every action is pinned, the tag checks are the PyPI
+    release's own, and the release step's file list holds no pickle."""
+    text = (data_ml / RELEASE).read_text(encoding="utf-8")
+    data = _release(data_ml)
+    assert data[True] == {"push": {"tags": ["v*"]}}
+    assert data["permissions"] == {}
+    jobs = data["jobs"]
+    assert set(jobs) == {"model", "publish"}
+    assert all("if" not in job for job in jobs.values())
+    assert jobs["publish"]["needs"] == "model"
+    assert jobs["model"]["permissions"] == {"contents": "read"}
+    write = {"contents": "write", "id-token": "write", "attestations": "write"}
+    assert jobs["publish"]["permissions"] == write
+    assert "secrets." not in text
+    assert "password:" not in text
+    for ref in re.findall(r"uses:\s*(\S+)", text):
+        assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
+    for name in (
+        "Check the tag against pyproject.toml's version",
+        "Check the tagged commit is on main",
+    ):
+        assert _step_script(data_ml, name, "model") == _step_script(rendered, name)
+    create = _steps(data_ml, "publish")["Create the GitHub Release"]["run"]
+    assert create.rstrip().endswith("$ASSETS SHA256SUMS"), create
+    files = [*data["env"]["ASSETS"].split(), "SHA256SUMS"]
+    assert files == ["model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"]
+    assert not [f for f in files if f.endswith(PICKLES)], f"the release uploads a pickle: {files}"
+
+
+def test_data_ml_release_checks_everything_before_the_release_exists(data_ml: Path) -> None:
+    """The tag checks, the training run and the check of its files come
+    before the artifact; `publish` checks the sums and signs before it
+    creates the release."""
+    model, publish = list(_steps(data_ml, "model")), list(_steps(data_ml, "publish"))
+    order = ["Check the tagged commit is on main", "Train the model"]
+    order += ["Check the files before anything is uploaded"]
+    assert [n for n in model if n in order] == order
+    assert model[-1].startswith("actions/upload-artifact@")
+    order = ["Check the files against SHA256SUMS", "Sign a record of how the files were made"]
+    order += ["Create the GitHub Release", "Say what was published"]
+    assert [n for n in publish if n in order] == order
+    assert (
+        'python -m "$package" train --out release'
+        in _steps(data_ml, "model")["Train the model"]["run"]
+    )
+    attest = _steps(data_ml, "publish")["Sign a record of how the files were made"]
+    assert attest["with"] == {"subject-checksums": "release/SHA256SUMS"}
+    assert attest["continue-on-error"] == "${{ github.event.repository.private }}"
+    private_user = "github.event.repository.private && github.event.repository.owner.type == 'User'"
+    assert attest["if"] == "${{ !(" + private_user + ") }}"
+
+
+GOOD = {"model.skops": "model", "metrics.json": '{"accuracy": 0.97}\n', "MODEL_CARD.md": "# card"}
+
+
+def _check_files(out: Path, files: dict[str, str], assets: str = "") -> Any:
+    """The file check as rendered, run with bash in a `release/` holding `files`."""
+    release = out / "release"
+    shutil.rmtree(release, ignore_errors=True)
+    release.mkdir()
+    for name, body in files.items():
+        (release / name).write_text(body, encoding="utf-8")
+    step = _steps(out, "model")["Check the files before anything is uploaded"]
+    assert step["working-directory"] == "release"
+    path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    env = {**os.environ, "PATH": path, "ASSETS": assets or _release(out)["env"]["ASSETS"]}
+    run = ["bash", "-c", step["run"]]
+    return subprocess.run(run, cwd=release, env=env, capture_output=True, text=True, check=False)  # noqa: S603
+
+
+def test_data_ml_release_writes_sums_that_match_the_files(data_ml: Path) -> None:
+    import hashlib
+
+    done = _check_files(data_ml, GOOD)
+    assert done.returncode == 0, done.stdout + done.stderr
+    sums = (data_ml / "release" / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
+    pairs = [line.split("  ", 1) for line in sums]
+    assert [name for _, name in pairs] == list(GOOD)
+    for digest, name in pairs:
+        assert digest == hashlib.sha256(GOOD[name].encode()).hexdigest(), name
+
+
+NOT_NUMBERS = "metrics.json is not a set of named numbers"
+
+
+@pytest.mark.parametrize(
+    ("files", "assets", "title"),
+    [
+        ({k: v for k, v in GOOD.items() if k != "metrics.json"}, "", "A file is missing"),
+        ({**GOOD, "metrics.json": ""}, "", "A file is missing"),
+        ({**GOOD, "metrics.json": "{accuracy: 0.97"}, "", NOT_NUMBERS),
+        ({**GOOD, "metrics.json": "[0.97]"}, "", NOT_NUMBERS),
+        ({**GOOD, "metrics.json": "{}"}, "", NOT_NUMBERS),
+        ({**GOOD, "metrics.json": '{"accuracy": "high"}'}, "", NOT_NUMBERS),
+        ({**GOOD, "metrics.json": '{"passed": true}'}, "", NOT_NUMBERS),
+        *(
+            ({**GOOD, f"m{s}": "x"}, f"m{s} metrics.json", "A pickle is not published")
+            for s in PICKLES
+        ),
+    ],
+)
+def test_data_ml_release_stops_before_any_upload(
+    data_ml: Path, files: dict[str, str], assets: str, title: str
+) -> None:
+    """A missing or broken `metrics.json`, or a pickle in the list, stops the
+    `model` job, which the job that creates the release needs: no release,
+    and no draft."""
+    done = _check_files(data_ml, files, assets)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f"::error title={title}" in done.stdout
+    assert "Nothing was uploaded" in done.stdout
+    assert not (data_ml / "release" / "SHA256SUMS").exists()
+
+
+def test_data_ml_release_without_a_signature_says_so_and_does_not_fail(data_ml: Path) -> None:
+    summary = data_ml / "summary.md"
+    env = {"SERVER": "https://github.com", "ASSETS": _release(data_ml)["env"]["ASSETS"]}
+    env |= {"GITHUB_REPOSITORY": "someone/probe", "GITHUB_REF_NAME": "v0.1.0"}
+    for outcome, signed in (("success", True), ("failure", False), ("skipped", False)):
+        summary.unlink(missing_ok=True)
+        env |= {"ATTESTED": outcome, "GITHUB_STEP_SUMMARY": str(summary)}
+        done = _run_step(data_ml, "Say what was published", env, job="publish")
+        assert done.returncode == 0, done.stdout + done.stderr
+        text = summary.read_text(encoding="utf-8")
+        for name in ("model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"):
+            assert f"https://github.com/someone/probe/releases/download/v0.1.0/{name}" in text
+        assert "releases/latest/download/<name>" in text
+        assert ("gh attestation verify model.skops --repo someone/probe" in text) is signed
+        assert ("::notice title=Published without a signed record::" in done.stdout) is not signed
+
+
+def test_data_ml_how_to_says_what_a_person_must_decide(data_ml: Path) -> None:
+    """Not to publish a model trained on personal data from a public
+    repository, the safe formats, and that Hugging Face is unchecked on a tag."""
+    howto = " ".join((data_ml / RELEASE_HOWTO).read_text(encoding="utf-8").split())
+    assert howto.startswith("# Publish a release of the model ")
+    assert "Do not publish a model trained on personal data from a public repository" in howto
+    assert "https://github.com/someone/probe/releases/latest/download/model.skops" in howto
+    assert "gh attestation verify model.skops --repo someone/probe" in howto
+    assert all(fmt in howto for fmt in ("skops", "safetensors", "ONNX"))
+    assert "**Never a pickle**: no `.pkl`, `.pickle`, `.joblib` or `.pt` file." in howto
+    assert "## 5. Hugging Face Hub (optional)" in howto
+    assert "**Not yet checked on a tag run.**" in howto
+    assert "PyPI" not in howto
+    assert "docker" not in howto
 
 
 def test_dependabot_watches_the_reusable_workflow_pin(rendered: Path) -> None:
@@ -2608,8 +2776,8 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
 #: The archetypes whose file sets differ. The service conditions are
 #: `archetype not in ['backend', 'data-ml', 'web']`, the Django files
 #: `archetype != 'web'`, the model files `archetype != 'data-ml'`
-#: (coolbress/plinth#716), and the release workflow is left out for `data-ml`
-#: and `web` (coolbress/plinth#706), so the sets are {cli, library},
+#: (coolbress/plinth#716), and the release workflow is left out for `web`
+#: (coolbress/plinth#706), so the sets are {cli, library},
 #: {backend}, {data-ml} and {web}. `data-ml` has its own dependencies and
 #: lockfile as well, so it runs its own checks; one representative each
 #: covers the rest.

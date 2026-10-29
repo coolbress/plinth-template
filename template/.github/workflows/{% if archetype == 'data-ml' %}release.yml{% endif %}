@@ -1,0 +1,182 @@
+# Publishes the training run's files and a SHA256SUMS to a GitHub Release
+# when a version tag (`v1.2.3`) is pushed, with the run's own token and no
+# stored secret. Not a required check; no job is skipped with `if:`. On a
+# public repository the files also get a signed record (an attestation).
+# The person's steps: docs/how-to/publish-a-release.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Nothing by default; each job asks for what it uses.
+permissions: {}
+
+# Two tags pushed together publish one after the other, never at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# What a release uploads besides SHA256SUMS. Never a pickle: loading one
+# runs whatever code it holds.
+env:
+  ASSETS: model.skops metrics.json MODEL_CARD.md
+
+jobs:
+  # A tag that fails here creates no release.
+  model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, to tell whether the tagged commit is on main.
+          fetch-depth: 0
+          persist-credentials: false   # nothing here pushes
+      - name: Check the tag against pyproject.toml's version
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            exit 1
+          fi
+          echo "The tag $tag matches pyproject.toml's version $version."
+      - name: Check the tagged commit is on main
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME is on main."
+      - name: Install uv (official release, SHA256 verified)
+        env:
+          UV_VERSION: "0.12.9"
+          UV_SHA256: "ec7a99cd05e0cd7f80243f135ce1361c76835cb0ee60055d14d20eba8eba1460"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/uv"; mkdir -p "$d"
+          f="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/$f"
+          echo "${UV_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
+          echo "$d" >> "$GITHUB_PATH"
+      # The package is the directory under src/ that holds train.py.
+      - name: Train the model
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=(src/*/train.py)
+          if [ "${#found[@]}" -ne 1 ]; then
+            echo "::error title=No training run found::Expected one src/<package>/train.py, found ${#found[@]}. Nothing was uploaded. docs/how-to/publish-a-release.md says what the release needs."
+            exit 1
+          fi
+          package="$(basename "$(dirname "${found[0]}")")"
+          uv sync --locked --no-dev
+          uv run --locked --no-dev python -m "$package" train --out release
+      - name: Check the files before anything is uploaded
+        working-directory: release
+        run: |
+          set -euo pipefail
+          for f in $ASSETS; do
+            case "$f" in
+              *.pkl | *.pickle | *.joblib | *.pt)
+                echo "::error title=A pickle is not published::$f is a format that runs code when it is loaded. Nothing was uploaded. Save the model with skops (scikit-learn), safetensors (weights) or ONNX instead: docs/how-to/publish-a-release.md."
+                exit 1 ;;
+            esac
+            if [ ! -s "$f" ]; then
+              echo "::error title=A file is missing::The training run did not write $f, or wrote it empty. Nothing was uploaded, and no release was made. Run \`python -m <package> train\` on your machine and check what it writes."
+              exit 1
+            fi
+          done
+          if ! python3 -c 'import json, sys; d = json.load(open("metrics.json")); sys.exit(not (isinstance(d, dict) and d and all(type(v) in (int, float) for v in d.values())))'; then
+            echo "::error title=metrics.json is not a set of named numbers::metrics.json did not parse as an object of names and numbers, such as {\"accuracy\": 0.97}. Nothing was uploaded, and no release was made."
+            exit 1
+          fi
+          # shellcheck disable=SC2086  # the list is split on purpose
+          sha256sum $ASSETS > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: release/
+          if-no-files-found: error
+
+  # Runs no code from the repository: it publishes what `model` made.
+  publish:
+    needs: model
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write       # make the release and upload its files
+      id-token: write       # the attestation: a short-lived signing certificate
+      attestations: write   # the attestation: store it on GitHub
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release/
+      - name: Check the files against SHA256SUMS
+        working-directory: release
+        run: sha256sum --check --strict SHA256SUMS
+      # As in the backend release: a public repository's failed signature
+      # fails the run, before the release exists; a private one goes on, and
+      # a personal account's is not asked (GitHub refuses it there).
+      - name: Sign a record of how the files were made
+        id: attest
+        if: ${{ !(github.event.repository.private && github.event.repository.owner.type == 'User') }}
+        continue-on-error: ${{ github.event.repository.private }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: release/SHA256SUMS
+      - name: Write the release notes from the card and the metrics
+        working-directory: release
+        run: |
+          set -euo pipefail
+          {
+            cat MODEL_CARD.md
+            echo
+            echo "## metrics.json"
+            echo
+            echo '```json'
+            cat metrics.json
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+      - name: Create the GitHub Release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086  # the list is split on purpose
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" $ASSETS SHA256SUMS
+      - name: Say what was published
+        env:
+          ATTESTED: ${{ steps.attest.outcome }}
+          SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          url="$SERVER/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          {
+            echo "### Published $GITHUB_REF_NAME"
+            echo
+            for f in $ASSETS SHA256SUMS; do echo "- $url/$f"; done
+            echo
+            echo "The newest release's files are always at \`$SERVER/$GITHUB_REPOSITORY/releases/latest/download/<name>\`."
+            echo
+            if [ "$ATTESTED" = success ]; then
+              echo "Each file has a signed record of the workflow and commit that made it. Check one with \`gh attestation verify model.skops --repo $GITHUB_REPOSITORY\`."
+            else
+              echo "The files have no signed record of how they were made: GitHub signs these for private repositories only on the GitHub Enterprise Cloud plan. The release itself is published and complete; SHA256SUMS still checks the files. To get the record, make the repository public, or move it to an organization on that plan."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ATTESTED" != success ]; then
+            echo "::notice title=Published without a signed record::$GITHUB_REF_NAME is published. A signed record of how its files were made is not available for a private repository on this plan (GitHub signs them for private repositories only on GitHub Enterprise Cloud). Nothing failed. The run summary says more."
+          fi

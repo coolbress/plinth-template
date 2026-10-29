@@ -19,6 +19,29 @@ means `copier update` on an instance needs hands.
   extra, and that nothing written is a pickle. `python -m <package>` with
   no argument still logs that it started, so the `image` check is
   unchanged. On GitHub and GitLab.
+- A `data-ml` project on GitHub publishes its model on a version tag.
+  `.github/workflows/release.yml`, from a third source file, runs only on a
+  pushed `v*` tag. Its `model` job makes the PyPI release's two checks
+  (the tag is `v` plus `pyproject.toml`'s version, the tagged commit is on
+  `main`), runs the training again, and stops before anything is uploaded
+  when a file is missing or empty, when `metrics.json` is not an object of
+  names and numbers, or when a file to upload has a pickle's name; it then
+  writes `SHA256SUMS`. Its `publish` job checks the sums, signs a record of
+  the files with `actions/attest` (pinned) on a public repository, and
+  makes a GitHub Release with the run's own token (`contents: write`, no
+  stored secret) holding `model.skops`, `metrics.json`, `MODEL_CARD.md`
+  and `SHA256SUMS`, with the card and the metrics as its notes. A private
+  repository publishes without the signed record and says so in a notice
+  and the run summary, without failing, as the `backend` release does.
+  Not a required check, and no job is skipped with `if:`.
+  `docs/how-to/publish-a-release.md` for `data-ml` says, in plain words,
+  how to cut a release, where the files are
+  (`/releases/latest/download/<name>`), how to check them, how to replace
+  the starting model in a safe format (skops, safetensors, ONNX; never a
+  pickle), not to publish a model trained on personal data from a public
+  repository, and, as an optional section not yet run on a tag, how
+  Hugging Face's keyless Trusted Publishers would publish it there. The
+  README gains `## The model` and `## Releasing`.
 
 ### Changed
 - `owner_has_pr_template` and `owner_has_issue_forms` are recorded in

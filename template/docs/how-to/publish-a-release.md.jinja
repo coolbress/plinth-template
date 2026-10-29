@@ -133,6 +133,192 @@ Pushing the same tag again replaces the image under that version; the
 earlier one stays in the package, without a version, until you delete it.
 Deleting a tag turns its release page into a draft, so after pushing it
 again, delete the draft under **Releases**.
+{% elif archetype == 'data-ml' -%}
+{%- set repo = (owner if owner else '<your GitHub account>') ~ '/' ~ project_name -%}
+# Publish a release of the model
+
+A release is a page on GitHub that holds one version of this project's
+model, so that anyone allowed to read the repository can download exactly
+that version later. Each release here holds four files:
+
+| File | What it is |
+|---|---|
+| `model.skops` | The trained model, saved with skops |
+| `metrics.json` | How well it did on the part of the data it never trained on, as named numbers |
+| `MODEL_CARD.md` | What the model is, what it was trained on, and those results |
+| `SHA256SUMS` | A fingerprint of each of the other three, to check a download is whole and unchanged |
+
+How it works, in one paragraph: you push a version tag, such as `v0.2.0`.
+The workflow `.github/workflows/release.yml` then checks the tag, trains the
+model again from the tagged code (`python -m {{ package_name }} train`), checks
+that the three files are there and that `metrics.json` reads as numbers,
+and only then makes the release, with the card and the metrics as its
+notes. No password or token is stored anywhere: the run uses its own token,
+which GitHub makes for that run and which stops working when it ends.
+
+Nothing has to be set up before the first tag.
+
+**Before you publish, answer one question: does the training data hold
+personal information?** Names, email addresses, faces, voices, locations,
+health records, or anything else that points to a person. A model can give
+back what it was trained on. **Do not publish a model trained on personal
+data from a public repository**: everyone can download it, and a release
+cannot be taken back from those who already did. The card has the same
+question; keep its answer true.
+
+## 1. Publish
+
+1. Set the version. The version is written in `pyproject.toml`
+   (`version = "0.1.0"` to start). For a new release, ask the agent to raise
+   it in a pull request, for example "raise the version to 0.2.0 with
+   `uv version 0.2.0`", and add what changed to `CHANGELOG.md`. Merge it when
+   its checks are green.
+2. Push the tag. The tag is the version with a `v` in front, on the merged
+   `main`. In a terminal, in this repository:
+
+   ```bash
+   git fetch origin
+   git tag v0.2.0 origin/main
+   git push origin v0.2.0
+   ```
+
+   You push the tag yourself, not the agent: letting a model out is a
+   person's decision.
+3. Open the repository's **Actions** tab and the run named **Release**. When
+   it is green, its summary links each file, and the release is under
+   **Releases** on GitHub.
+
+## 2. Find the files
+
+The newest release's files always have the same address, whatever its
+version:
+
+```text
+https://github.com/{{ repo }}/releases/latest/download/model.skops
+```
+
+Put `metrics.json`, `MODEL_CARD.md` or `SHA256SUMS` in place of
+`model.skops` for the others; for one version, use
+`releases/download/v0.2.0/<name>`. From a **public** repository anyone can
+download them. From a **private** one only people who can read the
+repository can, through GitHub's own tool, logged in:
+`gh release download v0.2.0 --repo {{ repo }}`.
+
+To check that what you downloaded is whole and unchanged, keep the four
+files in one folder and run `sha256sum --check SHA256SUMS` (on a Mac,
+`shasum -a 256 --check SHA256SUMS`). Each line must say `OK`.
+
+To use the model in Python:
+
+```python
+import skops.io
+
+path = "model.skops"
+print(skops.io.get_untrusted_types(file=path))  # [] for the starting model
+model = skops.io.load(path)
+```
+
+`skops.io.load` refuses any type in the file that it was not told to trust.
+If the list printed is not empty, read it before passing it to
+`load(path, trusted=...)`: trust only names you recognise.
+
+## 3. The signed record of how the files were made
+
+On a **public** repository, each file gets a signed record (an
+*attestation*) saying which workflow, in which repository, made it from
+which commit. Anyone can check a downloaded file:
+
+```bash
+gh attestation verify model.skops --repo {{ repo }}
+```
+
+On a **private** repository, GitHub makes these records only on its
+GitHub Enterprise Cloud plan. On any other plan the run publishes the files
+without one, does not fail, and says so in its summary: "Published without
+a signed record". `SHA256SUMS` still checks the files.
+
+## 4. Replace the starting model with a real one
+
+The starting model is a placeholder: it sorts iris flowers, trained on a
+sample that comes with scikit-learn. Ask the agent to replace it in
+`src/{{ package_name }}/train.py`: `load_sample()` with your data, the
+model with yours. Keep the run writing the three files, and update
+`MODEL_CARD.md` (what it does, the data, the personal-information answer,
+its limits).
+
+Save the model in a format that cannot run code when it is loaded:
+
+| What the model is | Save it as |
+|---|---|
+| scikit-learn | skops (`skops.io.dump`), as now |
+| Weights of a neural network (PyTorch and others) | safetensors (`.safetensors`) |
+| A model to run outside Python, or across frameworks | ONNX (`.onnx`) |
+
+**Never a pickle**: no `.pkl`, `.pickle`, `.joblib` or `.pt` file. Loading
+one runs whatever code is inside it, so a downloaded model would be a
+program anyone could have changed. The release workflow refuses those
+names. If the file's name changes, change it in two places in the same
+pull request: `OUTPUTS` in `train.py`, and `ASSETS` at the top of
+`.github/workflows/release.yml`.
+
+GitHub takes files up to 2 GiB each in a release. This workflow has been
+run only with the starting model, a few kilobytes; a model near that size
+has not been tried here.
+
+## 5. Hugging Face Hub (optional)
+
+[Hugging Face Hub](https://huggingface.co) is a common shelf for models.
+The release workflow does not publish there. If you want it to, it can
+without a stored token, through Hugging Face's Trusted Publishers
+(<https://huggingface.co/docs/hub/trusted-publishers>, read 2026-10-29): the
+run proves to Hugging Face which repository and workflow it is, and gets a
+token that works for one hour and one model repository.
+
+**Not yet checked on a tag run.** The steps below come from Hugging Face's
+page; plinth has not run them. Hugging Face matches each setting exactly,
+with no patterns, so a `branch` setting of `main` does not match a run
+started by a tag. Treat the first tag as a trial.
+
+What you do on the web, once:
+
+1. Make an account at <https://huggingface.co/join>, and a model repository
+   (**New** > **Model**).
+2. In that model repository, **Settings** > **Trusted Publishers**, add
+   one: provider **GitHub Actions**, `repository` = `{{ repo }}`,
+   `workflow` = `release.yml`. Leave `branch` empty: a tag is not a branch.
+   You need the Write role on the model repository to do this.
+
+What the agent does, in a pull request: add a step at the end of the
+`publish` job in `release.yml`, with the job's `id-token: write` (already
+there). It installs Hugging Face's `hf` tool (version 1.19.0 or later, pinned
+to one version), sets `HF_OIDC_RESOURCE` to the model repository
+(`<your Hugging Face account>/<model>`), and runs
+`hf upload <your Hugging Face account>/<model> release .`. If the run says
+`invalid_grant`, a setting differs from what the run presents: check the two
+values above letter for letter.
+
+## When a release fails
+
+Nothing is uploaded, and no release is made, until every check before the
+upload has passed. The run says which step stopped.
+
+- **"The tag and the version differ."** The tag says one version,
+  `pyproject.toml` another. Decide which one is right. If the file is right,
+  delete the tag and push the right one. If the tag is right, change the
+  version in a pull request first, merge it, then delete the tag and push it
+  again. To delete a tag: `git push origin --delete v0.2.0`, then
+  `git tag -d v0.2.0`.
+- **"The tag is not on main."** The tag points at a commit that never went
+  through a pull request. Delete it and tag `origin/main` as in step 1.
+- **"A file is missing" or "metrics.json is not a set of named numbers".**
+  The training run did not write what a release publishes. Ask the agent to
+  run `uv run python -m {{ package_name }} train` and look at `dist/model/`;
+  `tests/test_train.py` checks the same files on every pull request.
+- **"A pickle is not published."** A file in `ASSETS` has a pickle's name.
+  Save the model in one of the formats in step 4.
+
+Deleting a tag turns its release into a draft. After pushing the tag again,
+delete the draft under **Releases**.
 {% else -%}
 {%- set owner_name = owner if owner else '<your GitHub account>' -%}
 # Publish a release to PyPI

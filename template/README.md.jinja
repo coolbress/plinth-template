@@ -480,7 +480,17 @@ writes a copy of [`MODEL_CARD.md`](MODEL_CARD.md) with the results filled
 in. Replace the sample and the model in `src/{{ package_name }}/train.py`, and keep the
 card true: it asks whether the training data holds personal information.
 
-{% endif %}## Working with Claude Code
+{% if host != 'gitlab' %}## Releasing
+
+A version tag (`v0.1.0`) runs the training again and publishes the three
+files and a `SHA256SUMS` to a GitHub Release, with the card and the metrics
+as its notes, through
+[`.github/workflows/release.yml`](.github/workflows/release.yml). No
+password or token is stored: the run uses its own token. How to cut one,
+where the files are, and how to put a real model in its place are in
+[`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
+
+{% endif %}{% endif %}## Working with Claude Code
 
 `.claude/settings.json` turns on the `Beginner or non-engineer` output style
 for everyone who opens this repository in Claude Code. The agent does the same
