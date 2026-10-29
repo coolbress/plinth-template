@@ -468,7 +468,29 @@ or token is stored: the push uses the run's own token. Who can fetch the
 image, and what a private one costs to keep, are in
 [`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
 
-{% endif %}## Working with Claude Code
+{% endif %}{% if archetype == 'data-ml' %}## The model
+
+```bash
+uv run python -m {{ package_name }} train   # writes dist/model/: model.skops, metrics.json, MODEL_CARD.md
+```
+
+It trains a small scikit-learn model on a sample shipped with scikit-learn,
+measures it on a held-out part, saves it with skops (never a pickle) and
+writes a copy of [`MODEL_CARD.md`](MODEL_CARD.md) with the results filled
+in. Replace the sample and the model in `src/{{ package_name }}/train.py`, and keep the
+card true: it asks whether the training data holds personal information.
+
+{% if host != 'gitlab' %}## Releasing
+
+A version tag (`v0.1.0`) runs the training again and publishes the three
+files and a `SHA256SUMS` to a GitHub Release, with the card and the metrics
+as its notes, through
+[`.github/workflows/release.yml`](.github/workflows/release.yml). No
+password or token is stored: the run uses its own token. How to cut one,
+where the files are, and how to put a real model in its place are in
+[`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
+
+{% endif %}{% endif %}## Working with Claude Code
 
 `.claude/settings.json` turns on the `Beginner or non-engineer` output style
 for everyone who opens this repository in Claude Code. The agent does the same

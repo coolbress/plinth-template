@@ -6,6 +6,43 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `data-ml` project has a defined output (coolbress/plinth#716).
+  `python -m <package> train` (`src/<package>/train.py`) trains a small
+  scikit-learn model on a sample shipped with scikit-learn, measures it on
+  a held-out quarter and writes `dist/model/model.skops` (saved with skops,
+  never a pickle), `metrics.json` (named numbers) and a copy of the new
+  `MODEL_CARD.md` with its results filled in. The card asks whether the
+  training data holds personal information. scikit-learn and skops are the
+  archetype's dependencies, in its own `uv.lock`; `tests/test_train.py`
+  checks the three files, that the model loads with skops trusting nothing
+  extra, and that nothing written is a pickle. `python -m <package>` with
+  no argument still logs that it started, so the `image` check is
+  unchanged. On GitHub and GitLab.
+- A `data-ml` project on GitHub publishes its model on a version tag.
+  `.github/workflows/release.yml`, from a third source file, runs only on a
+  pushed `v*` tag. Its `model` job makes the PyPI release's two checks
+  (the tag is `v` plus `pyproject.toml`'s version, the tagged commit is on
+  `main`), runs the training again, and stops before anything is uploaded
+  when a file is missing or empty, when `metrics.json` is not an object of
+  names and numbers, or when a file to upload has a pickle's name; it then
+  writes `SHA256SUMS`. Its `publish` job checks the sums, signs a record of
+  the files with `actions/attest` (pinned) on a public repository, and
+  makes a GitHub Release with the run's own token (`contents: write`, no
+  stored secret) holding `model.skops`, `metrics.json`, `MODEL_CARD.md`
+  and `SHA256SUMS`, with the card and the metrics as its notes. A private
+  repository publishes without the signed record and says so in a notice
+  and the run summary, without failing, as the `backend` release does.
+  Not a required check, and no job is skipped with `if:`.
+  `docs/how-to/publish-a-release.md` for `data-ml` says, in plain words,
+  how to cut a release, where the files are
+  (`/releases/latest/download/<name>`), how to check them, how to replace
+  the starting model in a safe format (skops, safetensors, ONNX; never a
+  pickle), not to publish a model trained on personal data from a public
+  repository, and, as an optional section not yet run on a tag, how
+  Hugging Face's keyless Trusted Publishers would publish it there. The
+  README gains `## The model` and `## Releasing`.
+
 ## [1.30.0] - 2026-10-29
 
 A `backend` project on GitHub can now publish its container image by

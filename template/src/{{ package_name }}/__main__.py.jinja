@@ -10,6 +10,13 @@ checking that production's settings are in the environment: a start without a
 secret key, allowed hosts (`DJANGO_ALLOWED_HOSTS` or Render's
 `RENDER_EXTERNAL_HOSTNAME`) or a database URL is refused, not served with
 defaults.
+{%- elif archetype == 'data-ml' -%}
+`python -m <package>` logs that it started, which is what the image check
+reads. `python -m <package> train` trains the model and writes
+`dist/model/model.skops`, `metrics.json` and `MODEL_CARD.md` (`train.py`);
+`--out` names another directory. The release workflow runs the same command.
+`tests/test_entry_point.py` runs this module without arguments and compares
+what it prints with `tests/entry_point.expected`: change them with it.
 {%- elif archetype == 'cli' -%}
 Replace the body of `main()` with what the command does; the logging setup can
 stay. `tests/test_entry_point.py` runs this module and compares what it prints
@@ -35,12 +42,18 @@ the repository, in whatever the deployment uses.
 
 from __future__ import annotations
 
+{% if archetype == 'data-ml' -%}
+import argparse
+{% endif -%}
 import json
 import logging
 {%- if archetype == 'web' %}
 import os
 {%- endif %}
 import sys
+{%- if archetype == 'data-ml' %}
+from pathlib import Path
+{%- endif %}
 from typing import Any
 {%- if archetype != 'web' %}
 
@@ -108,6 +121,25 @@ def main() -> None:
 
     # All interfaces: inside a container the host reaches the server from outside it.
     uvicorn.run(f"{__package__}.asgi:application", host="0.0.0.0", port=port, log_config=None)  # noqa: S104
+{%- elif archetype == 'data-ml' -%}
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog=f"python -m {__package__}")
+    commands = parser.add_subparsers(dest="command")
+    trainer = commands.add_parser("train", help="train, and write what a release publishes")
+    trainer.add_argument("--out", type=Path, default=Path("dist/model"), help="dist/model")
+    trainer.add_argument("--card", type=Path, default=Path("MODEL_CARD.md"), help="to fill in")
+    args = parser.parse_args(argv)
+    configure()
+    log = logging.getLogger(__package__)
+    if args.command == "train":
+        # Imported here: scikit-learn takes a second to load, and the image
+        # check runs the line below.
+        from .train import train
+
+        metrics = train(args.out, args.card)
+        log.info("trained", extra={"out": str(args.out), **metrics})
+        return
+    log.info("started", extra={"greeting": greet("world")})
 {%- else -%}
 def main() -> None:
     configure()
