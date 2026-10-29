@@ -341,6 +341,7 @@ def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backen
         "src/probe/notes/models.py",
         "src/probe/notes/migrations/0001_initial.py",
         "tests/test_access.py",
+        "tests/test_pages.py",
         "tests/migration_rows.json",
     )
     for name in django:
