@@ -1146,6 +1146,36 @@ def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
     assert "PyPI" not in readme.split("## Releasing", 1)[1].split("\n## ", 1)[0]
 
 
+# ── a data-ml project's model (coolbress/plinth#716) ──────────────────────
+
+
+def test_data_ml_card_asks_about_personal_data(tmp_path: Path) -> None:
+    out = render(tmp_path, archetype="data-ml")
+    card = (out / "MODEL_CARD.md").read_text(encoding="utf-8")
+    assert card.startswith("# Model card: probe\n")
+    assert "**Does the training data hold personal information?**" in card
+    assert "<!-- results: the training run writes the numbers here -->" in card
+    train = (out / "src" / "probe" / "train.py").read_text(encoding="utf-8")
+    assert 'OUTPUTS = ("model.skops", "metrics.json", "MODEL_CARD.md")' in train
+    assert 'RESULTS = "<!-- results: the training run writes the numbers here -->"' in train
+
+
+@pytest.mark.parametrize("archetype", ["cli", "backend", "web"])
+def test_only_data_ml_gets_the_model_files(tmp_path: Path, archetype: str) -> None:
+    out = render(tmp_path, archetype=archetype)
+    for name in ("MODEL_CARD.md", "tests/test_train.py", "src/probe/train.py"):
+        assert not (out / name).exists(), f"{name} rendered for {archetype}"
+    assert "scikit-learn" not in (out / "pyproject.toml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_data_ml_gets_the_model_on_either_host(tmp_path: Path, host: str) -> None:
+    out = render(tmp_path, archetype="data-ml", host=host)
+    assert (out / "MODEL_CARD.md").is_file()
+    assert (out / "src" / "probe" / "train.py").is_file()
+    assert "## The model" in (out / "README.md").read_text(encoding="utf-8")
+
+
 def test_dependabot_watches_the_reusable_workflow_pin(rendered: Path) -> None:
     dep = (rendered / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     assert 'package-ecosystem: "github-actions"' in dep, (
@@ -2577,12 +2607,13 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
 
 #: The archetypes whose file sets differ. The service conditions are
 #: `archetype not in ['backend', 'data-ml', 'web']`, the Django files
-#: `archetype != 'web'`, and the release workflow is left out for `data-ml`
+#: `archetype != 'web'`, the model files `archetype != 'data-ml'`
+#: (coolbress/plinth#716), and the release workflow is left out for `data-ml`
 #: and `web` (coolbress/plinth#706), so the sets are {cli, library},
-#: {backend}, {data-ml} and {web}. `data-ml`'s is `backend`'s without the
-#: release files, so `backend` covers it; one representative each covers the
-#: rest.
-E2E_ARCHETYPES = ("cli", "library", "backend", "web")
+#: {backend}, {data-ml} and {web}. `data-ml` has its own dependencies and
+#: lockfile as well, so it runs its own checks; one representative each
+#: covers the rest.
+E2E_ARCHETYPES = ("cli", "library", "backend", "data-ml", "web")
 
 
 def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> None:
@@ -2602,11 +2633,7 @@ def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> 
             files < sets[r] for r in E2E_ARCHETYPES
         )
         assert covered, f"no representative for {reps}"
-    assert sets["data-ml"] < sets["backend"]
-    assert sets["backend"] - sets["data-ml"] == {
-        ".github/workflows/release.yml",
-        "docs/how-to/publish-a-release.md",
-    }
+    assert sets["data-ml"] - sets["backend"] == {"MODEL_CARD.md", "tests/test_train.py"}
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")

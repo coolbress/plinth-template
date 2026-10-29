@@ -68,6 +68,11 @@ _exclude:
   - "{% if archetype != 'web' %}tests/test_access.py{% endif %}"
   - "{% if archetype != 'web' %}tests/test_pages.py{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
+  # The data-ml archetype's model: the training run, its test, and the card
+  # each release publishes beside the model (coolbress/plinth#716).
+  - "{% if archetype != 'data-ml' %}src/{{ package_name }}/train.py{% endif %}"
+  - "{% if archetype != 'data-ml' %}tests/test_train.py{% endif %}"
+  - "{% if archetype != 'data-ml' %}MODEL_CARD.md{% endif %}"
   # Publishing on a version tag, and the person's steps around it: a `cli` or
   # `library` publishes its package to PyPI (coolbress/plinth#703), a
   # `backend` its image to GHCR (coolbress/plinth#706). The two workflows are

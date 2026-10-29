@@ -1,0 +1,69 @@
+"""The training run as the release workflow runs it: `python -m {{ package_name }} train`.
+
+It writes the three files a release publishes, the metrics parse as named
+numbers, the model loads back with skops trusting nothing extra and answers
+as it did, the card's results are filled in, and nothing is a pickle.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import skops.io
+
+from {{ package_name }}.train import OUTPUTS, RESULTS, load_sample, train
+
+CARD = Path(__file__).resolve().parents[1] / "MODEL_CARD.md"
+
+#: Formats that run code when loaded. A release never carries one.
+PICKLES = (".pkl", ".pickle", ".joblib", ".pt")
+
+
+def test_the_run_writes_what_a_release_publishes(tmp_path: Path) -> None:
+    command = ["train", "--out", str(tmp_path), "--card", str(CARD)]
+    done = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "{{ package_name }}", *command],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(OUTPUTS)
+    logged = [json.loads(line) for line in done.stdout.splitlines() if line]
+    assert [r["message"] for r in logged] == ["trained"], done.stdout
+
+
+def test_the_metrics_are_named_numbers_and_the_card_holds_them(tmp_path: Path) -> None:
+    metrics = train(tmp_path, CARD)
+    written = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert written == metrics
+    assert written, "no metrics written"
+    for name, value in written.items():
+        assert type(value) in (int, float), name
+    # The starting model on the starting sample; a real model sets its own floor.
+    assert written["accuracy"] >= 0.9, written
+    card = (tmp_path / "MODEL_CARD.md").read_text(encoding="utf-8")
+    assert RESULTS not in card
+    assert f"| `accuracy` | {written['accuracy']} |" in card
+    assert "Does the training data hold personal information?" in card
+    assert RESULTS in CARD.read_text(encoding="utf-8"), "the committed card was changed"
+
+
+def test_the_model_loads_without_trusting_anything_extra(tmp_path: Path) -> None:
+    train(tmp_path, CARD)
+    path = tmp_path / "model.skops"
+    assert skops.io.get_untrusted_types(file=path) == []
+    model = skops.io.load(path)
+    features, _ = load_sample()
+    assert len(model.predict(features[:5])) == 5
+
+
+def test_nothing_written_is_a_pickle(tmp_path: Path) -> None:
+    train(tmp_path, CARD)
+    for name in OUTPUTS:
+        assert not name.endswith(PICKLES), name
+    assert not [p for p in tmp_path.rglob("*") if p.name.endswith(PICKLES)]
