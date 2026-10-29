@@ -20,7 +20,8 @@ from deleting data and revoking keys to archiving the repository last.
   version tag (coolbress/plinth#706), as `ghcr.io/<owner>/<repository>:<version>`.
   `.github/workflows/release.yml`, now rendered for `backend` as well as
   `cli` and `library` (from a separate template file for `backend`; the
-  `cli` and `library` render is unchanged), runs only on a pushed `v*` tag and makes
+  `cli` and `library` render is unchanged), runs only on a pushed `v*`
+  tag and makes
   the same two checks as the PyPI release before anything is pushed: the
   tag is `v` plus `pyproject.toml`'s version, and the tagged commit is on
   `main`. It builds with `docker/build-push-action` (pinned to a commit)
