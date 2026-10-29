@@ -468,6 +468,18 @@ or token is stored: the push uses the run's own token. Who can fetch the
 image, and what a private one costs to keep, are in
 [`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
 
+{% endif %}{% if archetype == 'data-ml' %}## The model
+
+```bash
+uv run python -m {{ package_name }} train   # writes dist/model/: model.skops, metrics.json, MODEL_CARD.md
+```
+
+It trains a small scikit-learn model on a sample shipped with scikit-learn,
+measures it on a held-out part, saves it with skops (never a pickle) and
+writes a copy of [`MODEL_CARD.md`](MODEL_CARD.md) with the results filled
+in. Replace the sample and the model in `src/{{ package_name }}/train.py`, and keep the
+card true: it asks whether the training data holds personal information.
+
 {% endif %}## Working with Claude Code
 
 `.claude/settings.json` turns on the `Beginner or non-engineer` output style

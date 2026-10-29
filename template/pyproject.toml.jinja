@@ -18,6 +18,13 @@ dependencies = [
     # Serves the collected static files (the admin's CSS and JavaScript) from the app.
     "whitenoise>=6.6",
 ]
+{%- elif archetype == 'data-ml' %}
+dependencies = [
+    # The starting model and how it is saved: skops writes a format that
+    # loading cannot run code from, unlike a pickle (docs/how-to/publish-a-release.md).
+    "scikit-learn>=1.9",
+    "skops>=0.16",
+]
 {%- else %}
 dependencies = []
 {%- endif %}
@@ -77,6 +84,14 @@ plugins = ["mypy_django_plugin.main"]
 
 [tool.django-stubs]
 django_settings_module = "{{ package_name }}.settings"
+{%- endif %}
+{%- if archetype == 'data-ml' %}
+
+# scikit-learn and skops ship no type information; what they return is
+# checked by the tests instead.
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "skops.*"]
+ignore_missing_imports = true
 {%- endif %}
 
 {% if host == 'gitlab' %}# Tests, `test`.{% else %}# Tests, `ci / test`.{% endif %}

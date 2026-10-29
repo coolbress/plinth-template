@@ -1,0 +1,42 @@
+# Model card: {{ project_name }}
+
+What this model is, what it was trained on, and how well it did. Each
+release publishes a copy of this page with the results filled in, beside
+the model. Keep it true when you change the model or the data.
+
+## The model
+
+- **What it does:** sorts an iris flower into one of three species from four
+  measurements of its petals and sepals. Replace this line when you replace
+  the model.
+- **How it is made:** scikit-learn's logistic regression, trained by
+  `python -m {{ package_name }} train` (`src/{{ package_name }}/train.py`).
+- **How it is saved:** `model.skops`, in the skops format. Load it with
+  `skops.io.load("model.skops")`, which refuses any type it was not told
+  to trust. Never a pickle: loading one runs whatever code is inside it.
+
+## The training data
+
+- **What it is:** Fisher's iris measurements, 150 flowers, shipped inside
+  scikit-learn. A quarter of them is held out and never trained on; the
+  results below are measured on that quarter.
+- **Does the training data hold personal information?** No: the sample
+  measures flowers. Answer again, yes or no and what kind, whenever the
+  data changes. Names, email addresses, faces, voices, locations, health
+  records and anything else that points to a person count. A model can
+  give back what it was trained on: if the answer is yes, do not publish
+  the model from a public repository.
+- **Where it came from, and may it be used:** Fisher (1936), in the public
+  domain. Say the same for your own data: who collected it, and under what
+  terms.
+
+## Results
+
+<!-- results: the training run writes the numbers here -->
+
+## Limits
+
+- Measured on 38 flowers: a small sample, so a result can move by a few
+  points between runs on other data.
+- Say here what the model must not be used for, and where it is known to be
+  wrong.

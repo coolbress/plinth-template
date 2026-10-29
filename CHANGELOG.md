@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `data-ml` project has a defined output (coolbress/plinth#716).
+  `python -m <package> train` (`src/<package>/train.py`) trains a small
+  scikit-learn model on a sample shipped with scikit-learn, measures it on
+  a held-out quarter and writes `dist/model/model.skops` (saved with skops,
+  never a pickle), `metrics.json` (named numbers) and a copy of the new
+  `MODEL_CARD.md` with its results filled in. The card asks whether the
+  training data holds personal information. scikit-learn and skops are the
+  archetype's dependencies, in its own `uv.lock`; `tests/test_train.py`
+  checks the three files, that the model loads with skops trusting nothing
+  extra, and that nothing written is a pickle. `python -m <package>` with
+  no argument still logs that it started, so the `image` check is
+  unchanged. On GitHub and GitLab.
+
 ## [1.30.0] - 2026-10-29
 
 A `backend` project on GitHub can now publish its container image by
