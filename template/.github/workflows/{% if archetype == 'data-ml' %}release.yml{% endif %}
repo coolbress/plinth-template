@@ -1,20 +1,8 @@
-# Publishes this project's model to a GitHub Release when a version tag
-# (`v1.2.3`) is pushed: the training run's `model.skops`, `metrics.json` and
-# `MODEL_CARD.md`, and a `SHA256SUMS` file to check them by. The card and the
-# metrics are the release notes. What the person does around it, and how to
-# replace the starting model: docs/how-to/publish-a-release.md.
-#
-# Not a required check and not part of `ci`: it runs on a tag, never on a pull
-# request, so no ruleset waits for it. No job is skipped with `if:`; each job
-# runs or fails, so a red run says which step stopped.
-#
-# No stored secret. The release is made with this run's own token
-# (`contents: write`), which GitHub makes for the run and which stops working
-# when it ends. On a public repository the files also get a signed record of
-# the workflow and commit that made them (an attestation). GitHub signs these
-# for private repositories only on GitHub Enterprise Cloud, so a private
-# repository on another plan gets the files without the record, and the run
-# says so.
+# Publishes the training run's files and a SHA256SUMS to a GitHub Release
+# when a version tag (`v1.2.3`) is pushed, with the run's own token and no
+# stored secret. Not a required check; no job is skipped with `if:`. On a
+# public repository the files also get a signed record (an attestation).
+# The person's steps: docs/how-to/publish-a-release.md.
 name: Release
 
 on:
@@ -29,15 +17,13 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-# What a release uploads besides SHA256SUMS, as the training run writes them.
-# Never a pickle (`.pkl`, `.pickle`, `.joblib`, `.pt`): loading one runs
-# whatever code it holds.
+# What a release uploads besides SHA256SUMS. Never a pickle: loading one
+# runs whatever code it holds.
 env:
   ASSETS: model.skops metrics.json MODEL_CARD.md
 
 jobs:
-  # Checks, then the training run and a check of what it wrote, before
-  # anything leaves the repository: a tag that fails here creates no release.
+  # A tag that fails here creates no release.
   model:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -121,8 +107,7 @@ jobs:
           path: release/
           if-no-files-found: error
 
-  # The release page, once the files are made and checked. Nothing here runs
-  # code from the repository: it publishes what `model` made.
+  # Runs no code from the repository: it publishes what `model` made.
   publish:
     needs: model
     runs-on: ubuntu-latest
@@ -139,12 +124,9 @@ jobs:
       - name: Check the files against SHA256SUMS
         working-directory: release
         run: sha256sum --check --strict SHA256SUMS
-      # On a public repository a failed signature fails the run, before the
-      # release exists. A private one owned by a personal account is not
-      # asked: GitHub refuses it there ("Feature not available for
-      # user-owned private repositories"). A private one owned by an
-      # organization is asked, and gets the record only on GitHub Enterprise
-      # Cloud. Either way the last step says so instead of failing.
+      # As in the backend release: a public repository's failed signature
+      # fails the run, before the release exists; a private one goes on, and
+      # a personal account's is not asked (GitHub refuses it there).
       - name: Sign a record of how the files were made
         id: attest
         if: ${{ !(github.event.repository.private && github.event.repository.owner.type == 'User') }}
