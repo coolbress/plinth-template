@@ -33,7 +33,10 @@ cd /tmp/probe && uv sync --locked && uv run pytest
 It asks for `plinth_sha` along with the rest; Enter takes the commit this
 template is tested with. It is a recorded answer rather than a computed one so
 that `copier update` on an instance can be given the pin that instance has
-now, instead of re-rendering this file's default over it (#22).
+now, instead of re-rendering this file's default over it (#22). On GitHub it
+also asks whether the owner's `.github` repository publishes a pull-request
+template and issue forms; Enter answers no, and the template writes its own.
+They are recorded for the same reason (coolbress/plinth#726).
 
 ## Land a change
 

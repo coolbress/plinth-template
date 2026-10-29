@@ -6,6 +6,31 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- `owner_has_pr_template` and `owner_has_issue_forms` are recorded in
+  `.copier-answers.yml` (coolbress/plinth#726). They were `when: false`, so
+  copier never wrote them, and a `copier update` that did not pass them
+  read both as false: a form added to the template later reached an
+  instance of an owner with organisation-wide forms as one local file, and
+  one local file hides every shared form. Now asked on GitHub, with a help
+  text, and recorded, so an update keeps the answer. A new project gets
+  what it got before: `/plinth:new-project` passes both, and a render by
+  hand asks them, Enter answering no as the default always did. A GitLab
+  render neither asks nor records them.
+- An existing GitHub instance now gets the end-or-hand-over form by
+  `copier update`. 1.30.0 left that form out of every update, because the
+  update could not tell whether the owner shares forms; that hold-back is
+  gone. plinth's update line, from the plinth release that renders this
+  template, reads the owner's `.github` and passes both answers, each true
+  only while the instance has none of its own. Measured with copier 9.18.2
+  on untouched instances made at 1.29.0, updated by that line: an owner
+  with shared forms got no file under `.github/ISSUE_TEMPLATE/`, and an
+  owner without them got the new form beside the others. An instance made
+  at 1.30.0 or earlier and updated by hand, without
+  `--data owner_has_issue_forms=true`, still reads the answer as false and
+  gets the form, which hides an owner's shared forms: pass the answer, or
+  update through `/plinth:template-update`.
+
 ## [1.30.0] - 2026-10-29
 
 A `backend` project on GitHub can now publish its container image by
