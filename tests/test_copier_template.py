@@ -341,6 +341,7 @@ def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backen
         "src/probe/notes/models.py",
         "src/probe/notes/migrations/0001_initial.py",
         "tests/test_access.py",
+        "tests/test_pages.py",
         "tests/migration_rows.json",
     )
     for name in django:
@@ -2210,17 +2211,27 @@ def test_a_new_project_gets_the_end_or_hand_over_form(rendered: Path) -> None:
 
 
 END_FORM = "template/.github/ISSUE_TEMPLATE/end-or-hand-over.yml"
-HOLD_BACK = (
-    "  - \"{% if _copier_operation == 'update' %}"
-    '.github/ISSUE_TEMPLATE/end-or-hand-over.yml{% endif %}"\n'
-)
+# How the two owner questions are asked now; `when: false` is how they were
+# asked up to plinth-template 1.30.0, unrecorded (coolbress/plinth#726).
+OWNER_WHEN = "  when: \"{{ host != 'gitlab' }}\"\n"
+UNRECORDED = "  when: false\n"
 
 
-def _forms_after_an_update(tmp_path: Path, *, hold_back: bool) -> list[str]:
-    """An instance of an owner with organisation-wide forms, made before the
-    form existed (v1.29.0's shape: no form, no hold-back), updated to this
-    tree. `/plinth:template-update` passes no `owner_has_issue_forms`, and
-    the answers file does not have it, so the update does not either."""
+def _forms_after_an_update(
+    tmp_path: Path,
+    *,
+    owner_has_forms: bool,
+    made_unrecorded: bool,
+    update_data: dict[str, object] | None,
+    now_unrecorded: bool = False,
+) -> list[str]:
+    """An untouched instance made at a tag with no end-or-hand-over form,
+    updated to this tree, which adds it: the files under
+    `.github/ISSUE_TEMPLATE/` afterwards. `made_unrecorded` makes the first
+    tag ask the owner questions as 1.30.0 did, so the answers file lacks
+    them (an instance that exists today); `now_unrecorded` does the same to
+    this tree, which is the fix reverted. `update_data` is what the update
+    passes, as plinth's update line passes the owner's answers."""
     import copier
 
     tpl = tmp_path / "tpl"
@@ -2234,16 +2245,17 @@ def _forms_after_an_update(tmp_path: Path, *, hold_back: bool) -> list[str]:
     )
     config = tpl / "copier.yml"
     now = config.read_text(encoding="utf-8")
-    assert HOLD_BACK in now, "the hold-back line changed; update this test with it"
+    assert now.count(OWNER_WHEN) == 2, "the owner questions' `when` changed; update this test"
+    unrecorded = now.replace(OWNER_WHEN, UNRECORDED)
     form = (tpl / END_FORM).read_bytes()
-    config.write_text(now.replace(HOLD_BACK, ""), encoding="utf-8")
+    config.write_text(unrecorded if made_unrecorded else now, encoding="utf-8")
     (tpl / END_FORM).unlink()
     _git(tpl, "init", "-q", "-b", "main", ".")
     _git(tpl, "add", "-A")
     _git(tpl, "commit", "-qm", "before the form")
     _git(tpl, "tag", "-a", "-m", "before", "v9.0.0")
     (tpl / END_FORM).write_bytes(form)
-    config.write_text(now if hold_back else now.replace(HOLD_BACK, ""), encoding="utf-8")
+    config.write_text(unrecorded if now_unrecorded else now, encoding="utf-8")
     _git(tpl, "add", "-A")
     _git(tpl, "commit", "-qm", "the form")
     _git(tpl, "tag", "-a", "-m", "after", "v9.1.0")
@@ -2253,33 +2265,112 @@ def _forms_after_an_update(tmp_path: Path, *, hold_back: bool) -> list[str]:
     copier.run_copy(
         str(tpl),
         str(proj),
-        data={**data, "owner_has_issue_forms": True},
+        data={**data, "owner_has_issue_forms": owner_has_forms},
         defaults=True,
         quiet=True,
         unsafe=False,
         vcs_ref="v9.0.0",
     )
+    recorded = "owner_has_issue_forms" in (proj / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert recorded is not made_unrecorded, "the first tag made another kind of instance"
     _git(proj, "init", "-q", "-b", "main", ".")
     _git(proj, "add", "-A")
     _git(proj, "commit", "-qm", "the render")
     copier.run_update(
-        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.1.0"
+        str(proj),
+        data=update_data or {},
+        defaults=True,
+        overwrite=True,
+        quiet=True,
+        unsafe=False,
+        vcs_ref="v9.1.0",
     )
     folder = proj / ".github" / "ISSUE_TEMPLATE"
     return sorted(p.name for p in folder.rglob("*") if p.is_file())
 
 
-def test_an_update_never_writes_a_form_for_an_owner_with_their_own(tmp_path: Path) -> None:
-    """One local file under `.github/ISSUE_TEMPLATE/` hides every form the
-    owner shares from `owner/.github`. The update reads `owner_has_issue_forms`
-    as false, so the new form is held back at every update."""
-    assert _forms_after_an_update(tmp_path, hold_back=True) == []
+OWN_FORMS = ["bug.yml", "config.yml", "end-or-hand-over.yml", "feature.yml", "task.yml"]
 
 
-def test_without_the_hold_back_the_update_writes_the_form(tmp_path: Path) -> None:
-    """The test above fails without the `_copier_operation` line: the
-    update itself does not keep the form out."""
-    assert _forms_after_an_update(tmp_path, hold_back=False) == ["end-or-hand-over.yml"]
+def test_the_answers_file_records_the_owner_answers(tmp_path: Path) -> None:
+    """Recorded, an update keeps them; unrecorded, an update read both as
+    false (coolbress/plinth#726). On GitLab nothing under `.github/` is
+    written, so neither is asked or recorded there."""
+    github = render(tmp_path / "gh", owner_has_issue_forms=True, owner_has_pr_template=True)
+    answers = (github / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert "owner_has_issue_forms: true" in answers
+    assert "owner_has_pr_template: true" in answers
+    gitlab = render(tmp_path / "gl", host="gitlab")
+    assert "owner_has" not in (gitlab / ".copier-answers.yml").read_text(encoding="utf-8")
+
+
+def test_an_update_keeps_a_recorded_owner_answer(tmp_path: Path) -> None:
+    """An instance made from this template with the owner's forms: an update
+    that passes nothing still writes no form, because the answer is in
+    `.copier-answers.yml`. One local file would hide every shared form."""
+    assert (
+        _forms_after_an_update(
+            tmp_path, owner_has_forms=True, made_unrecorded=False, update_data=None
+        )
+        == []
+    )
+
+
+def test_unrecorded_the_same_update_writes_the_form(tmp_path: Path) -> None:
+    """The test above fails with `when: false` back on the owner questions:
+    the fix reverted, the update reads the answer as false."""
+    assert _forms_after_an_update(
+        tmp_path,
+        owner_has_forms=True,
+        made_unrecorded=True,
+        update_data=None,
+        now_unrecorded=True,
+    ) == ["end-or-hand-over.yml"]
+
+
+def test_an_existing_instance_keeps_the_owners_forms_when_the_update_passes_it(
+    tmp_path: Path,
+) -> None:
+    """An instance made before the answers were recorded, of an owner with
+    shared forms, updated as plinth's update line does it: with the owner's
+    answer passed. No form is written, though nothing holds this one back."""
+    assert (
+        _forms_after_an_update(
+            tmp_path,
+            owner_has_forms=True,
+            made_unrecorded=True,
+            update_data={"owner_has_issue_forms": True},
+        )
+        == []
+    )
+
+
+def test_an_existing_instance_of_an_owner_without_forms_gets_the_new_one(
+    tmp_path: Path,
+) -> None:
+    """The same instance shape, an owner who shares no forms: the update
+    adds the end-or-hand-over form beside the template's others."""
+    assert (
+        _forms_after_an_update(
+            tmp_path,
+            owner_has_forms=False,
+            made_unrecorded=True,
+            update_data={"owner_has_issue_forms": False},
+        )
+        == OWN_FORMS
+    )
+
+
+def test_an_existing_instance_updated_without_the_answer_still_gets_the_form(
+    tmp_path: Path,
+) -> None:
+    """What remains: an instance made before the answers were recorded,
+    updated by hand without passing the answer, reads it as false and gets
+    the form, which hides the owner's shared set. plinth's update line passes
+    it; this records why it must."""
+    assert _forms_after_an_update(
+        tmp_path, owner_has_forms=True, made_unrecorded=True, update_data=None
+    ) == ["end-or-hand-over.yml"]
 
 
 def test_pr_template_ties_each_criterion_to_a_test(rendered: Path) -> None:
