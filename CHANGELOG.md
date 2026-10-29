@@ -7,6 +7,30 @@ means `copier update` on an instance needs hands.
 ## [Unreleased]
 
 ### Added
+- A `backend` project on GitHub publishes its container image to GHCR on a
+  version tag (coolbress/plinth#706), as `ghcr.io/<owner>/<repository>:<version>`.
+  `.github/workflows/release.yml`, now rendered for `backend` as well as
+  `cli` and `library` (the file branches on the archetype; the `cli` and
+  `library` render is unchanged), runs only on a pushed `v*` tag and makes
+  the same two checks as the PyPI release before anything is pushed: the
+  tag is `v` plus `pyproject.toml`'s version, and the tagged commit is on
+  `main`. It builds with `docker/build-push-action` (pinned to a commit)
+  with the `org.opencontainers.image.source` label, runs the image and
+  reads its first log line as the `image` check does, pushes with the
+  run's own token (`packages: write`, no stored secret), fetches the pushed
+  image by digest and runs the same check again, and makes a GitHub
+  Release that names the image. On a public repository `actions/attest`
+  signs a record of the build, and a failed signature fails the run. A
+  private repository publishes without the record and says so in a notice
+  and the run summary, without failing: GitHub signs these for private
+  repositories only on GitHub Enterprise Cloud, so a personal account's
+  private repository is not asked. Not a required check, and no job is
+  skipped with `if:`. `docs/how-to/publish-a-release.md` for `backend`
+  gives the steps in plain words: the tag, who can fetch the image, the
+  storage a private image counts against on each plan (500 MB on GitHub
+  Free, shared with Actions artifacts), deleting old versions, checking
+  the signed record, and what each failure means. The README links it.
+  Deploying the image stays out (coolbress/plinth-template#107).
 - An issue form for ending a project or handing it over
   (coolbress/plinth#702): `.github/ISSUE_TEMPLATE/end-or-hand-over.yml` on
   GitHub, `.gitlab/issue_templates/End-or-hand-over.md` on GitLab, labelled
