@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-10-30
+
+The domain glossary is now `GLOSSARY.md`, the name Matt Pocock's skills
+use from v1.3.2, which plinth installs. The end-or-hand-over form points a
+project with plinth to `/retro`, which suggests rules and checks from the
+session being looked back on.
+
 ### Changed
 - The domain glossary is `GLOSSARY.md`, no longer `CONTEXT.md`
   (coolbress/plinth#714). Matt Pocock's skills renamed it in v1.3.2, and
