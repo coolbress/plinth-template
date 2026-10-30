@@ -77,7 +77,9 @@ body:
       description: |
         For each mistake above, the line in `AGENTS.md` or the check in CI that
         would have caught it. A check that fails is stronger than a rule that
-        asks.
+        asks. If plinth is installed, type `/retro` in Claude Code, in the
+        session you are looking back on: it suggests rules and checks from
+        what went wrong there. Copy the ones you keep here.
     validations:
       required: false
 

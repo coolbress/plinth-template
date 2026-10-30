@@ -5,7 +5,7 @@ Domain documents the engineering skills read **before** exploring the codebase.
 
 ## Before exploring, read these
 
-- Root **`CONTEXT.md`**: the glossary. No implementation detail.
+- Root **`GLOSSARY.md`**: the glossary. No implementation detail.
 - **`docs/adr/`**: the ADRs for the area you touch.
 
 If either is missing, move on quietly. Do not report it and do not create it
@@ -18,7 +18,7 @@ single-context (this repository):
 
 ```text
 /
-├── CONTEXT.md
+├── GLOSSARY.md
 ├── docs/adr/
 │   ├── 0001-….md
 │   └── 0002-….md

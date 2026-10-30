@@ -2372,6 +2372,37 @@ def test_gitlab_end_or_hand_over_template_matches_the_github_form(
     assert text.rstrip().endswith("/label ~task")
 
 
+def test_end_or_hand_over_names_retro_only_if_plinth_is_installed(
+    rendered: Path, gitlab: Path
+) -> None:
+    """Beside the rule-or-check question, both hosts name `/retro`, plinth's
+    retrospective skill, behind "If plinth is installed": the form is read in
+    projects rendered without plinth too (coolbress/plinth#714)."""
+    form = yaml.safe_load(
+        (rendered / ".github" / "ISSUE_TEMPLATE" / "end-or-hand-over.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    rule = next(f for f in form["body"] if f.get("id") == "rule-or-check-to-add")
+    gitlab_text = (gitlab / ".gitlab" / "issue_templates" / "End-or-hand-over.md").read_text(
+        encoding="utf-8"
+    )
+    gitlab_rule = gitlab_text.split("## A rule or check to add next time", 1)[1]
+    for text in (rule["attributes"]["description"], gitlab_rule):
+        assert "If plinth is installed, type /retro" in " ".join(text.replace("`", "").split())
+
+
+def test_domain_docs_name_the_glossary_file_the_installed_skills_name(rendered: Path) -> None:
+    """mattpocock/skills v1.3.2 renamed `CONTEXT.md` to `GLOSSARY.md`; the
+    instance's pointers name the new file (coolbress/plinth#714). plinth's
+    install test checks the installed skills against this file."""
+    domain = (rendered / "docs" / "agents" / "domain.md").read_text(encoding="utf-8")
+    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Root **`GLOSSARY.md`**: the glossary." in domain
+    assert "root `GLOSSARY.md` plus `docs/adr/`" in agents
+    assert "CONTEXT.md" not in domain + agents
+
+
 def test_a_new_project_gets_the_end_or_hand_over_form(rendered: Path) -> None:
     """Made with `copier copy` and no owner forms, the instance has the form;
     with the owner's forms it has none (the test above checks the folder)."""
