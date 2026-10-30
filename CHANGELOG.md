@@ -6,6 +6,21 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- The domain glossary is `GLOSSARY.md`, no longer `CONTEXT.md`
+  (coolbress/plinth#714). Matt Pocock's skills renamed it in v1.3.2, and
+  plinth installs that version: `AGENTS.md` and `docs/agents/domain.md`
+  point to the new name. `copier update` changes those two pointers only and
+  never touches an instance's own `CONTEXT.md`; plinth's
+  `/plinth:template-update` renames that file, its content kept.
+
+### Added
+- The end-or-hand-over form says, beside "A rule or check to add next
+  time", that a project with plinth installed can type `/retro` in the
+  session it is looking back on to get suggested rules and checks
+  (coolbress/plinth#714). On GitHub and GitLab; the line starts with "If
+  plinth is installed", so it reads correctly in a project without it.
+
 ## [1.31.0] - 2026-10-29
 
 A `data-ml` project now has a defined output: `python -m <package> train`

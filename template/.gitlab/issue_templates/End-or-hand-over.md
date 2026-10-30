@@ -30,7 +30,7 @@
 
 ## A rule or check to add next time
 
-<!-- For each mistake above, the line in AGENTS.md or the check in CI that would have caught it. A check that fails is stronger than a rule that asks. -->
+<!-- For each mistake above, the line in AGENTS.md or the check in CI that would have caught it. A check that fails is stronger than a rule that asks. If plinth is installed, type /retro in Claude Code, in the session you are looking back on: it suggests rules and checks from what went wrong there. Copy the ones you keep here. -->
 
 <!-- When this closes, write the ending under "## Outcome": which steps were done, which were not needed, and anything left open with why. -->
 
