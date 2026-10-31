@@ -12,6 +12,18 @@ means `copier update` on an instance needs hands.
   form (coolbress/plinth#746). A ticket cut from a spec keeps its id and
   original title in `## Parent`, and the task form's `Parent` field says so
   on both hosts.
+- A `visibility` question, `public` or `private`, which
+  `/plinth:new-project` answers (coolbress/plinth#747). It decides where
+  `SECURITY.md` sends a security report. GitHub offers its private
+  reporting form, **Security → Report a vulnerability**, on a public
+  repository only: on a personal account's private repository it answered
+  404 to reading the setting and to turning it on. A private repository's
+  `SECURITY.md` now names an issue, which only people with access can read,
+  and says what to do before the repository is made public. A public one
+  keeps the form, which `/plinth:new-project` now turns on. GitLab's
+  confidential issue is unchanged. An instance made before this has no
+  answer, so `copier update` renders it as `public`: a private instance
+  passes `--data visibility=private` once.
 
 ## [1.32.0] - 2026-10-30
 

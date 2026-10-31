@@ -346,3 +346,24 @@ owner_has_issue_forms:
     .github/ISSUE_TEMPLATE? Then this project writes none: one local form
     hides every shared one. Press Enter for no: this project writes its own.
   default: false
+
+# Where a security report goes (coolbress/plinth#747). SECURITY.md names
+# GitHub's private reporting form, Security → Report a vulnerability, which
+# `/plinth:new-project` turns on. A private repository is not offered it: on
+# a personal account's private repository GitHub answered 404 to reading and
+# to turning it on (2026-10-31), where a public one answered with the same
+# token. There SECURITY.md names an issue, which only people with access to
+# the repository can read. `/plinth:new-project` passes the answer; recorded,
+# an update keeps it. Asked on GitHub only: GitLab's route is a confidential
+# issue whatever the answer.
+visibility:
+  type: str
+  when: "{{ host == 'github' }}"
+  help: |
+    Is the repository public or private? It decides where SECURITY.md sends
+    a security report: GitHub's private reporting form on a public one, an
+    issue on a private one.
+  default: public
+  choices:
+    Public: public
+    Private: private

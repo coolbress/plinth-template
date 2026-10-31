@@ -5,7 +5,15 @@
 {% if host == 'gitlab' %}**Do not open a public issue.** Open a confidential one: on a new issue, tick
 **Turn on confidentiality**, so only the project's members with at least the
 Planner role can read it. Include what you found, how to reproduce it, and the
-version or commit you tested.{% else %}**Do not open a public issue.** Use the repository's private reporting form:
+version or commit you tested.{% elif visibility == 'private' %}Open an issue in this repository. It is private, so only people with access
+to it can read the issue. Include what you found, how to reproduce it, and the
+version or commit you tested.
+
+Its issues become public if the repository does. Before it is made public,
+delete each security issue (**Delete issue**, at the bottom of the issue), then
+turn on private vulnerability reporting (`gh api -X PUT
+repos/{{ owner or '<owner>' }}/{{ project_name }}/private-vulnerability-reporting`)
+and change this section to name **Security → Report a vulnerability**.{% else %}**Do not open a public issue.** Use the repository's private reporting form:
 **Security → Report a vulnerability** (GitHub Security Advisories). Include what
 you found, how to reproduce it, and the version or commit you tested.{% endif %}
 

@@ -76,6 +76,40 @@ def test_the_four_questions_are_kept() -> None:
         assert re.search(rf"^{question}", cfg, re.M), f"question {question} is gone"
 
 
+#: The form GitHub offers a public repository and not a private one
+#: (coolbress/plinth#747): `/plinth:new-project` turns it on where it exists.
+REPORT_FORM = "Security → Report a vulnerability"
+
+
+def test_security_md_names_the_form_on_a_public_repository(rendered: Path) -> None:
+    text = (rendered / "SECURITY.md").read_text(encoding="utf-8")
+    assert f"**{REPORT_FORM}**" in text
+    assert "Do not open a public issue" in text
+
+
+def test_security_md_names_an_issue_on_a_private_repository(tmp_path: Path) -> None:
+    """GitHub answers 404 to private vulnerability reporting on a private
+    repository, so the form never appears there: the route is an issue, which
+    only people with access can read, and the file never names the form as
+    the way in."""
+    out = render(tmp_path / "private", visibility="private", owner="someone")
+    section = (out / "SECURITY.md").read_text(encoding="utf-8").split("## Response", 1)[0]
+    assert "Open an issue in this repository. It is private" in section
+    assert "Use the repository's private reporting form" not in section
+    assert "Do not open a public issue" not in section
+    # Named only as what to turn on before the repository goes public.
+    assert "repos/someone/probe/private-vulnerability-reporting" in section
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^visibility: private$", answers, re.M), "an update would lose the answer"
+
+
+def test_visibility_is_ignored_on_gitlab(tmp_path: Path) -> None:
+    out = render(tmp_path / "gl", host="gitlab", visibility="private")
+    text = (out / "SECURITY.md").read_text(encoding="utf-8")
+    assert "Turn on confidentiality" in text
+    assert "Open an issue in this repository" not in text
+
+
 # ── the render ────────────────────────────────────────────────────────────
 
 
