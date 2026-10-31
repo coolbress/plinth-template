@@ -107,9 +107,15 @@ def test_cli_archetype_omits_service_only_files(rendered: Path) -> None:
 
 #: The test of what a person runs, per archetype (#109): the entry point and
 #: its stored output where there is an entry point, the built wheel for a
-#: library, and for web the tests in `tests/test_probe.py`.
+#: library and a cli (its command installed from it, coolbress/plinth#749),
+#: and for web the tests in `tests/test_probe.py`.
 ENTRY_POINT_TESTS = {
-    "cli": {"src/probe/__main__.py", "tests/test_entry_point.py", "tests/entry_point.expected"},
+    "cli": {
+        "src/probe/__main__.py",
+        "tests/test_entry_point.py",
+        "tests/entry_point.expected",
+        "tests/test_built_wheel.py",
+    },
     "backend": {"src/probe/__main__.py", "tests/test_entry_point.py", "tests/entry_point.expected"},
     "data-ml": {"src/probe/__main__.py", "tests/test_entry_point.py", "tests/entry_point.expected"},
     "library": {"tests/test_built_wheel.py"},
@@ -1261,7 +1267,23 @@ def test_data_ml_release_checks_everything_before_the_release_exists(data_ml: Pa
     assert attest["if"] == "${{ !(" + private_user + ") }}"
 
 
-GOOD = {"model.skops": "model", "metrics.json": '{"accuracy": 0.97}\n', "MODEL_CARD.md": "# card"}
+#: The commit a tag points at, as the release run's GITHUB_SHA.
+TAGGED = "0123456789abcdef0123456789abcdef01234567"
+
+#: The card's "How it was made" rows, as the training run writes them.
+MADE = {"scikit-learn": "1.9.0", "skops": "0.16.0", "commit": TAGGED, "seed": "0"}
+
+
+def _card(made: dict[str, str]) -> str:
+    rows = "".join(f"| `{k}` | {v} |\n" for k, v in made.items())
+    return f"# card\n\n| How it was made | Value |\n|---|---|\n{rows}"
+
+
+GOOD = {
+    "model.skops": "model",
+    "metrics.json": '{"accuracy": 0.97}\n',
+    "MODEL_CARD.md": _card(MADE),
+}
 
 
 def _check_files(out: Path, files: dict[str, str], assets: str = "") -> Any:
@@ -1275,6 +1297,7 @@ def _check_files(out: Path, files: dict[str, str], assets: str = "") -> Any:
     assert step["working-directory"] == "release"
     path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
     env = {**os.environ, "PATH": path, "ASSETS": assets or _release(out)["env"]["ASSETS"]}
+    env["GITHUB_SHA"] = TAGGED
     run = ["bash", "-c", step["run"]]
     return subprocess.run(run, cwd=release, env=env, capture_output=True, text=True, check=False)  # noqa: S603
 
@@ -1292,6 +1315,7 @@ def test_data_ml_release_writes_sums_that_match_the_files(data_ml: Path) -> None
 
 
 NOT_NUMBERS = "metrics.json is not a set of named numbers"
+NOT_MADE = "The card does not say how the model was made"
 
 
 @pytest.mark.parametrize(
@@ -1308,12 +1332,30 @@ NOT_NUMBERS = "metrics.json is not a set of named numbers"
             ({**GOOD, f"m{s}": "x"}, f"m{s} metrics.json", "A pickle is not published")
             for s in PICKLES
         ),
+        # Each row of how the model was made, left out or left empty
+        # (coolbress/plinth#749), and a commit other than the tagged one.
+        *(
+            (
+                {**GOOD, "MODEL_CARD.md": _card({k: v for k, v in MADE.items() if k != gone})},
+                "",
+                NOT_MADE,
+            )
+            for gone in MADE
+        ),
+        *(({**GOOD, "MODEL_CARD.md": _card({**MADE, k: ""})}, "", NOT_MADE) for k in MADE),
+        ({**GOOD, "MODEL_CARD.md": _card({**MADE, "commit": "f" * 40})}, "", NOT_MADE),
+        (
+            {**GOOD, "MODEL_CARD.md": _card({**MADE, "commit": "none: not a git repository"})},
+            "",
+            NOT_MADE,
+        ),
     ],
 )
 def test_data_ml_release_stops_before_any_upload(
     data_ml: Path, files: dict[str, str], assets: str, title: str
 ) -> None:
-    """A missing or broken `metrics.json`, or a pickle in the list, stops the
+    """A missing or broken `metrics.json`, a card that does not say how the
+    model was made from the tagged commit, or a pickle in the list, stops the
     `model` job, which the job that creates the release needs: no release,
     and no draft."""
     done = _check_files(data_ml, files, assets)
@@ -2663,9 +2705,11 @@ def test_the_old_shape_is_gone(rendered: Path, backend: Path) -> None:
     """Removed on review: the session hook, the logging module and its test, and
     the policy tests that `ci / floor-check` now runs. What stays in the app's
     tests is a package smoke test and tree hygiene."""
-    for out in (rendered, backend):
+    common = ["test_entry_point.py", "test_probe.py", "test_tree_hygiene.py"]
+    # A cli also tests its command installed from the built wheel (coolbress/plinth#749).
+    for out, expected in ((rendered, ["test_built_wheel.py", *common]), (backend, common)):
         names = sorted(p.name for p in (out / "tests").glob("*.py"))
-        assert names == ["test_entry_point.py", "test_probe.py", "test_tree_hygiene.py"], names
+        assert names == expected, names
         assert not (out / "src" / "probe" / "_logging.py").exists()
 
 
@@ -2827,6 +2871,62 @@ def test_lockfile_carries_the_package_name(tmp_path: Path) -> None:
     """A mismatch fails `uv sync --locked` on the new repository's first pull request."""
     out = render(tmp_path / "locked", project_name="my.app")
     assert 'name = "my_app"' in (out / "uv.lock").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "data-ml", "web"])
+def test_only_cli_declares_a_command_named_after_the_package(
+    tmp_path: Path, archetype: str
+) -> None:
+    """A `cli` published to PyPI gives `pip install` a command running
+    `python -m <package>`'s `main` (coolbress/plinth#749). It has the package's
+    name, never the repository's: macOS kills a program whose name ends in
+    `.app` (exit 137, measured), and `my.app` is a valid repository name."""
+    import tomllib
+
+    out = render(tmp_path / archetype, archetype=archetype, project_name="my.app")
+    project = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    expected = {"my_app": "my_app.__main__:main"} if archetype == "cli" else None
+    assert project.get("scripts") == expected, project.get("scripts")
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "data-ml", "web"])
+def test_library_and_cli_say_they_are_typed(tmp_path: Path, archetype: str) -> None:
+    """They ship `py.typed`; the classifier says so on the package index
+    (coolbress/plinth#749)."""
+    import tomllib
+
+    out = render(tmp_path / archetype, archetype=archetype)
+    project = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    typed = "Typing :: Typed" in project.get("classifiers", [])
+    assert typed is (archetype in ("cli", "library")), project.get("classifiers")
+    assert (out / "src" / "probe" / "py.typed").is_file()
+
+
+def test_gitignore_ignores_coverage_reports_and_build_output(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """What a local run or CI writes: coverage's data and reports, and a
+    build directory (coolbress/plinth#749). git itself is asked."""
+    repo = tmp_path / "repo"
+    shutil.copytree(rendered, repo, symlinks=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)  # noqa: S607
+    paths = [".coverage", "coverage.xml", "htmlcov/index.html", "build/lib/probe/__init__.py"]
+    done = subprocess.run(  # noqa: S603
+        ["git", "check-ignore", "--no-index", *paths],  # noqa: S607
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.stdout.splitlines() == paths, done.stdout + done.stderr
+    kept = subprocess.run(
+        ["git", "check-ignore", "--no-index", "src/probe/__init__.py", "tests/test_probe.py"],  # noqa: S607
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert kept.stdout == "", kept.stdout
 
 
 @pytest.mark.parametrize("bad", ["9lives", "class", "my+app"])
