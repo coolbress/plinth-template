@@ -48,7 +48,10 @@ def database(url: str | None) -> dict[str, object]:
         "PASSWORD": unquote(parts.password or ""),
         "HOST": parts.hostname or "",
         "PORT": str(parts.port or ""),
-        "CONN_MAX_AGE": 60,
+        # A new connection per request: under ASGI, which uvicorn serves,
+        # Django's databases reference says to turn persistent connections
+        # off, and a small Postgres plan allows few connections.
+        "CONN_MAX_AGE": 0,
         # Connection options in the query (`?sslmode=verify-full`) reach psycopg as given.
         "OPTIONS": dict(parse_qsl(parts.query)),
     }
@@ -79,6 +82,16 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+# The four checks `startproject` writes: `createsuperuser` and the password
+# forms refuse a password like the account's name, shorter than 8
+# characters, a common one, or all numbers. The admin is on the public address.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 ROOT_URLCONF = f"{__package__}.urls"

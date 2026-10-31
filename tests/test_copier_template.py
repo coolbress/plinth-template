@@ -342,6 +342,7 @@ def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backen
         "src/probe/notes/migrations/0001_initial.py",
         "tests/test_access.py",
         "tests/test_pages.py",
+        "tests/test_passwords.py",
         "tests/migration_rows.json",
     )
     for name in django:
@@ -378,6 +379,16 @@ def test_web_deploy_check_passes_and_its_silences_are_why(tmp_path: Path) -> Non
     done = subprocess.run(check, cwd=out, env=env, capture_output=True, text=True, timeout=120)  # noqa: S603
     assert done.returncode == 0, done.stdout + done.stderr
     assert "(2 silenced)" in done.stdout + done.stderr
+    # Persistent connections off under ASGI, as Django's databases reference says (plinth #748).
+    ask = "from django.conf import settings; print(settings.DATABASES['default']['CONN_MAX_AGE'])"
+    done = subprocess.run(  # noqa: S603
+        [python, "manage.py", "shell", "--no-imports", "-c", ask],
+        cwd=out,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert done.stdout.strip() == "0", done.stdout + done.stderr
 
     settings = out / "src" / "probe" / "settings.py"
     text = settings.read_text(encoding="utf-8")
@@ -608,6 +619,7 @@ def test_somewhere_else_names_the_place_and_says_plinth_did_not_check_it(
         "python -m probe.predeploy",
         "**The first account.**",
         "`python -m django createsuperuser`",
+        "never slows down or locks out someone who keeps guessing",
         # The cold read's wording (coolbress/plinth#679, how-to #690).
         "the browser shows a padlock",
         "the checks are the automatic tests the project runs on every change",
@@ -2997,6 +3009,8 @@ def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path
         "**Shell**",
         "`python -m django createsuperuser`",
         "paste it",
+        # No login throttle (coolbress/plinth#604, coolbress/plinth#748): the README says so.
+        "never slows down or locks out someone who keeps guessing",
         "**Recovery**",
         "**Restore Database**",
         "up to 10 minutes ago; the last 10 minutes cannot be chosen",

@@ -67,6 +67,7 @@ _exclude:
   - "{% if archetype != 'web' %}src/{{ package_name }}/notes{% endif %}"
   - "{% if archetype != 'web' %}tests/test_access.py{% endif %}"
   - "{% if archetype != 'web' %}tests/test_pages.py{% endif %}"
+  - "{% if archetype != 'web' %}tests/test_passwords.py{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
   # The data-ml archetype's model: the training run, its test, and the card
   # each release publishes beside the model (coolbress/plinth#716).
