@@ -77,7 +77,10 @@ merged and its checks have passed.
   run `python -m django createsuperuser`. The Shell does not show the password
   as you type it, so write it somewhere first and paste it, both times it is
   asked and later at the log-in page. Typed blind, it can come out different
-  from what you meant.
+  from what you meant. The log-in page never slows down or locks out someone
+  who keeps guessing, so make the password long and hard to guess, such as
+  four unrelated words; Django refuses one shorter than 8 characters, all
+  numbers, or a common one.
 - **Getting data back.** On the database's page in Render, open **Recovery**
   and choose **Restore Database**. Render can make a new database holding
   your data as it was at any moment from 3 days ago (7 on Pro or higher) up to
@@ -120,7 +123,10 @@ production settings. On a hosting service, that is the app's own console or
 shell in its dashboard; on your own server or computer,
 `docker exec -it <container> python -m django createsuperuser`. The password
 is not shown as you type it, so write it somewhere first and paste it, both
-times it is asked and later at the log-in page.
+times it is asked and later at the log-in page. The log-in page never slows
+down or locks out someone who keeps guessing, so make the password long and
+hard to guess, such as four unrelated words; Django refuses one shorter than
+8 characters, all numbers, or a common one.
 
 Five things decide whether you can trust where it runs. plinth checked them
 on Render, not here; check each one yourself:

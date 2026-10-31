@@ -9,6 +9,10 @@ license-files = ["LICENSE"]
 {%- if owner %}
 authors = [{ name = "{{ owner }}" }]
 {%- endif %}
+{%- if archetype in ['cli', 'library'] %}
+# The package ships `py.typed`: a type checker reads its annotations.
+classifiers = ["Typing :: Typed"]
+{%- endif %}
 {%- if archetype == 'web' %}
 dependencies = [
     # The LTS series: security fixes to April 2028 (djangoproject.com/download).
@@ -27,6 +31,14 @@ dependencies = [
 ]
 {%- else %}
 dependencies = []
+{%- endif %}
+{%- if archetype == 'cli' %}
+
+# The command `pip install` or `uv tool install` puts on PATH. It runs what
+# `python -m {{ package_name }}` runs, and has the distribution's name, which
+# `uvx {{ package_name }}` and `pipx run` look for.
+[project.scripts]
+{{ package_name }} = "{{ package_name }}.__main__:main"
 {%- endif %}
 {%- if owner %}
 

@@ -98,6 +98,19 @@ jobs:
             echo "::error title=metrics.json is not a set of named numbers::metrics.json did not parse as an object of names and numbers, such as {\"accuracy\": 0.97}. Nothing was uploaded, and no release was made."
             exit 1
           fi
+          # What loading the model needs and what makes it again: the run
+          # writes these rows into the card's results, and the commit is the
+          # one this tag points at.
+          for row in scikit-learn skops seed; do
+            if ! grep -Eq "^\| \`$row\` \| [^ |]" MODEL_CARD.md; then
+              echo "::error title=The card does not say how the model was made::MODEL_CARD.md has no $row row in its results. Nothing was uploaded, and no release was made. Run \`python -m <package> train\` on your machine and read the card it writes."
+              exit 1
+            fi
+          done
+          if ! grep -Fq "| \`commit\` | $GITHUB_SHA |" MODEL_CARD.md; then
+            echo "::error title=The card does not say how the model was made::MODEL_CARD.md does not name the tagged commit $GITHUB_SHA in its results. Nothing was uploaded, and no release was made. Run \`python -m <package> train\` on your machine and read the card it writes."
+            exit 1
+          fi
           # shellcheck disable=SC2086  # the list is split on purpose
           sha256sum $ASSETS > SHA256SUMS
           cat SHA256SUMS

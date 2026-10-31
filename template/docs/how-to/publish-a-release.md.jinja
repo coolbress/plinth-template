@@ -145,16 +145,17 @@ that version later. Each release here holds four files:
 |---|---|
 | `model.skops` | The trained model, saved with skops |
 | `metrics.json` | How well it did on the part of the data it never trained on, as named numbers |
-| `MODEL_CARD.md` | What the model is, what it was trained on, and those results |
+| `MODEL_CARD.md` | What the model is, what it was trained on, those results, and how it was made: the scikit-learn and skops versions, the commit and the seed |
 | `SHA256SUMS` | A fingerprint of each of the other three, to check a download is whole and unchanged |
 
 How it works, in one paragraph: you push a version tag, such as `v0.2.0`.
 The workflow `.github/workflows/release.yml` then checks the tag, trains the
 model again from the tagged code (`python -m {{ package_name }} train`), checks
-that the three files are there and that `metrics.json` reads as numbers,
-and only then makes the release, with the card and the metrics as its
-notes. No password or token is stored anywhere: the run uses its own token,
-which GitHub makes for that run and which stops working when it ends.
+that the three files are there, that `metrics.json` reads as numbers and
+that the card says how the model was made from the tagged commit, and only
+then makes the release, with the card and the metrics as its notes. No
+password or token is stored anywhere: the run uses its own token, which
+GitHub makes for that run and which stops working when it ends.
 
 Nothing has to be set up before the first tag.
 
@@ -314,6 +315,11 @@ upload has passed. The run says which step stopped.
   The training run did not write what a release publishes. Ask the agent to
   run `uv run python -m {{ package_name }} train` and look at `dist/model/`;
   `tests/test_train.py` checks the same files on every pull request.
+- **"The card does not say how the model was made."** The card's results
+  lack the scikit-learn or skops version, the seed, or the tagged commit.
+  The training run writes them; a card that lost its results line, or a
+  run outside the repository, does not. `tests/test_train.py` checks the
+  rows on every pull request.
 - **"A pickle is not published."** A file in `ASSETS` has a pickle's name.
   Save the model in one of the formats in step 4.
 

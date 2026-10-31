@@ -6,12 +6,41 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A `web` project's Postgres connection is opened per request
+  (`CONN_MAX_AGE` 0, was 60) (coolbress/plinth#748). The app is served over
+  ASGI, where Django's databases reference says to turn persistent
+  connections off, and a small Render Postgres allows few connections.
+
 ### Added
 - `docs/agents/issue-tracker.md` says how an issue title is written: one
   sentence saying what the issue does, not a pull request's `type(scope):`
   form (coolbress/plinth#746). A ticket cut from a spec keeps its id and
   original title in `## Parent`, and the task form's `Parent` field says so
   on both hosts.
+- A `web` project checks passwords with Django's four standard validators
+  (coolbress/plinth#748): `createsuperuser` and the password forms refuse a
+  password shorter than 8 characters, all numbers, a common one, or one like
+  the account's name. An account made earlier keeps its password; the check
+  runs when a password is set. `tests/test_passwords.py` holds it.
+- The `web` README says the log-in page never slows down or locks out someone
+  who keeps guessing, and to choose a long password instead
+  (coolbress/plinth#748).
+- A `cli` declares its command in `[project.scripts]`, named after the
+  package and running `<package>.__main__:main`, so `pip install` and
+  `uv tool install` put it on PATH (coolbress/plinth#749). Its new
+  `tests/test_built_wheel.py` builds the wheel, installs it into an empty
+  environment and runs the command found on PATH.
+- A `data-ml` model card says how the model was made: the scikit-learn and
+  skops versions, the commit and the seed, in a second table under its
+  results, which the release notes carry (coolbress/plinth#749).
+  `metrics.json` stays numbers only. Outside a git repository the commit row
+  says `none: not a git repository`; the release workflow refuses a card
+  that lacks a row or names a commit other than the tagged one.
+- `library` and `cli` carry the `Typing :: Typed` classifier: they ship
+  `py.typed` (coolbress/plinth#749).
+- `.gitignore` ignores `.coverage`, `coverage.xml`, `htmlcov/` and `build/`
+  (coolbress/plinth#749).
 - A `visibility` question, `public` or `private`, which
   `/plinth:new-project` answers (coolbress/plinth#747). It decides where
   `SECURITY.md` sends a security report. GitHub offers its private
