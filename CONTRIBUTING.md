@@ -40,6 +40,12 @@ They are recorded for the same reason (coolbress/plinth#726).
 
 ## Land a change
 
+A change only to this repository is filed here, even though plinth raises its
+pin afterwards; the pull request that raises the pin closes the issue. A
+change that also touches plinth (the door, `/plinth:floor-check`, plinth's
+docs) is filed in coolbress/plinth, and the pull request here ends with
+`Part of coolbress/plinth#N`.
+
 1. Branch from `origin/main`, always naming the base. Unless the checkout is
    yours alone — no command tells you whether another session is in it — make
    the branch in its own worktree: `git fetch origin`, then
