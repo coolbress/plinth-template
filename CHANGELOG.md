@@ -6,12 +6,26 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A `web` project's Postgres connection is opened per request
+  (`CONN_MAX_AGE` 0, was 60) (coolbress/plinth#748). The app is served over
+  ASGI, where Django's databases reference says to turn persistent
+  connections off, and a small Render Postgres allows few connections.
+
 ### Added
 - `docs/agents/issue-tracker.md` says how an issue title is written: one
   sentence saying what the issue does, not a pull request's `type(scope):`
   form (coolbress/plinth#746). A ticket cut from a spec keeps its id and
   original title in `## Parent`, and the task form's `Parent` field says so
   on both hosts.
+- A `web` project checks passwords with Django's four standard validators
+  (coolbress/plinth#748): `createsuperuser` and the password forms refuse a
+  password shorter than 8 characters, all numbers, a common one, or one like
+  the account's name. An account made earlier keeps its password; the check
+  runs when a password is set. `tests/test_passwords.py` holds it.
+- The `web` README says the log-in page never slows down or locks out someone
+  who keeps guessing, and to choose a long password instead
+  (coolbress/plinth#748).
 - A `cli` declares its command in `[project.scripts]`, named after the
   package and running `<package>.__main__:main`, so `pip install` and
   `uv tool install` put it on PATH (coolbress/plinth#749). Its new
