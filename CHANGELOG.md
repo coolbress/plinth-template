@@ -6,9 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-10-31
+
+A `web` project checks passwords and opens its database connection per
+request, a `cli` installs a command, a `data-ml` model card says how the
+model was made, and an issue title is one sentence. A new `visibility`
+question decides where `SECURITY.md` sends a security report: a private
+repository names an issue, since GitHub offers its reporting form on public
+repositories only. A private instance made before this passes
+`--data visibility=private` once to `copier update`.
+
 ### Changed
 - A `web` project's Postgres connection is opened per request
-  (`CONN_MAX_AGE` 0, was 60) (coolbress/plinth#748). The app is served over
+  (`CONN_MAX_AGE` 0, was 60) (coolbress/plinth-template#156). The app is served over
   ASGI, where Django's databases reference says to turn persistent
   connections off, and a small Render Postgres allows few connections.
 
@@ -19,28 +29,28 @@ means `copier update` on an instance needs hands.
   original title in `## Parent`, and the task form's `Parent` field says so
   on both hosts.
 - A `web` project checks passwords with Django's four standard validators
-  (coolbress/plinth#748): `createsuperuser` and the password forms refuse a
+  (coolbress/plinth-template#156): `createsuperuser` and the password forms refuse a
   password shorter than 8 characters, all numbers, a common one, or one like
   the account's name. An account made earlier keeps its password; the check
   runs when a password is set. `tests/test_passwords.py` holds it.
 - The `web` README says the log-in page never slows down or locks out someone
   who keeps guessing, and to choose a long password instead
-  (coolbress/plinth#748).
+  (coolbress/plinth-template#156).
 - A `cli` declares its command in `[project.scripts]`, named after the
   package and running `<package>.__main__:main`, so `pip install` and
-  `uv tool install` put it on PATH (coolbress/plinth#749). Its new
+  `uv tool install` put it on PATH (coolbress/plinth-template#157). Its new
   `tests/test_built_wheel.py` builds the wheel, installs it into an empty
   environment and runs the command found on PATH.
 - A `data-ml` model card says how the model was made: the scikit-learn and
   skops versions, the commit and the seed, in a second table under its
-  results, which the release notes carry (coolbress/plinth#749).
+  results, which the release notes carry (coolbress/plinth-template#157).
   `metrics.json` stays numbers only. Outside a git repository the commit row
   says `none: not a git repository`; the release workflow refuses a card
   that lacks a row or names a commit other than the tagged one.
 - `library` and `cli` carry the `Typing :: Typed` classifier: they ship
-  `py.typed` (coolbress/plinth#749).
+  `py.typed` (coolbress/plinth-template#157).
 - `.gitignore` ignores `.coverage`, `coverage.xml`, `htmlcov/` and `build/`
-  (coolbress/plinth#749).
+  (coolbress/plinth-template#157).
 - A `visibility` question, `public` or `private`, which
   `/plinth:new-project` answers (coolbress/plinth#747). It decides where
   `SECURITY.md` sends a security report. GitHub offers its private
