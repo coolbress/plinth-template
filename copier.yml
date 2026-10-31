@@ -54,7 +54,9 @@ _exclude:
   # `web` tests its own entry point in `tests/test_<package>.py`.
   - "{% if archetype in ['library', 'web'] %}tests/test_entry_point.py{% endif %}"
   - "{% if archetype in ['library', 'web'] %}tests/entry_point.expected{% endif %}"
-  - "{% if archetype != 'library' %}tests/test_built_wheel.py{% endif %}"
+  # The built wheel: a `library` imports its public name from it, a `cli`
+  # installs it and runs the command it puts on PATH.
+  - "{% if archetype in ['backend', 'data-ml', 'web'] %}tests/test_built_wheel.py{% endif %}"
   # The web archetype's Django project: its settings, routes, the ASGI
   # application the entry point serves, the pre-deploy step, and Django's
   # command line.

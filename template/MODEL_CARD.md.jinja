@@ -14,6 +14,10 @@ the model. Keep it true when you change the model or the data.
 - **How it is saved:** `model.skops`, in the skops format. Load it with
   `skops.io.load("model.skops")`, which refuses any type it was not told
   to trust. Never a pickle: loading one runs whatever code is inside it.
+  Load it with the scikit-learn version the results name: another version
+  may refuse the file or answer differently.
+- **How to make it again:** the results name the commit and the seed. The
+  same code, data and seed give the same model.
 
 ## The training data
 
