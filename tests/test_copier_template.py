@@ -99,6 +99,9 @@ def test_security_md_names_an_issue_on_a_private_repository(tmp_path: Path) -> N
     assert "Do not open a public issue" not in section
     # Named only as what to turn on before the repository goes public.
     assert "repos/someone/probe/private-vulnerability-reporting" in section
+    # Turned on after the repository is public: a private one answers 404.
+    before = section.index("Before it is made public")
+    assert section.index("Once it is\npublic, turn that form on") > before
     answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
     assert re.search(r"^visibility: private$", answers, re.M), "an update would lose the answer"
 
