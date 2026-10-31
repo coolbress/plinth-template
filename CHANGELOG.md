@@ -6,6 +6,13 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- `docs/agents/issue-tracker.md` says how an issue title is written: one
+  sentence saying what the issue does, not a pull request's `type(scope):`
+  form (coolbress/plinth#746). A ticket cut from a spec keeps its id and
+  original title in `## Parent`, and the task form's `Parent` field says so
+  on both hosts.
+
 ## [1.32.0] - 2026-10-30
 
 The domain glossary is now `GLOSSARY.md`, the name Matt Pocock's skills

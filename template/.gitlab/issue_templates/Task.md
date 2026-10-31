@@ -1,6 +1,6 @@
 ## Parent
 
-<!-- The spec or map this comes from, as #N. Leave empty for a standalone task. -->
+<!-- The spec or map this comes from, as #N; a ticket cut from a spec adds its id and original title, such as #12 T6.16 ci(release): trusted publishing. Leave empty for a standalone task. -->
 
 ## What to build
 
