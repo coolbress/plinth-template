@@ -2228,6 +2228,31 @@ def test_task_form_asks_what_done_means(rendered: Path) -> None:
     assert "- [ ]" in field
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_issue_title_is_a_sentence_and_a_spec_ticket_keeps_its_id(
+    tmp_path: Path, host: str
+) -> None:
+    """An issue title is a sentence, not a pull request's `type(scope):` form,
+    and a ticket cut from a spec keeps its id and original title beside the
+    parent's `#N` (plinth #746), on both hosts."""
+    out = render(tmp_path / host, host=host)
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    assert "- **Title**: one sentence saying what the issue does" in tracker
+    change = "pull request" if host == "github" else "merge request"
+    assert f"Not a {change}'s `type(scope):` form" in tracker
+    assert "- **A ticket from a spec or plan**: keep its id" in tracker
+    assert "in `## Parent`, beside the parent's `#N`" in tracker
+    if host == "github":
+        form = yaml.safe_load(
+            (out / ".github" / "ISSUE_TEMPLATE" / "task.yml").read_text(encoding="utf-8")
+        )
+        parent = {f.get("id"): f for f in form["body"]}["parent"]["attributes"]["description"]
+    else:
+        parent = (out / ".gitlab" / "issue_templates" / "Task.md").read_text(encoding="utf-8")
+        parent = parent.split("## Parent", 1)[1].split("##", 1)[0]
+    assert "a ticket cut from a spec adds its id and original title" in parent
+
+
 @pytest.mark.parametrize("name", ["feature", "task"])
 def test_change_forms_ask_what_should_happen_and_what_is_not_decided(
     rendered: Path, name: str
