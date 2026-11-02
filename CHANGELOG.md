@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.35.0] - 2026-11-02
+
+A GitHub project can turn on the `third-party / review` caller with a
+`third_party_review` question instead of uncommenting `ci.yml` by hand, and
+`AGENTS.md` and `CONTRIBUTING.md` give the `Assisted-by` trailer one example
+and one line for each model the work used. The question defaults to off, so
+`copier update` needs no hands; an instance that wants the caller passes
+`--data third_party_review=true` once. `AGENTS.md` changed, so the plinth
+release that pins this one runs its eval suite.
+
 ### Added
 - A `third_party_review` question, GitHub only and off by default. On, it
   renders `.github/workflows/third-party.yml`, which calls plinth's
@@ -21,8 +31,9 @@ means `copier update` on an instance needs hands.
   (coolbress/plinth-template#163). The example lived only in a comment of the
   pull-request and merge-request templates, which a session writing the
   description through `gh pr create --body` or `glab mr create --description`
-  never sees, and sessions named the same tool three ways. The templates' example now agrees. An existing project
-  gets it through `/plinth:template-update`.
+  never sees, and sessions named the same tool three ways. The templates'
+  example now agrees. An existing project gets it through
+  `/plinth:template-update`.
 
 ## [1.34.0] - 2026-11-02
 
