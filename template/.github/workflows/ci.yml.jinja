@@ -125,6 +125,12 @@ jobs:
 {%- endif %}
 {%- endif %}
 
+{% if third_party_review -%}
+# The third-party review check, `third-party / review`, is in
+# `.github/workflows/third-party.yml`, called at the same commit as the `ci`
+# job above. It reports and is not required; requiring it is section 3 of
+# https://github.com/coolbress/plinth/blob/main/docs/how-to/configure-the-third-party-reviewer.md
+{% else -%}
 # Optional: a review signal from a third party on every ready pull request,
 # reported as the check `third-party / review`. Off by default: it needs a
 # reviewer account (the default is the Codex code reviewer, a ChatGPT
@@ -158,3 +164,4 @@ jobs:
 #       with:
 #         reviewer-logins: "chatgpt-codex-connector[bot]"   # whose signal counts
 #         ask-comment: "@codex review"                       # posted to summon it; empty never summons
+{% endif -%}

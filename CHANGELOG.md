@@ -6,6 +6,14 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `third_party_review` question, GitHub only and off by default. On, it
+  renders `.github/workflows/third-party.yml`, which calls plinth's
+  `pr-review.yml` at the commit the `ci` job calls, so each pull request gets
+  a `third-party / review` result. It reports and is not required: the
+  ruleset does not name it. `/plinth:new-project` passes it when the person
+  says a reviewer is already connected (coolbress/plinth#765).
+
 ### Changed
 - `AGENTS.md` and `CONTRIBUTING.md` give the `Assisted-by` trailer the
   Linux kernel's form with one example, `Assisted-by: Claude:claude-opus-5-5`,
