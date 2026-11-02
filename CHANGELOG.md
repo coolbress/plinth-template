@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `web` project answers a missing page from `404.html` and a server error
+  from `500.html` instead of Django's bare default, as Django's deployment
+  checklist asks, and every page carries the viewport `<meta>`, so a phone
+  draws it at its own width (coolbress/plinth-template#171). The pages now
+  extend one `base.html` that holds `lang`, the viewport and `<main>`. The
+  tests beside the existing page tests check both error pages and the
+  viewport on every page. An existing project gets it through
+  `/plinth:template-update`; a project that changed the three page
+  templates sees a conflict in them.
+
 ## [1.35.0] - 2026-11-02
 
 A GitHub project can turn on the `third-party / review` caller with a
