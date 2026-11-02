@@ -3294,7 +3294,11 @@ def test_web_readme_local_steps_bring_the_app_up(tmp_path: Path) -> None:
         assert done.returncode == 0, f"{line}\n{done.stdout}\n{done.stderr}"
 
     run(lines[0])
-    assert "DJANGO_DEBUG=1" in (out / ".env").read_text(encoding="utf-8")
+    written = (out / ".env").read_text(encoding="utf-8")
+    assert written.startswith("DJANGO_DEBUG=1\nDJANGO_SECRET_KEY="), written
+    # uv keeps the first of a repeated key: run again, the line leaves `.env` alone.
+    run(lines[0])
+    assert (out / ".env").read_text(encoding="utf-8") == written
     run(lines[1])
     password = "a long local password 1"  # noqa: S105
     run(
