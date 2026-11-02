@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- A `cli` project's command reads its command line with argparse:
+  `--help` and `--version` print and exit 0, a wrong option exits 2 with the
+  usage, and an optional name says who to greet. The result goes to stdout
+  and the JSON log lines to stderr (clig.dev); before, `<command> --help`
+  ignored its argument, printed a log line to stdout and exited 0
+  (coolbress/plinth-template#171). The run-it test and
+  `tests/entry_point.expected` are kept and now read stderr, and new tests
+  cover the four cases. An existing project gets it through
+  `/plinth:template-update`; one that rewrote `main()` or the entry-point
+  test sees a conflict there, and a script that read the log lines from
+  stdout reads them from stderr now.
+
 ## [1.35.0] - 2026-11-02
 
 A GitHub project can turn on the `third-party / review` caller with a
