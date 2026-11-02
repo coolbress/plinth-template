@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- `AGENTS.md` and `CONTRIBUTING.md` give the `Assisted-by` trailer the
+  Linux kernel's form with one example, `Assisted-by: Claude:claude-opus-5-5`,
+  and say one line for each model the work used
+  (coolbress/plinth-template#163). The example lived only in a comment of the
+  pull-request and merge-request templates, which a session writing the
+  description through `gh pr create --body` or `glab mr create --description`
+  never sees, and sessions named the same tool three ways. The templates' example now agrees. An existing project
+  gets it through `/plinth:template-update`.
+
 ## [1.34.0] - 2026-11-02
 
 `docs/agents/issue-tracker.md` says how to pick an issue's kind and that

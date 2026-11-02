@@ -2252,7 +2252,7 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     """A tool's default AI lines are dropped, a person's trailers kept (#34):
     an agent kept Claude Code's `Co-Authored-By` and generated-with line next
     to `Assisted-by`, reading "existing attribution is preserved" as leave it."""
-    contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    contributing = " ".join((rendered / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
     assert "the only line that marks AI" in contributing
     assert "Existing attribution is preserved" not in contributing
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
@@ -2260,6 +2260,30 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
     assert "Keep any\n" not in template
     assert "generated-with line" in template
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_assisted_by_has_one_example_and_one_line_per_model(tmp_path: Path, host: str) -> None:
+    """The example lived only in the description template's comment, which a
+    session writing through `gh pr create --body` or `glab mr create
+    --description` never sees; 67 lines named
+    the same tool three ways (#163). AGENTS.md and CONTRIBUTING.md give the
+    Linux kernel's form with one example, one line for each model the work
+    used, and the description template agrees."""
+    out = render(tmp_path / host, host=host)
+    example = "`Assisted-by: Claude:claude-opus-5-5`"
+    template = (
+        out / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        if host == "github"
+        else out / ".gitlab" / "merge_request_templates" / "Default.md"
+    )
+    for path in (out / "AGENTS.md", out / "CONTRIBUTING.md", template):
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert example in text, f"{path.name} has no Assisted-by example"
+        assert "one line for each model the work used" in text, path.name
+        assert "claude-fable-5-1" not in text, f"{path.name} keeps the old example"
+    agents = " ".join((out / "AGENTS.md").read_text(encoding="utf-8").split())
+    assert "the Linux kernel's form" in agents
 
 
 def test_text_others_write_is_data_and_named(rendered: Path, gitlab: Path) -> None:
