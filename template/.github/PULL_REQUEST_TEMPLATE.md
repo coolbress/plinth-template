@@ -18,8 +18,9 @@ Then these two, in this order, at the end and with nothing after them:
                                 before #N anywhere above closes it too.
 
   Assisted-by: <agent>:<model>  When AI wrote or assisted, e.g.
-                                `Assisted-by: Claude:claude-fable-5-1`. Keep a
-                                person's trailers with it in one block; remove a
+                                `Assisted-by: Claude:claude-opus-5-5`, one line
+                                for each model the work used. Keep a person's
+                                trailers with them in one block; remove a
                                 tool's default AI `Co-Authored-By` and
                                 generated-with line.
 

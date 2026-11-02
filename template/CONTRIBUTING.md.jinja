@@ -47,9 +47,11 @@ one narrow ignore in `pyproject.toml`, with its reason.
    yours. `--no-track` leaves the branch with no upstream: tracking
    `origin/main`, a bare `git push` refuses and the fix git prints first is
    `git push origin HEAD:main` — a push to `main`, not to your branch.
-3. Commit. A commit made with AI carries the trailer `Assisted-by: <agent>:<model>`,
-   the only line that marks AI: remove a tool's default `Co-Authored-By` for the
-   AI and its generated-with line. A person who co-wrote the change keeps their
+3. Commit. A commit made with AI carries the trailer `Assisted-by: <agent>:<model>`
+   (the Linux kernel's form, e.g. `Assisted-by: Claude:claude-opus-5-5`), one
+   line for each model the work used. `Assisted-by` is the only line that
+   marks AI: remove a tool's default `Co-Authored-By` for the AI and its
+   generated-with line. A person who co-wrote the change keeps their
    `Co-authored-by`.
 {% if host == 'gitlab' %}4. Open a merge request. Its title is `type(scope): summary`, checked by
    `pr-title` (a `Draft:` prefix is left out);{% else %}4. Open a pull request. Its title is `type(scope): summary`, checked by

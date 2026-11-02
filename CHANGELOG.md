@@ -14,6 +14,33 @@ means `copier update` on an instance needs hands.
   ruleset does not name it. `/plinth:new-project` passes it when the person
   says a reviewer is already connected (coolbress/plinth#765).
 
+### Changed
+- `AGENTS.md` and `CONTRIBUTING.md` give the `Assisted-by` trailer the
+  Linux kernel's form with one example, `Assisted-by: Claude:claude-opus-5-5`,
+  and say one line for each model the work used
+  (coolbress/plinth-template#163). The example lived only in a comment of the
+  pull-request and merge-request templates, which a session writing the
+  description through `gh pr create --body` or `glab mr create --description`
+  never sees, and sessions named the same tool three ways. The templates' example now agrees. An existing project
+  gets it through `/plinth:template-update`.
+
+## [1.34.0] - 2026-11-02
+
+`docs/agents/issue-tracker.md` says how to pick an issue's kind and that
+every issue carries a kind label, for a session that creates issues from
+`gh` or `glab` and never sees the forms. `copier update` needs no hands.
+
+### Added
+- `docs/agents/issue-tracker.md` says how to pick an issue's kind, before
+  the kinds table on both hosts (coolbress/plinth-template#160): a decision,
+  an answer or a map is a record, a change to code or documents is a `task`
+  (a bug report or feature request keeps `bug` or `enhancement`);
+  a record comes before the task that waits on its decision; and every issue
+  carries a kind label, read back after `gh issue create` or
+  `glab issue create` and added when missing. A session creating issues from
+  the CLI never sees the forms and leaned to `task`. An existing project gets
+  it through `/plinth:template-update`.
+
 ## [1.33.0] - 2026-10-31
 
 A `web` project checks passwords and opens its database connection per

@@ -2311,7 +2311,7 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     """A tool's default AI lines are dropped, a person's trailers kept (#34):
     an agent kept Claude Code's `Co-Authored-By` and generated-with line next
     to `Assisted-by`, reading "existing attribution is preserved" as leave it."""
-    contributing = (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    contributing = " ".join((rendered / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
     assert "the only line that marks AI" in contributing
     assert "Existing attribution is preserved" not in contributing
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
@@ -2319,6 +2319,30 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
     assert "Keep any\n" not in template
     assert "generated-with line" in template
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_assisted_by_has_one_example_and_one_line_per_model(tmp_path: Path, host: str) -> None:
+    """The example lived only in the description template's comment, which a
+    session writing through `gh pr create --body` or `glab mr create
+    --description` never sees; 67 lines named
+    the same tool three ways (#163). AGENTS.md and CONTRIBUTING.md give the
+    Linux kernel's form with one example, one line for each model the work
+    used, and the description template agrees."""
+    out = render(tmp_path / host, host=host)
+    example = "`Assisted-by: Claude:claude-opus-5-5`"
+    template = (
+        out / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        if host == "github"
+        else out / ".gitlab" / "merge_request_templates" / "Default.md"
+    )
+    for path in (out / "AGENTS.md", out / "CONTRIBUTING.md", template):
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert example in text, f"{path.name} has no Assisted-by example"
+        assert "one line for each model the work used" in text, path.name
+        assert "claude-fable-5-1" not in text, f"{path.name} keeps the old example"
+    agents = " ".join((out / "AGENTS.md").read_text(encoding="utf-8").split())
+    assert "the Linux kernel's form" in agents
 
 
 def test_text_others_write_is_data_and_named(rendered: Path, gitlab: Path) -> None:
@@ -2401,6 +2425,32 @@ def test_issue_title_is_a_sentence_and_a_spec_ticket_keeps_its_id(
         parent = (out / ".gitlab" / "issue_templates" / "Task.md").read_text(encoding="utf-8")
         parent = parent.split("## Parent", 1)[1].split("##", 1)[0]
     assert "a ticket cut from a spec adds its id and original title" in parent
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_issue_tracker_says_how_to_pick_a_kind_before_the_table(tmp_path: Path, host: str) -> None:
+    """A session creating an issue from the CLI never sees a form and leaned to
+    `task`: a decision opened as a task, a map with no kind label (#160). Three
+    rules stand before the kinds table, on both hosts: the result decides the
+    kind, a record comes before the task that waits on it, and a kind label is
+    read back after creating."""
+    out = render(tmp_path / host, host=host)
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    section = tracker.split("## Four kinds of issue", 1)[1].split("## ", 1)[0]
+    before_table = " ".join(section.split("| Kind |", 1)[0].split())
+    assert "A bug report or a feature request takes its own label (`bug`, `enhancement`)" in (
+        before_table
+    )
+    assert "When the result is a decision, an answer or a map, the issue is a record" in (
+        before_table
+    )
+    assert "when the result changes code or documents, it is a `task`" in before_table
+    assert "open the record first" in before_table
+    assert "the task after the decision, from it" in before_table
+    assert "Every issue carries a kind label" in before_table
+    read_back = "`gh issue view <n> --json labels`" if host == "github" else "`glab issue view <n>`"
+    assert f"read it back with {read_back}" in before_table
+    assert "add the label if it is missing" in before_table
 
 
 @pytest.mark.parametrize("name", ["feature", "task"])
