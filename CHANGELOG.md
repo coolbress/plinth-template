@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.34.0] - 2026-11-02
+
+`docs/agents/issue-tracker.md` says how to pick an issue's kind and that
+every issue carries a kind label, for a session that creates issues from
+`gh` or `glab` and never sees the forms. `copier update` needs no hands.
+
 ### Added
 - `docs/agents/issue-tracker.md` says how to pick an issue's kind, before
   the kinds table on both hosts (coolbress/plinth-template#160): a decision,
