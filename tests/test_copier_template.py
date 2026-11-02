@@ -2344,6 +2344,32 @@ def test_issue_title_is_a_sentence_and_a_spec_ticket_keeps_its_id(
     assert "a ticket cut from a spec adds its id and original title" in parent
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_issue_tracker_says_how_to_pick_a_kind_before_the_table(tmp_path: Path, host: str) -> None:
+    """A session creating an issue from the CLI never sees a form and leaned to
+    `task`: a decision opened as a task, a map with no kind label (#160). Three
+    rules stand before the kinds table, on both hosts: the result decides the
+    kind, a record comes before the task that waits on it, and a kind label is
+    read back after creating."""
+    out = render(tmp_path / host, host=host)
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    section = tracker.split("## Four kinds of issue", 1)[1].split("## ", 1)[0]
+    before_table = " ".join(section.split("| Kind |", 1)[0].split())
+    assert "A bug report or a feature request takes its own label (`bug`, `enhancement`)" in (
+        before_table
+    )
+    assert "When the result is a decision, an answer or a map, the issue is a record" in (
+        before_table
+    )
+    assert "when the result changes code or documents, it is a `task`" in before_table
+    assert "open the record first" in before_table
+    assert "the task after the decision, from it" in before_table
+    assert "Every issue carries a kind label" in before_table
+    read_back = "`gh issue view <n> --json labels`" if host == "github" else "`glab issue view <n>`"
+    assert f"read it back with {read_back}" in before_table
+    assert "add the label if it is missing" in before_table
+
+
 @pytest.mark.parametrize("name", ["feature", "task"])
 def test_change_forms_ask_what_should_happen_and_what_is_not_decided(
     rendered: Path, name: str

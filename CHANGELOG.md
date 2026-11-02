@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- `docs/agents/issue-tracker.md` says how to pick an issue's kind, before
+  the kinds table on both hosts (coolbress/plinth-template#160): a decision,
+  an answer or a map is a record, a change to code or documents is a `task`
+  (a bug report or feature request keeps `bug` or `enhancement`);
+  a record comes before the task that waits on its decision; and every issue
+  carries a kind label, read back after `gh issue create` or
+  `glab issue create` and added when missing. A session creating issues from
+  the CLI never sees the forms and leaned to `task`. An existing project gets
+  it through `/plinth:template-update`.
+
 ## [1.33.0] - 2026-10-31
 
 A `web` project checks passwords and opens its database connection per
