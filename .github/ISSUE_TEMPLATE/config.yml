@@ -1,0 +1,5 @@
+# Blank issues stay enabled on purpose. Forcing a form for every note makes people
+# stop leaving notes; a one-line issue is better than none.
+# No contact_links: there is no forum or docs site to point at, and an empty link
+# is worse than no link.
+blank_issues_enabled: true
