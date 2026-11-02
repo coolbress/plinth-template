@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- A `data-ml` project says where its data and notebooks live
+  (coolbress/plinth-template#171; coolbress/plinth#708 left it for a later
+  ticket). `data/` holds `raw/` and `processed/`, and its own `.gitignore`
+  keeps everything there out of git but `data/README.md`, which says where
+  each file came from. Notebooks are committed with their outputs cleared:
+  `tests/test_tree_hygiene.py` fails on one that still has them, in every
+  archetype, and `.ipynb_checkpoints/` is ignored. A test places files where
+  a person puts them and asks git which are ignored. An existing project
+  gets it through `/plinth:template-update`; data already committed under
+  `data/` stays tracked until `git rm --cached` removes it.
+
 ## [1.35.0] - 2026-11-02
 
 A GitHub project can turn on the `third-party / review` caller with a

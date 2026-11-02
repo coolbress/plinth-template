@@ -10,8 +10,10 @@ the problem is when it is committed.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -96,4 +98,28 @@ def test_personal_claude_settings_are_not_tracked() -> None:
     assert not personal, (
         f"personal settings are tracked: {personal}\n"
         "One person's approvals reach everyone. Add it to .gitignore and `git rm --cached` it."
+    )
+
+
+def test_no_notebook_is_committed_with_outputs() -> None:
+    """A notebook is committed with its outputs cleared.
+
+    Outputs are what a run printed or drew: they bloat every diff, they hide
+    the change to the code beneath a change to a picture, and a printed table
+    can carry the data `data/` keeps out of git. In Jupyter, clear them with
+    Edit > Clear Outputs of All Cells, then save, before committing.
+    """
+    run = [
+        p
+        for p in tracked()
+        if p.endswith(".ipynb")
+        and Path(p).is_file()
+        and any(
+            cell.get("outputs") or cell.get("execution_count") is not None
+            for cell in json.loads(Path(p).read_text(encoding="utf-8")).get("cells", [])
+        )
+    ]
+    assert not run, (
+        f"notebooks committed with outputs: {run}\n"
+        "Clear them (Edit > Clear Outputs of All Cells), save, and commit again."
     )

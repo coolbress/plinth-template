@@ -1291,6 +1291,101 @@ def test_data_ml_gets_the_model_on_either_host(tmp_path: Path, host: str) -> Non
     assert "## The model" in (out / "README.md").read_text(encoding="utf-8")
 
 
+def _git_in(out: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],  # noqa: S607
+        cwd=out,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "LC_ALL": "C"},
+    )
+
+
+def test_data_ml_keeps_data_out_of_git_but_says_where_it_lives(tmp_path: Path) -> None:
+    """Where data and notebooks live (#171; coolbress/plinth#708 left it for
+    later): everything under `data/` stays out of git except the README that
+    says what is there, a notebook is committed and its checkpoints are not.
+    The rules are read by git itself, on files placed where a person puts them."""
+    out = render(tmp_path / "dml", archetype="data-ml")
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "## Data and notebooks" in readme
+    assert "outputs cleared" in readme
+    assert (out / "data" / "README.md").is_file()
+    assert _git_in(out, "init", "-q").returncode == 0
+    placed = {
+        "data/raw/survey.csv": True,
+        "data/raw/nested/images/a.png": True,
+        "data/processed/train.parquet": True,
+        "data/big-download.zip": True,
+        "notebooks/.ipynb_checkpoints/explore-checkpoint.ipynb": True,
+        "data/README.md": False,
+        "data/.gitignore": False,
+        "notebooks/explore.ipynb": False,
+    }
+    for name in placed:
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
+        if not (out / name).exists():
+            (out / name).write_text("x\n", encoding="utf-8")
+    for name, ignored in placed.items():
+        found = _git_in(out, "check-ignore", "-q", "--no-index", name).returncode == 0
+        assert found is ignored, f"{name}: ignored={found}, expected {ignored}"
+    assert _git_in(out, "add", "-A").returncode == 0
+    staged = set(_git_in(out, "diff", "--cached", "--name-only").stdout.split())
+    assert {"data/README.md", "data/.gitignore", "notebooks/explore.ipynb"} <= staged
+    assert not {n for n, ignored in placed.items() if ignored} & staged
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_notebook_committed_with_outputs_fails_the_tree_check(tmp_path: Path) -> None:
+    """The notebooks line is held by a test, not left to memory: a committed
+    notebook with an output fails `tests/test_tree_hygiene.py`, cleared it passes."""
+    out = render(tmp_path / "nb", archetype="data-ml")
+    cell: dict[str, Any] = {"cell_type": "code", "metadata": {}, "source": ["1 + 1"]}
+    notebook = out / "notebooks" / "explore.ipynb"
+    notebook.parent.mkdir()
+
+    def commit(outputs: list[Any], count: int | None) -> subprocess.CompletedProcess[str]:
+        nb = {
+            "cells": [cell | {"outputs": outputs, "execution_count": count}],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        notebook.write_text(json.dumps(nb), encoding="utf-8")
+        assert _git_in(out, "add", "-A").returncode == 0
+        assert _git_in(out, "commit", "-qm", "nb").returncode == 0
+        return subprocess.run(
+            ["uv", "run", "--quiet", "pytest", "-q", "tests/test_tree_hygiene.py"],  # noqa: S607
+            cwd=out,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    assert _git_in(out, "init", "-q").returncode == 0
+    shown = [
+        {
+            "output_type": "execute_result",
+            "data": {"text/plain": ["2"]},
+            "metadata": {},
+            "execution_count": 1,
+        }
+    ]
+    dirty = commit(shown, 1)
+    assert dirty.returncode == 1, dirty.stdout
+    assert "notebooks/explore.ipynb" in dirty.stdout
+    clean = commit([], None)
+    assert clean.returncode == 0, clean.stdout
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "web"])
+def test_only_data_ml_gets_the_data_folder(tmp_path: Path, archetype: str) -> None:
+    out = render(tmp_path, archetype=archetype)
+    assert not (out / "data").exists()
+    assert "## Data and notebooks" not in (out / "README.md").read_text(encoding="utf-8")
+
+
 # ── releasing a data-ml model (coolbress/plinth#716) ──────────────────────
 
 #: Formats that run code when they are loaded. No release carries one.
@@ -3115,7 +3210,12 @@ def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> 
             files < sets[r] for r in E2E_ARCHETYPES
         )
         assert covered, f"no representative for {reps}"
-    assert sets["data-ml"] - sets["backend"] == {"MODEL_CARD.md", "tests/test_train.py"}
+    assert sets["data-ml"] - sets["backend"] == {
+        "MODEL_CARD.md",
+        "tests/test_train.py",
+        "data/.gitignore",
+        "data/README.md",
+    }
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
@@ -3312,6 +3412,9 @@ def test_tree_hygiene_skips_outside_a_repository_in_git_s_own_language(rendered:
         "this git prints its messages in English for fr, ko and de, so the case this "
         "test needs cannot be built here and the skip's locale handling goes unchecked"
     )
+    # Every test in the file reads `git ls-files`, so every one skips.
+    hygiene = (rendered / "tests" / "test_tree_hygiene.py").read_text(encoding="utf-8")
+    every = hygiene.count("\ndef test_")
     for language in translated:
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "-q", "tests/test_tree_hygiene.py"],
@@ -3322,7 +3425,7 @@ def test_tree_hygiene_skips_outside_a_repository_in_git_s_own_language(rendered:
             env=_speaking(language),
         )
         assert done.returncode == 0, f"LANGUAGE={language}\n{done.stdout}\n{done.stderr}"
-        assert "3 skipped" in done.stdout, f"LANGUAGE={language}: {done.stdout}"
+        assert f"{every} skipped" in done.stdout, f"LANGUAGE={language}: {done.stdout}"
 
 
 def _git(cwd: Path, *args: str) -> None:
