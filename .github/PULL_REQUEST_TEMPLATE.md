@@ -16,6 +16,11 @@ Then these two, in this order, at the end and with nothing after them:
                                 `Closes` auto-closes, so the wrong verb closes
                                 unfinished work. A close, fix or resolve word
                                 before #N anywhere above closes it too.
+                                A change that reaches an instance is
+                                completed when plinth raises its pin to the
+                                release: `Part of #N`, or
+                                `Part of coolbress/plinth#N` when the issue is
+                                filed there.
 
   Assisted-by: <agent>:<model>  When AI wrote or assisted, e.g.
                                 `Assisted-by: Claude:claude-opus-5-5`, one line

@@ -13,28 +13,28 @@ found, how to reproduce it, and the version or commit you tested.
 | Acknowledgement | within 3 business days |
 | Fix for medium severity or higher | within 60 days |
 
-These are best-effort targets. The projects are maintained by one person with no
+These are best-effort targets. The project is maintained by one person with no
 on-call rotation, and this file does not promise what cannot be operated. If your
 report is urgent, say so in the report.
 
 ## Scope
 
-- `plinth` — the plugin, the reusable CI workflows, and the scripts that create
-  repositories and apply rulesets
-- `plinth-template` — the project template
-- `plinth-lab` — research and tooling; no runtime surface
+This repository: the project template under `template/` and what it renders, and
+the harness that tests it.
 
-Projects *generated* by the template are not covered here; report those to their
-own maintainers.
+The plugin, its reusable CI workflows and its scripts are reported to
+`coolbress/plinth`. A project *generated* by the template is covered only for
+what the template put in it; report the rest to that project's own maintainers.
 
 ## Supported versions
 
-The latest release of each repository. Older releases are not patched.
+The latest release. Older releases are not patched.
 
-## What these repositories do
+## What this repository does
 
 - Dependencies are pinned by lockfile; Dependabot opens weekly updates.
-- GitHub Actions are pinned to commit SHAs — tags are mutable and a supply-chain vector.
-- Secrets are never committed. `.env` is ignored; only `.env.example` is tracked.
+- GitHub Actions and `plinth_sha` are pinned to full commit SHAs — tags are mutable
+  and a supply-chain vector.
+- Secrets are never committed. `.env` is ignored.
 - `main` is protected: nothing merges without green CI.
 - No home-grown cryptography — standard libraries and vetted implementations only.
