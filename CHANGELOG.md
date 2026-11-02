@@ -6,6 +6,12 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+- A `web` project's `Dockerfile` said no framework was chosen; the image
+  serves the Django project with uvicorn, and the comment now says so
+  (coolbress/plinth-template#171). `backend` keeps the old line, which is
+  true of it. An existing project gets it through `/plinth:template-update`.
+
 ## [1.35.0] - 2026-11-02
 
 A GitHub project can turn on the `third-party / review` caller with a
