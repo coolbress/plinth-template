@@ -370,3 +370,21 @@ visibility:
   choices:
     Public: public
     Private: private
+
+# The third-party review check, `third-party / review` (plinth's
+# docs/how-to/configure-the-third-party-reviewer.md): `true` renders
+# `.github/workflows/third-party.yml`, which calls plinth's pr-review.yml at
+# `plinth_sha` on every pull request. It reports and is not required: the
+# ruleset `/plinth:new-project` raises does not name it, so a reviewer that
+# never comes leaves a red check, not a locked pull request. Requiring it is a
+# later step, plinth's scripts/upgrade-ruleset.sh, once it has reported
+# (coolbress/plinth#765). Recorded, so an update keeps it. GitHub only: the
+# check is a GitHub workflow.
+third_party_review:
+  type: bool
+  when: "{{ host == 'github' }}"
+  help: |
+    Is a code reviewer, such as Codex's, already connected to your GitHub
+    account? Yes adds the check `third-party / review` to every pull request.
+    It reports and is not required, so a pull request still merges without it.
+  default: false

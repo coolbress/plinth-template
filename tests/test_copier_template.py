@@ -867,6 +867,65 @@ def test_third_party_review_is_offered_but_off(rendered: Path) -> None:
     assert not (rendered / ".github" / "workflows" / "third-party.yml").exists()
 
 
+THIRD_PARTY = Path(".github") / "workflows" / "third-party.yml"
+
+
+def test_the_third_party_question_is_github_only_and_off_by_default() -> None:
+    """`/plinth:new-project` passes `third_party_review=true` only when the person
+    says a reviewer is connected (coolbress/plinth#765); unasked, it is off."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    q = cfg["third_party_review"]
+    assert q["type"] == "bool"
+    assert q["default"] is False
+    assert q["when"] == "{{ host == 'github' }}"
+
+
+def test_third_party_review_on_renders_the_caller_at_the_ci_pin(tmp_path: Path) -> None:
+    """On: the caller is a live workflow, at the commit the ci job calls, with the
+    job name the check name comes from, and read access only."""
+    out = render(tmp_path / "on", third_party_review=True)
+    caller = (out / THIRD_PARTY).read_text(encoding="utf-8")
+    flow = yaml.safe_load(caller)
+    job = flow["jobs"]["third-party"]
+    assert job["uses"] == f"coolbress/plinth/.github/workflows/pr-review.yml@{_plinth_sha()}"
+    assert job["secrets"] == {"summons-token": "${{ secrets.SUMMONS_TOKEN }}"}
+    assert flow["permissions"] == {"contents": "read", "pull-requests": "read"}
+    # PyYAML reads the key `on` as True.
+    triggers = flow[True]
+    assert triggers["pull_request"]["types"] == [
+        "opened",
+        "synchronize",
+        "reopened",
+        "ready_for_review",
+    ]
+    assert triggers["pull_request_review"]["types"] == ["submitted"]
+    assert flow["concurrency"] == {
+        "group": "third-party-${{ github.event.pull_request.number }}",
+        "cancel-in-progress": False,
+    }
+    assert "{{" not in caller.replace("${{", ""), "a jinja expression was left unrendered"
+    # ci.yml no longer carries the how-to-turn-it-on block, and says where it is.
+    ci = (out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "pr-review.yml" not in ci
+    assert "`.github/workflows/third-party.yml`" in ci
+    assert "is not required" in ci
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    recorded = re.search(r"^third_party_review: true$", answers, re.M)
+    assert recorded, "an update would lose the answer"
+
+
+def test_third_party_review_off_records_the_answer(rendered: Path) -> None:
+    answers = (rendered / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^third_party_review: false$", answers, re.M)
+
+
+def test_third_party_review_is_not_rendered_on_gitlab(tmp_path: Path) -> None:
+    out = render(tmp_path / "gl", host="gitlab", third_party_review=True)
+    assert not (out / ".github").exists()
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert "third_party_review" not in answers
+
+
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
 
 RELEASE = Path(".github") / "workflows" / "release.yml"
