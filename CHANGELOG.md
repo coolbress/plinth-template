@@ -38,6 +38,53 @@ means `copier update` on an instance needs hands.
   viewport on every page. An existing project gets it through
   `/plinth:template-update`; a project that changed the three page
   templates sees a conflict in them.
+- A `data-ml` project says where its data and notebooks live
+  (coolbress/plinth-template#171; coolbress/plinth#708 left it for a later
+  ticket). `data/` holds `raw/` and `processed/`, and its own `.gitignore`
+  keeps everything there out of git but `data/README.md`, which says where
+  each file came from. Notebooks are committed with their outputs cleared:
+  `tests/test_tree_hygiene.py` fails on one that still has them, in every
+  archetype, and `.ipynb_checkpoints/` is ignored. A test places files where
+  a person puts them and asks git which are ignored. An existing project
+  gets it through `/plinth:template-update`; data already committed under
+  `data/` stays tracked until `git rm --cached` removes it.
+- A ticket split across several pull or merge requests divides its
+  acceptance criteria in the open, and every description keeps its
+  not-verified line (coolbress/plinth-template#170). An audit of 69 merged
+  agent-written pull requests in a project made with plinth found the
+  misses in two places: a split ticket's pull requests left implicit which
+  criteria each met, and a closing one did not list what earlier ones had
+  met; and small fixes and docs-only changes dropped the not-verified line
+  when there was nothing to report. `AGENTS.md`, `CONTRIBUTING.md` step 5
+  and the pull-request and merge-request templates now say: each one of a
+  split says which criteria it meets and which it leaves to a later one,
+  the one that closes the issue lists every criterion with the one that met
+  it, and the line is always there, as `Not verified: nothing` when that is
+  true. A render test checks both rules on both hosts. An existing project
+  gets it through `/plinth:template-update`.
+
+### Changed
+- **A `cli` project's log lines move from stdout to stderr.** Before, the
+  command wrote its JSON log lines to stdout; now stdout carries only what
+  the command produces, and the log lines go to stderr (clig.dev). A
+  script, pipe or log collector that read them from stdout must read stderr
+  after the update: nothing fails, they simply stop arriving where they
+  were. `copier update` applies it without hands; a project that rewrote
+  `main()` or `tests/test_entry_point.py` sees a conflict there
+  (coolbress/plinth-template#171). An existing project gets it through
+  `/plinth:template-update`.
+- A `cli` project's command reads its command line with argparse:
+  `--help` and `--version` print and exit 0, a wrong option exits 2 with the
+  usage, and an optional name says who to greet. Before, `<command> --help`
+  ignored its argument, printed a log line and exited 0. The run-it test and
+  `tests/entry_point.expected` are kept and now read stderr, and new tests
+  cover the four cases.
+
+### Fixed
+- A `web` project's `Dockerfile` said no framework was chosen; the image
+  serves the Django project with uvicorn, and the comment now says so
+  (coolbress/plinth-template#171). `backend` keeps the old line, which is
+  true of it. An existing project gets it through `/plinth:template-update`.
 
 ### Changed
 - A project's release steps no longer tell the person to delete a `v*`

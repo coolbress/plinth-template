@@ -10,6 +10,8 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# Jupyter's autosaves beside a notebook; the notebook itself is committed
+.ipynb_checkpoints/
 
 # Coverage reports, from a local run or CI
 .coverage

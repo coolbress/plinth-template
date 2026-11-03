@@ -10,8 +10,10 @@ the problem is when it is committed.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -30,10 +32,15 @@ def tracked() -> list[str]:
     # The arguments are literals, so only S607 (partial path) applies, and an
     # absolute path would be worse: git lives in different places on CI and on
     # a laptop.
+    # `-z`: NUL between paths and none quoted. Without it git writes a path
+    # outside ASCII as `"notebooks/an\303\241lisis.ipynb"`, quotes included,
+    # and no check below would match it.
     done = subprocess.run(
-        ["git", "ls-files"],  # noqa: S607
+        ["git", "ls-files", "-z"],  # noqa: S607
         capture_output=True,
-        text=True,
+        # The paths are the bytes the file system holds, UTF-8 here; the
+        # locale's encoding, which `text=True` alone uses, may not be.
+        encoding="utf-8",
         check=False,
         # git translates its messages, so the skip below reads whatever
         # language the machine's git speaks. `LC_ALL=C` pins the message to
@@ -52,7 +59,7 @@ def tracked() -> list[str]:
         if "not a git repository" in done.stderr.lower():
             pytest.skip("not a git repository (a fresh render): nothing is tracked yet")
         raise AssertionError(f"`git ls-files` failed: {done.stderr.strip()}")
-    return [line for line in done.stdout.splitlines() if line]
+    return [path for path in done.stdout.split("\0") if path]
 
 
 def test_no_real_dotenv_is_tracked() -> None:
@@ -96,4 +103,28 @@ def test_personal_claude_settings_are_not_tracked() -> None:
     assert not personal, (
         f"personal settings are tracked: {personal}\n"
         "One person's approvals reach everyone. Add it to .gitignore and `git rm --cached` it."
+    )
+
+
+def test_no_notebook_is_committed_with_outputs() -> None:
+    """A notebook is committed with its outputs cleared.
+
+    Outputs are what a run printed or drew: they bloat every diff, they hide
+    the change to the code beneath a change to a picture, and a printed table
+    can carry the data `data/` keeps out of git. In Jupyter, clear them with
+    Edit > Clear Outputs of All Cells, then save, before committing.
+    """
+    run = [
+        p
+        for p in tracked()
+        if p.endswith(".ipynb")
+        and Path(p).is_file()
+        and any(
+            cell.get("outputs") or cell.get("execution_count") is not None
+            for cell in json.loads(Path(p).read_text(encoding="utf-8")).get("cells", [])
+        )
+    ]
+    assert not run, (
+        f"notebooks committed with outputs: {run}\n"
+        "Clear them (Edit > Clear Outputs of All Cells), save, and commit again."
     )
