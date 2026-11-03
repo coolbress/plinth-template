@@ -3349,6 +3349,119 @@ def test_web_entry_point_serves_render_s_own_host_only(tmp_path: Path) -> None:
             server.stdout.close()
 
 
+def _readme_block(readme: str, heading: str) -> tuple[str, list[str]]:
+    """The section under `heading` and the command lines of its first bash block,
+    each without its trailing comment."""
+    section = readme.split(f"\n{heading}\n", 1)[1].split("\n## ", 1)[0]
+    block = section.split("```bash\n", 1)[1].split("```", 1)[0]
+    return section, [re.sub(r"\s+# .*$", "", line) for line in block.splitlines() if line]
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_web_readme_local_steps_bring_the_app_up(tmp_path: Path) -> None:
+    """A fresh web render, the README's local steps run as written: before
+    them, `python -m <package>` with `DJANGO_DEBUG=1` refused for want of
+    production's settings and nothing said what else to do (#171). Two
+    lines are changed on the way: `createsuperuser` takes its answers from
+    the environment, having no terminal to ask in, and `runserver` gets a
+    free port instead of 8000. The URL the README names answers with the
+    log-in page, and the account just made logs in."""
+    import http.cookiejar
+    import signal
+    import socket
+    import urllib.parse
+    import urllib.request
+
+    out = render(tmp_path / "local", archetype="web")
+    section, lines = _readme_block(
+        (out / "README.md").read_text(encoding="utf-8"), "## Run it on your computer"
+    )
+    url = re.search(r"<(http://127\.0\.0\.1:8000/)>", section)
+    assert url, "the local steps do not say which URL to open"
+    assert [line.split()[-1] for line in lines[1:]] == ["migrate", "createsuperuser", "runserver"]
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    env.pop("VIRTUAL_ENV", None)
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, env=env, check=True)  # noqa: S607
+
+    def run(line: str, extra: dict[str, str] | None = None) -> None:
+        done = subprocess.run(  # noqa: S603
+            ["bash", "-c", line],  # noqa: S607
+            cwd=out,
+            env=env | (extra or {}),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 0, f"{line}\n{done.stdout}\n{done.stderr}"
+
+    run(lines[0])
+    written = (out / ".env").read_text(encoding="utf-8")
+    assert written.startswith("DJANGO_DEBUG=1\nDJANGO_SECRET_KEY="), written
+    # uv keeps the first of a repeated key: run again, the line leaves `.env` alone.
+    run(lines[0])
+    assert (out / ".env").read_text(encoding="utf-8") == written
+    run(lines[1])
+    password = "a long local password 1"  # noqa: S105
+    run(
+        f"{lines[2]} --noinput",
+        {
+            "DJANGO_SUPERUSER_USERNAME": "me",
+            "DJANGO_SUPERUSER_PASSWORD": password,
+            "DJANGO_SUPERUSER_EMAIL": "me@example.com",
+        },
+    )
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = subprocess.Popen(  # noqa: S603
+        ["bash", "-c", f"exec {lines[3]} --noreload 127.0.0.1:{port}"],  # noqa: S607
+        cwd=out,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        home = url.group(1).replace(":8000/", f":{port}/")
+        jar = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+        page = landed = ""
+        for _ in range(120):
+            try:
+                with opener.open(home, timeout=2) as r:
+                    page, landed = r.read().decode(), r.url
+                break
+            except OSError:
+                time.sleep(0.5)
+        assert "/accounts/login/" in landed, landed
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page)
+        assert token, page
+        form = {"username": "me", "password": password, "csrfmiddlewaretoken": token.group(1)}
+        request = urllib.request.Request(  # noqa: S310
+            landed, data=urllib.parse.urlencode(form).encode(), headers={"Referer": landed}
+        )
+        with opener.open(request, timeout=10) as r:
+            assert r.status == 200
+            assert urllib.parse.urlsplit(r.url).path == "/", r.url
+    finally:
+        os.killpg(server.pid, signal.SIGTERM)
+        server.wait(timeout=10)
+
+
+def test_dockerfile_comment_says_what_the_image_runs(tmp_path: Path, backend: Path) -> None:
+    """The web image serves Django under uvicorn; its Dockerfile said no
+    framework was chosen, which is true of `backend` only (#171)."""
+    web = (render(tmp_path / "web", archetype="web") / "Dockerfile").read_text(encoding="utf-8")
+    cmd = web.split("\nCMD ", 1)[0].rsplit("\n\n", 1)[1]
+    assert "No framework" not in web
+    assert "Django" in cmd, cmd
+    assert "uvicorn" in cmd, cmd
+    assert "No framework is chosen here." in (backend / "Dockerfile").read_text(encoding="utf-8")
+
+
 def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path) -> None:
     """What the first live deploy had to find out by hand (#105): the first
     account, the restore and its window, the wait and the real host."""

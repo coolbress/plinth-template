@@ -25,13 +25,43 @@ dependency review and the merge request checks. Pass them locally first.{% else 
 Pass them locally first. The list of required checks is the repository's
 ruleset, so it is not repeated here.{% endif %}
 
-{% if archetype in ['backend', 'data-ml', 'web'] %}## Configuration
+{% if archetype == 'web' %}## Run it on your computer
 
+The first time, after `uv sync --locked`, give this computer a `.env`: debug
+on, and a secret key of its own. With no `DATABASE_URL` the app keeps its
+data in `db.sqlite3` in this folder, a file for development only that is
+never committed; the hosted app uses Postgres. The first line writes `.env`
+only when there is none; if you already have one, put `DJANGO_DEBUG=1` and a
+`DJANGO_SECRET_KEY=` of your own in it by hand.
+
+```bash
+test -e .env || printf 'DJANGO_DEBUG=1\nDJANGO_SECRET_KEY=%s\n' "$(uv run python -c 'import secrets; print(secrets.token_urlsafe(50))')" > .env
+uv run --env-file .env python manage.py migrate           # make the database's tables
+uv run --env-file .env python manage.py createsuperuser   # your account: a name and a password
+uv run --env-file .env python manage.py runserver         # serve until Ctrl+C
+```
+
+Then open <http://127.0.0.1:8000/> in a browser and log in with that account;
+the admin is at <http://127.0.0.1:8000/admin/>. After the first time only the
+last line is needed, and `migrate` again when a change adds a migration.
+
+`python -m {{ package_name }}` is what the hosted app runs, not this: it refuses
+to start without production's settings, a fixed secret key, the allowed hosts
+and a database URL, so that a missing one is never served with a default.
+
+{% endif %}{% if archetype in ['backend', 'data-ml', 'web'] %}## Configuration
+
+{% if archetype == 'web' -%}
+[`.env.example`](.env.example) lists every setting the app reads, and `.env`
+holds this computer's values; [Run it on your computer](#run-it-on-your-computer)
+writes the two it needs, so do not copy `.env.example` over it.
+{%- else -%}
 Copy [`.env.example`](.env.example) to `.env` and fill in the values.
+{%- endif %}
 **`.env` is never committed.**
 {%- if archetype == 'web' %} Nothing reads `.env` by itself: run with
-`uv run --env-file .env python -m {{ package_name }}`, or
-`uv run --env-file .env python manage.py <command>`.
+`uv run --env-file .env python manage.py <command>`, as
+[Run it on your computer](#run-it-on-your-computer) does.
 
 On a new database, apply the migrations before the first start:
 `uv run --env-file .env python manage.py migrate`. `/healthz` does not touch
