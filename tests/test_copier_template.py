@@ -2443,6 +2443,30 @@ def test_assisted_by_has_one_example_and_one_line_per_model(tmp_path: Path, host
     assert "the Linux kernel's form" in agents
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
+    tmp_path: Path, host: str
+) -> None:
+    """An audit of 69 agent-written pull requests (#170): three of a split
+    ticket left the division of criteria implicit and a closing one did not
+    list what earlier ones had met; all four with no not-verified statement
+    were small, where with nothing to report the line was dropped."""
+    out = render(tmp_path / host, host=host)
+    noun = "pull request" if host == "github" else "merge request"
+    template = (
+        out / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        if host == "github"
+        else out / ".gitlab" / "merge_request_templates" / "Default.md"
+    )
+    for path in (out / "AGENTS.md", out / "CONTRIBUTING.md", template):
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert "which criteria it meets and which it leaves to a later one" in text, path.name
+        assert f"lists every criterion with the {noun} that met it" in text, path.name
+        assert "`Not verified: nothing`" in text, path.name
+        other = "merge request" if host == "github" else "pull request"
+        assert f"the {other} that met it" not in text, f"{path.name} names the other host"
+
+
 def test_text_others_write_is_data_and_named(rendered: Path, gitlab: Path) -> None:
     """Planted instructions were refused 24 of 24 times but named to the person
     11 of 24 (plinth #642); the line targets the report (#116)."""
