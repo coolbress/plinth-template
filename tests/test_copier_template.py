@@ -372,6 +372,163 @@ def test_web_archetype_image_check_serves_and_is_asked(tmp_path: Path) -> None:
     assert "docker run --rm" not in job
 
 
+# ── the image's known vulnerabilities (#172) ──────────────────────────────
+
+#: Days a high or critical finding with a published fix is reported before it
+#: fails `image`: measured, see the comment above the scan in ci.yml.
+GRACE_DAYS = 14
+
+
+def _image_ci_steps(out: Path) -> dict[str, dict[str, Any]]:
+    ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    steps = ci["jobs"]["image"]["steps"]
+    return {s.get("name") or s.get("uses") or s["run"]: s for s in steps}
+
+
+def _finding(
+    severity: str,
+    name: str,
+    *,
+    state: str = "fixed",
+    days_ago: int | None = 30,
+    kind: str = "deb",
+    cve: str = "CVE-2026-0001",
+) -> dict[str, Any]:
+    """One match as grype 0.121's JSON report writes it (read from a scan of
+    python:3.12-slim on 2026-11-03), with the fix's date `days_ago` days back."""
+    available: list[dict[str, str]] = []
+    if state == "fixed" and days_ago is not None:
+        when = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days_ago * 86400))
+        available = [{"version": "2.0-1", "date": when, "kind": "advisory"}]
+    fix: dict[str, Any] = {"versions": ["2.0-1"] if state == "fixed" else [], "state": state}
+    if available:
+        fix["available"] = available
+    return {
+        "vulnerability": {"id": cve, "severity": severity, "fix": fix},
+        "artifact": {"name": name, "version": "1.0-1", "type": kind},
+    }
+
+
+def _read_scan(
+    out: Path, matches: list[dict[str, Any]] | None, outcome: str = "success"
+) -> tuple[subprocess.CompletedProcess[str], str]:
+    """The verdict step as rendered, run with Python on a report holding `matches`
+    (none: grype wrote no report)."""
+    steps = _image_ci_steps(out)
+    (name,) = [n for n in steps if n.startswith("Read the scan")]
+    step = steps[name]
+    assert step["shell"] == "python"
+    report = out / "scan.json"
+    report.unlink(missing_ok=True)
+    if matches is not None:
+        descriptor = {"version": "0.121.0", "db": {"status": {"built": "2026-11-02T06:26:52Z"}}}
+        report.write_text(json.dumps({"matches": matches, "descriptor": descriptor}), "utf-8")
+    summary = out / "scan-summary.md"
+    summary.unlink(missing_ok=True)
+    env = {**os.environ, "SCAN": outcome, "GITHUB_STEP_SUMMARY": str(summary)}
+    env |= {k: v for k, v in step["env"].items() if k not in ("SCAN", "REPORT")}
+    env["REPORT"] = str(report)
+    done = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", step["run"]], env=env, capture_output=True, text=True, check=False
+    )
+    return done, summary.read_text(encoding="utf-8") if summary.exists() else ""
+
+
+@pytest.mark.parametrize("archetype", ["backend", "data-ml", "web"])
+def test_image_check_scans_the_built_image_with_a_pinned_scanner(
+    tmp_path: Path, archetype: str
+) -> None:
+    """After the image is shown to start, grype reads it from the docker
+    daemon. The binary is the release's, checked against a SHA256 written
+    here; its database is fetched at run time. A scan that does not finish is
+    reported, not failed: the step goes on, and the verdict step reads it."""
+    out = render(tmp_path, archetype=archetype)
+    steps = _image_ci_steps(out)
+    names = list(steps)
+    install = steps["Install grype (official release, SHA256 verified)"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", install["env"]["GRYPE_VERSION"])
+    assert re.fullmatch(r"[0-9a-f]{64}", install["env"]["GRYPE_SHA256"])
+    assert "sha256sum -c -" in install["run"]
+    scan = steps["Scan the image for known vulnerabilities"]
+    assert scan["continue-on-error"] is True
+    assert "grype docker:image-under-test" in scan["run"]
+    (verdict,) = [n for n in names if n.startswith("Read the scan")]
+    assert steps[verdict]["env"]["SCAN"] == "${{ steps.scan.outcome }}"
+    assert steps[verdict]["env"]["GRACE_DAYS"] == str(GRACE_DAYS)
+    assert "if" not in steps[verdict], "the verdict is skipped"
+    (started,) = [n for n in names if "first log line" in n]
+    order = [started, "Install grype (official release, SHA256 verified)"]
+    order += ["Scan the image for known vulnerabilities", verdict]
+    assert [n for n in names if n in order] == order
+
+
+def test_image_scan_passes_with_no_fixable_high_or_critical(backend: Path) -> None:
+    """What a fresh python:3.12-slim showed on 2026-11-03: dozens of high
+    findings Debian has not fixed or will not fix, and lower ones with a fix.
+    Neither fails; the unfixed high ones are listed, not hidden."""
+    matches = [
+        _finding("High", "libsystemd0", state="wont-fix"),
+        _finding("High", "libgnutls30", state="not-fixed"),
+        _finding("Medium", "pip", kind="python", days_ago=400),
+        _finding("Low", "python", kind="binary", days_ago=200),
+    ]
+    done, summary = _read_scan(backend, matches)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "- pass: image scan, no high or critical vulnerability with a fix" in summary
+    assert "grype 0.121.0" in summary
+    assert "libsystemd0" in summary
+    assert "libgnutls30" in summary
+    assert "::warning" not in done.stdout
+    assert "::error" not in done.stdout
+
+
+@pytest.mark.parametrize("days_ago", [0, 3, GRACE_DAYS, None])
+def test_image_scan_reports_a_recent_fix_without_failing(
+    backend: Path, days_ago: int | None
+) -> None:
+    """A fix published in the last 14 days, or one grype gives no date for,
+    is a warning that names the package, its fix and what to do: the base
+    image is rebuilt, and Dependabot raises its digest, after the fix exists."""
+    matches = [_finding("Critical", "libssl3t64", days_ago=days_ago, cve="CVE-2026-63073")]
+    done, summary = _read_scan(backend, matches)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "- not yet confirmed: image scan, " in summary
+    assert "libssl3t64 1.0-1 (fixed in 2.0-1" in summary
+    assert "CVE-2026-63073" in summary
+    assert "Dependabot" in summary
+    assert done.stdout.count("::warning::") == 1
+    assert "::error" not in done.stdout
+
+
+@pytest.mark.parametrize("severity", ["High", "Critical"])
+def test_image_scan_fails_on_a_fix_older_than_the_grace(backend: Path, severity: str) -> None:
+    """A fix public for more than 14 days that the image still lacks fails
+    the check, and the line says what raises it, for each kind of package."""
+    matches = [
+        _finding(severity, "perl-base", days_ago=GRACE_DAYS + 1),
+        _finding(severity, "django", kind="python", days_ago=60, cve="GHSA-xxxx-yyyy-zzzz"),
+        _finding("High", "libgnutls30", state="not-fixed"),
+    ]
+    done, summary = _read_scan(backend, matches)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "- fail: image scan, 2 " in summary
+    assert "perl-base 1.0-1 (fixed in 2.0-1" in summary
+    assert "django 1.0-1 (fixed in 2.0-1" in summary
+    assert "uv lock --upgrade-package" in summary
+    assert ".grype.yaml" in summary
+    assert done.stdout.count("::error::") == 1
+
+
+def test_image_scan_that_did_not_finish_is_not_yet_confirmed(backend: Path) -> None:
+    """The database comes over the network at run time; a failed fetch is not
+    a finding, and does not turn the required check red."""
+    for outcome, matches in (("failure", None), ("success", None)):
+        done, summary = _read_scan(backend, matches, outcome)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert "- not yet confirmed: image scan, grype did not finish" in summary
+        assert done.stdout.count("::warning::") == 1
+
+
 def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backend: Path) -> None:
     out = render(tmp_path / "web", archetype="web")
     django = (
@@ -1438,7 +1595,13 @@ def test_data_ml_release_runs_on_a_tag_only_and_uploads_no_pickle(
     create = _steps(data_ml, "publish")["Create the GitHub Release"]["run"]
     assert create.rstrip().endswith("$ASSETS SHA256SUMS"), create
     files = [*data["env"]["ASSETS"].split(), "SHA256SUMS"]
-    assert files == ["model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"]
+    assert files == [
+        "model.skops",
+        "metrics.json",
+        "MODEL_CARD.md",
+        "sbom.spdx.json",
+        "SHA256SUMS",
+    ]
     assert not [f for f in files if f.endswith(PICKLES)], f"the release uploads a pickle: {files}"
 
 
@@ -1481,6 +1644,7 @@ GOOD = {
     "model.skops": "model",
     "metrics.json": '{"accuracy": 0.97}\n',
     "MODEL_CARD.md": _card(MADE),
+    "sbom.spdx.json": '{"spdxVersion": "SPDX-2.3"}\n',
 }
 
 
@@ -1573,11 +1737,122 @@ def test_data_ml_release_without_a_signature_says_so_and_does_not_fail(data_ml: 
         done = _run_step(data_ml, "Say what was published", env, job="publish")
         assert done.returncode == 0, done.stdout + done.stderr
         text = summary.read_text(encoding="utf-8")
-        for name in ("model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"):
+        for name in (*GOOD, "SHA256SUMS"):
             assert f"https://github.com/someone/probe/releases/download/v0.1.0/{name}" in text
         assert "releases/latest/download/<name>" in text
         assert ("gh attestation verify model.skops --repo someone/probe" in text) is signed
         assert ("::notice title=Published without a signed record::" in done.stdout) is not signed
+
+
+# ── a software bill of materials with each release (#172) ─────────────────
+
+SBOM = "sbom.spdx.json"
+INSTALL_SYFT = "Install syft (official release, SHA256 verified)"
+
+
+def _all_release_steps(out: Path) -> list[tuple[str, dict[str, Any]]]:
+    return [(j, s) for j, job in _release(out)["jobs"].items() for s in job["steps"]]
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "data-ml"])
+def test_each_release_makes_an_sbom_with_a_pinned_syft_and_attaches_it(
+    tmp_path: Path, archetype: str
+) -> None:
+    """Every archetype that releases makes an SPDX SBOM with the same syft,
+    a release binary checked against a SHA256 written here, and the step
+    that creates the GitHub Release attaches it."""
+    out = render(tmp_path, archetype=archetype)
+    steps = _all_release_steps(out)
+    (install,) = [s for _, s in steps if s.get("name") == INSTALL_SYFT]
+    assert install["env"]["SYFT_VERSION"] == "1.55.0"
+    assert re.fullmatch(r"[0-9a-f]{64}", install["env"]["SYFT_SHA256"])
+    assert "sha256sum -c -" in install["run"]
+    made = [s for _, s in steps if "syft scan" in s.get("run", "")]
+    assert len(made) == 1
+    assert "-o spdx-json=" in made[0]["run"]
+    (create,) = [s for _, s in steps if s.get("name") == "Create the GitHub Release"]
+    attached = create["run"] + json.dumps(_release(out).get("env", {}))
+    assert SBOM in attached, create["run"]
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library"])
+def test_package_sbom_is_of_the_wheel_installed_and_never_goes_to_pypi(
+    tmp_path: Path, archetype: str
+) -> None:
+    """The wheel holds no list of what it installs, so the SBOM is of a fresh
+    environment with the built wheel installed at the lockfile's runtime
+    versions. It travels apart from `dist/`, which the publish job uploads
+    whole to PyPI, and PyPI refuses a file that is not a distribution."""
+    out = render(tmp_path, archetype=archetype)
+    build = _release(out)["jobs"]["build"]["steps"]
+    names = [s.get("name") or s.get("run") or s["uses"] for s in build]
+    sbom_step = "Make the SBOM of the wheel and what it installs"
+    (make,) = [s["run"] for s in build if s.get("name") == sbom_step]
+    assert "uv export --locked --no-dev --no-emit-project" in make
+    assert "dist/*.whl" in make
+    assert f"sbom/{SBOM}" in make
+    assert "dist/" not in make.split("syft scan", 1)[1]
+    assert names.index("uv build") < names.index(INSTALL_SYFT) < names.index(sbom_step)
+    uploads = [s["with"] for s in build if "upload-artifact" in s.get("uses", "")]
+    assert {u["name"]: u["path"] for u in uploads} == {"dist": "dist/", "sbom": "sbom/"}
+    release = _release(out)["jobs"]["github-release"]["steps"]
+    fetched = {s["with"]["name"] for s in release if "download-artifact" in s.get("uses", "")}
+    assert fetched == {"dist", "sbom"}
+    publish = _release(out)["jobs"]["publish"]["steps"]
+    assert [s["with"]["name"] for s in publish if "download-artifact" in s.get("uses", "")] == [
+        "dist"
+    ]
+    (create,) = [s for s in release if s.get("name") == "Create the GitHub Release"]
+    assert create["run"].rstrip().endswith(f"dist/* sbom/{SBOM}")
+
+
+def test_backend_sbom_is_of_the_pushed_image(backend: Path) -> None:
+    """Read from the image fetched by its pushed digest, after it started,
+    and handed to the job that creates the release."""
+    steps = _image_steps(backend)
+    names = list(steps)
+    make = steps["Make the SBOM of the pushed image"]
+    assert (
+        make["env"]["PUSHED"]
+        == steps["Pull the pushed image and read its first log line"]["env"]["PUSHED"]
+    )
+    assert 'syft scan "docker:$PUSHED"' in make["run"]
+    pulled = names.index("Pull the pushed image and read its first log line")
+    assert pulled < names.index(INSTALL_SYFT) < names.index("Make the SBOM of the pushed image")
+    upload = [s["with"] for s in steps.values() if "upload-artifact" in s.get("uses", "")]
+    assert upload == [{"name": "sbom", "path": "sbom/", "if-no-files-found": "error"}]
+    release = _release(backend)["jobs"]["github-release"]["steps"]
+    assert [s["with"]["name"] for s in release if "download-artifact" in s.get("uses", "")] == [
+        "sbom"
+    ]
+    summary = backend / "summary.md"
+    summary.unlink(missing_ok=True)
+    env = {
+        "REF": "ghcr.io/someone/backend:0.1.0",
+        "DIGEST": "sha256:" + "0" * 64,
+        "ATTESTED": "success",
+        "GITHUB_REPOSITORY": "someone/backend",
+        "GITHUB_STEP_SUMMARY": str(summary),
+    }
+    _run_image_step(backend, "Say what was published", env)
+    assert SBOM in summary.read_text(encoding="utf-8")
+
+
+def test_data_ml_sbom_is_of_the_training_environment_and_in_the_sums(data_ml: Path) -> None:
+    """A data-ml release publishes the model, not an image: its SBOM is of
+    the environment the model was trained in, the one loading it needs. It
+    is one of the release's files, so SHA256SUMS and its signed record
+    cover it."""
+    model = _steps(data_ml, "model")
+    names = list(model)
+    make = model["Make the SBOM of the environment the model was trained in"]["run"]
+    assert "syft scan dir:.venv" in make
+    assert f"release/{SBOM}" in make
+    order = ["Train the model", INSTALL_SYFT]
+    order += ["Make the SBOM of the environment the model was trained in"]
+    order += ["Check the files before anything is uploaded"]
+    assert [n for n in names if n in order] == order
+    assert SBOM in _release(data_ml)["env"]["ASSETS"].split()
 
 
 def test_data_ml_how_to_says_what_a_person_must_decide(data_ml: Path) -> None:

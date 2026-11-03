@@ -20,6 +20,31 @@ means `copier update` on an instance needs hands.
   All four answers are recorded. An existing project gets the questions
   through `/plinth:template-update` with no hands: unanswered, each keeps
   what the project has (its `SECURITY.md`, no code of conduct).
+- **The `image` check of a `backend`, `data-ml` or `web` project scans
+  the image it built** for known vulnerabilities, with grype 0.121.0, a
+  release binary checked against its SHA256; its database is fetched at
+  run time (coolbress/plinth-template#172). The check's summary lists every
+  high and critical finding. One whose fix has been published for more
+  than 14 days fails the check; a newer one is a warning, and one with no
+  fix is listed and never fails. A scan that does not finish is a warning.
+  Measured on 2026-11-03: `python:3.12-slim` rebuilt on 2026-11-02 had no
+  high or critical finding with a fix, the digest this template pinned
+  from 2026-09-07 had 64, and both had about 60 with none. The template's
+  base image moves to the 2026-11-02 digest. An existing project gets the
+  scan through `/plinth:template-update`; one whose base-image digest is
+  older than its Dependabot pull request sees `image` fail until that pull
+  request is merged, and a finding that does not apply goes in
+  `.grype.yaml` with the reason.
+- **Each release carries a software bill of materials, `sbom.spdx.json`**
+  (SPDX, made with syft 1.55.0, a release binary checked against its
+  SHA256; coolbress/plinth-template#172). A `cli` or `library` release
+  lists the built wheel installed with its runtime dependencies at the
+  versions `uv.lock` names; a `backend` release lists the image as pushed,
+  read by its digest; a `data-ml` release, which publishes a model and no
+  image, lists the environment the model was trained in, and `SHA256SUMS`
+  and its signed record cover it. No new action: both tools come from their
+  own releases, so the Actions allowlist `/plinth:new-project` sets is
+  unchanged. An existing project gets it through `/plinth:template-update`.
 - A `web` project's README has a "Run it on your computer" section: the
   two lines of `.env` for this computer (debug on, a secret key of its own),
   `manage.py migrate`, `createsuperuser` and `runserver`, and the URL to
