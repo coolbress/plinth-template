@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-11-03
+
+**The `image` check of a `backend`, `data-ml` or `web` project can now fail
+on a known vulnerability**: a high or critical finding whose fix has been out
+for more than 14 days fails it. Merging the open Dependabot pull request for
+the base image clears what the base image carries; a finding that does not
+apply is listed in `.grype.yaml` with its reason. Each release also carries
+an SBOM, `sbom.spdx.json`. No new action, so the Actions allowlist is
+unchanged, and no question changes, so `copier update` needs no hands.
+
 ### Added
 - **The `image` check of a `backend`, `data-ml` or `web` project scans
   the image it built** for known vulnerabilities, with grype 0.121.0, a
