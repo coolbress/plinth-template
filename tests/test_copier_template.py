@@ -3348,6 +3348,17 @@ def test_web_readme_local_steps_bring_the_app_up(tmp_path: Path) -> None:
         server.wait(timeout=10)
 
 
+def test_dockerfile_comment_says_what_the_image_runs(tmp_path: Path, backend: Path) -> None:
+    """The web image serves Django under uvicorn; its Dockerfile said no
+    framework was chosen, which is true of `backend` only (#171)."""
+    web = (render(tmp_path / "web", archetype="web") / "Dockerfile").read_text(encoding="utf-8")
+    cmd = web.split("\nCMD ", 1)[0].rsplit("\n\n", 1)[1]
+    assert "No framework" not in web
+    assert "Django" in cmd, cmd
+    assert "uvicorn" in cmd, cmd
+    assert "No framework is chosen here." in (backend / "Dockerfile").read_text(encoding="utf-8")
+
+
 def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path) -> None:
     """What the first live deploy had to find out by hand (#105): the first
     account, the restore and its window, the wait and the real host."""

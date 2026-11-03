@@ -25,6 +25,11 @@ means `copier update` on an instance needs hands.
   viewport on every page. An existing project gets it through
   `/plinth:template-update`; a project that changed the three page
   templates sees a conflict in them.
+### Fixed
+- A `web` project's `Dockerfile` said no framework was chosen; the image
+  serves the Django project with uvicorn, and the comment now says so
+  (coolbress/plinth-template#171). `backend` keeps the old line, which is
+  true of it. An existing project gets it through `/plinth:template-update`.
 
 ## [1.35.0] - 2026-11-02
 
