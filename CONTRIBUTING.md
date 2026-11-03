@@ -61,8 +61,11 @@ docs) is filed in coolbress/plinth, and the pull request here ends with
    `Assisted-by: <agent>:<model>`.
 3. Open a pull request. Its description becomes the body of the squash commit:
    what changed and why, how it was verified, and, when AI wrote or assisted,
-   the `Assisted-by:` trailer as the last line. Delete the template's comment
-   lines; GitHub keeps HTML comments in the squash message.
+   the `Assisted-by:` trailer as the last line. Delete the comment lines of
+   `.github/PULL_REQUEST_TEMPLATE.md`; GitHub keeps HTML comments in the
+   squash message. That file and `.github/ISSUE_TEMPLATE/` are this
+   repository's own, copied from `template/.github/` at v1.35.0 with this
+   repository's rules; a change under `template/` does not reach them.
 4. Before merging, read the description against the final diff: what changed
    and why, what was verified and what was not, as of the last commit. A
    review fix that changed the scope changes the description too, because
