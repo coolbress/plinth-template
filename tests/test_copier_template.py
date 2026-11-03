@@ -1337,12 +1337,15 @@ def test_data_ml_keeps_data_out_of_git_but_says_where_it_lives(tmp_path: Path) -
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
-def test_a_notebook_committed_with_outputs_fails_the_tree_check(tmp_path: Path) -> None:
+@pytest.mark.parametrize("name", ["explore.ipynb", "분석.ipynb"])
+def test_a_notebook_committed_with_outputs_fails_the_tree_check(tmp_path: Path, name: str) -> None:
     """The notebooks line is held by a test, not left to memory: a committed
-    notebook with an output fails `tests/test_tree_hygiene.py`, cleared it passes."""
+    notebook with an output fails `tests/test_tree_hygiene.py`, cleared it passes.
+    A name outside ASCII too: git quotes such a path unless asked for NUL-separated
+    output, and a quoted path matched no `.ipynb` suffix, so the check passed."""
     out = render(tmp_path / "nb", archetype="data-ml")
     cell: dict[str, Any] = {"cell_type": "code", "metadata": {}, "source": ["1 + 1"]}
-    notebook = out / "notebooks" / "explore.ipynb"
+    notebook = out / "notebooks" / name
     notebook.parent.mkdir()
 
     def commit(outputs: list[Any], count: int | None) -> subprocess.CompletedProcess[str]:
@@ -1374,7 +1377,7 @@ def test_a_notebook_committed_with_outputs_fails_the_tree_check(tmp_path: Path) 
     ]
     dirty = commit(shown, 1)
     assert dirty.returncode == 1, dirty.stdout
-    assert "notebooks/explore.ipynb" in dirty.stdout
+    assert f"notebooks/{name}" in dirty.stdout
     clean = commit([], None)
     assert clean.returncode == 0, clean.stdout
 

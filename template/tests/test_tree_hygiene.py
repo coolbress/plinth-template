@@ -32,10 +32,15 @@ def tracked() -> list[str]:
     # The arguments are literals, so only S607 (partial path) applies, and an
     # absolute path would be worse: git lives in different places on CI and on
     # a laptop.
+    # `-z`: NUL between paths and none quoted. Without it git writes a path
+    # outside ASCII as `"notebooks/an\303\241lisis.ipynb"`, quotes included,
+    # and no check below would match it.
     done = subprocess.run(
-        ["git", "ls-files"],  # noqa: S607
+        ["git", "ls-files", "-z"],  # noqa: S607
         capture_output=True,
-        text=True,
+        # The paths are the bytes the file system holds, UTF-8 here; the
+        # locale's encoding, which `text=True` alone uses, may not be.
+        encoding="utf-8",
         check=False,
         # git translates its messages, so the skip below reads whatever
         # language the machine's git speaks. `LC_ALL=C` pins the message to
@@ -54,7 +59,7 @@ def tracked() -> list[str]:
         if "not a git repository" in done.stderr.lower():
             pytest.skip("not a git repository (a fresh render): nothing is tracked yet")
         raise AssertionError(f"`git ls-files` failed: {done.stderr.strip()}")
-    return [line for line in done.stdout.splitlines() if line]
+    return [path for path in done.stdout.split("\0") if path]
 
 
 def test_no_real_dotenv_is_tracked() -> None:
