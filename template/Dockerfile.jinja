@@ -40,5 +40,10 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 
 USER app
 
+{% if archetype == 'web' -%}
+# The entry point is this package's __main__.py: it serves the Django project
+# with uvicorn on $PORT, after refusing to start without production's settings.
+{% else -%}
 # The entry point is this package's __main__.py. No framework is chosen here.
+{% endif -%}
 CMD ["python", "-m", "{{ package_name }}"]

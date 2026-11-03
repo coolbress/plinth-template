@@ -1,9 +1,14 @@
-"""What the pages carry for a screen reader, checked on the HTML Django serves.
+"""What the pages carry for a screen reader and a phone, checked on the HTML Django serves.
 
 axe-core, which `ci / web-audit` runs, reports a page with no `lang`, content
 outside a `<main>` landmark, or a field with no label. These read the same
 three facts from the served page, so a template that drops one fails here
-before a browser opens it.
+before a browser opens it. Every page also carries the viewport `<meta>`:
+without it a phone draws the page at desktop width, shrunk.
+
+The error pages are Django's deployment checklist: with `DEBUG` off, a
+missing page and a server error are answered from `404.html` and
+`500.html`, not Django's bare default.
 """
 
 from __future__ import annotations
@@ -13,7 +18,8 @@ from html.parser import HTMLParser
 
 import pytest
 from django.contrib.auth.models import User
-from django.test import Client
+from django.test import Client, RequestFactory
+from django.views.defaults import server_error
 
 #: What may sit outside `<main>`: the document's own head.
 HEAD = {"html", "head", "title", "meta", "link"}
@@ -31,6 +37,7 @@ class Page(HTMLParser):
         self.outside: list[str] = []
         self.fields: dict[str, str] = {}
         self.labelled: set[str] = set()
+        self.viewport = ""
         self.feed(html)
         self.close()
 
@@ -38,6 +45,8 @@ class Page(HTMLParser):
         a = {k: v or "" for k, v in attrs}
         if tag == "html":
             self.lang = a.get("lang", "")
+        elif tag == "meta" and a.get("name") == "viewport":
+            self.viewport = a.get("content", "")
         elif tag == "main":
             self.mains += 1
             self.depth += 1
@@ -56,13 +65,16 @@ class Page(HTMLParser):
         return [name for name, id_ in self.fields.items() if not id_ or id_ not in self.labelled]
 
 
-def check(html: str) -> None:
+def check(html: str, *, fields: bool = True) -> Page:
     page = Page(html)
     assert page.lang, "<html> has no lang attribute"
+    assert "width=device-width" in page.viewport, "no viewport <meta> for phones"
     assert page.mains == 1, f"{page.mains} <main> elements, not one"
     assert page.outside == [], f"outside <main>: {page.outside}"
-    assert page.fields, "no field on the page"
+    if fields:
+        assert page.fields, "no field on the page"
     assert page.unlabelled() == [], f"fields with no <label for>: {page.unlabelled()}"
+    return page
 
 
 def test_the_log_in_page(client: Client) -> None:
@@ -79,7 +91,8 @@ def test_the_notes_page_and_a_note(client: Client) -> None:
 
 
 FIELD = '<label for="n">Note</label><input id="n" name="text">'
-WHOLE = f'<html lang="en"><title>t</title><main>{FIELD}</main>'
+VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+WHOLE = f'<html lang="en">{VIEWPORT}<title>t</title><main>{FIELD}</main>'
 
 
 def test_a_whole_page_passes() -> None:
@@ -90,6 +103,7 @@ def test_a_whole_page_passes() -> None:
     ("html", "missing"),
     [
         (WHOLE.replace(' lang="en"', ""), "lang"),
+        (WHOLE.replace(VIEWPORT, ""), "viewport"),
         (WHOLE.replace("<main>", "").replace("</main>", ""), "<main>"),
         (WHOLE.replace("<main>", "<h1>Notes</h1><main>"), "outside"),
         (WHOLE.replace('<label for="n">Note</label>', ""), "label"),
@@ -99,3 +113,21 @@ def test_a_whole_page_passes() -> None:
 def test_a_page_missing_one_fails(html: str, missing: str) -> None:
     with pytest.raises(AssertionError, match=missing):
         check(html)
+
+
+@pytest.mark.django_db
+def test_a_missing_page_is_answered_from_404_html(client: Client) -> None:
+    client.force_login(User.objects.create_user("dana", password=secrets.token_urlsafe()))
+    response = client.get("/no-such-page/", secure=True)
+    assert response.status_code == 404
+    assert "404.html" in [t.name for t in response.templates]
+    check(response.content.decode(), fields=False)
+
+
+def test_a_server_error_is_answered_from_500_html() -> None:
+    """Django's handler renders `500.html` with no context, so it must stand alone."""
+    response = server_error(RequestFactory().get("/"))
+    assert response.status_code == 500
+    html = response.content.decode()
+    assert "<h1>Server Error (500)</h1>" not in html, "Django's bare default, not 500.html"
+    check(html, fields=False)
