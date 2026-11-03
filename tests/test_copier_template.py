@@ -2452,7 +2452,9 @@ def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
     list what earlier ones had met; all four with no not-verified statement
     were small, where with nothing to report the line was dropped."""
     out = render(tmp_path / host, host=host)
-    noun = "pull request" if host == "github" else "merge request"
+    noun, other = (
+        ("pull request", "merge request") if host == "github" else ("merge request", "pull request")
+    )
     template = (
         out / ".github" / "PULL_REQUEST_TEMPLATE.md"
         if host == "github"
@@ -2462,8 +2464,7 @@ def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
         text = " ".join(path.read_text(encoding="utf-8").split())
         assert "which criteria it meets and which it leaves to a later one" in text, path.name
         assert f"lists every criterion with the {noun} that met it" in text, path.name
-        assert "`Not verified: nothing`" in text, path.name
-        other = "merge request" if host == "github" else "pull request"
+        assert "always there, as `Not verified: nothing` when that is true" in text, path.name
         assert f"the {other} that met it" not in text, f"{path.name} names the other host"
 
 
