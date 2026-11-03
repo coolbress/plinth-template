@@ -6,6 +6,23 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+- **The `image` check of a `backend`, `data-ml` or `web` project scans
+  the image it built** for known vulnerabilities, with grype 0.121.0, a
+  release binary checked against its SHA256; its database is fetched at
+  run time (coolbress/plinth-template#172). The check's summary lists every
+  high and critical finding. One whose fix has been published for more
+  than 14 days fails the check; a newer one is a warning, and one with no
+  fix is listed and never fails. A scan that does not finish is a warning.
+  Measured on 2026-11-03: `python:3.12-slim` rebuilt on 2026-11-02 had no
+  high or critical finding with a fix, the digest this template pinned
+  from 2026-09-07 had 64, and both had about 60 with none. The template's
+  base image moves to the 2026-11-02 digest. An existing project gets the
+  scan through `/plinth:template-update`; one whose base-image digest is
+  older than its Dependabot pull request sees `image` fail until that pull
+  request is merged, and a finding that does not apply goes in
+  `.grype.yaml` with the reason.
+
 ## [1.36.0] - 2026-11-03
 
 **A `cli` project's log lines move from stdout to stderr**: a script that read
