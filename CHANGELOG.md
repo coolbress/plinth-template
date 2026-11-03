@@ -7,17 +7,21 @@ means `copier update` on an instance needs hands.
 ## [Unreleased]
 
 ### Changed
+- **A `cli` project's log lines move from stdout to stderr.** Before, the
+  command wrote its JSON log lines to stdout; now stdout carries only what
+  the command produces, and the log lines go to stderr (clig.dev). A
+  script, pipe or log collector that read them from stdout must read stderr
+  after the update: nothing fails, they simply stop arriving where they
+  were. `copier update` applies it without hands; a project that rewrote
+  `main()` or `tests/test_entry_point.py` sees a conflict there
+  (coolbress/plinth-template#171). An existing project gets it through
+  `/plinth:template-update`.
 - A `cli` project's command reads its command line with argparse:
   `--help` and `--version` print and exit 0, a wrong option exits 2 with the
-  usage, and an optional name says who to greet. The result goes to stdout
-  and the JSON log lines to stderr (clig.dev); before, `<command> --help`
-  ignored its argument, printed a log line to stdout and exited 0
-  (coolbress/plinth-template#171). The run-it test and
+  usage, and an optional name says who to greet. Before, `<command> --help`
+  ignored its argument, printed a log line and exited 0. The run-it test and
   `tests/entry_point.expected` are kept and now read stderr, and new tests
-  cover the four cases. An existing project gets it through
-  `/plinth:template-update`; one that rewrote `main()` or the entry-point
-  test sees a conflict there, and a script that read the log lines from
-  stdout reads them from stderr now.
+  cover the four cases.
 
 ## [1.35.0] - 2026-11-02
 
