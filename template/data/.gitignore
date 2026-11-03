@@ -1,0 +1,7 @@
+# Data stays out of git: it is large, it changes outside the code, and it can
+# hold personal information that a commit would keep in the history for good.
+# Only this file and README.md, which says what belongs here and where it
+# came from, are committed.
+*
+!.gitignore
+!README.md

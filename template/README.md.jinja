@@ -516,6 +516,20 @@ writes a copy of [`MODEL_CARD.md`](MODEL_CARD.md) with the results filled
 in. Replace the sample and the model in `src/{{ package_name }}/train.py`, and keep the
 card true: it asks whether the training data holds personal information.
 
+## Data and notebooks
+
+Data goes in [`data/`](data/README.md) and is never committed: `data/raw/`
+holds it as received, `data/processed/` what the code makes from it. Only
+`data/README.md` is committed, and it says where each file came from, so the
+next person can get it again. Files too large for git, a download or a
+dataset, belong there too.
+
+Notebooks go in `notebooks/` and are committed with their outputs cleared
+(in Jupyter, Edit > Clear Outputs of All Cells, then save): outputs bloat
+every diff and a printed table can carry the data `data/` keeps out of git.
+`tests/test_tree_hygiene.py` fails on a committed notebook that still has
+them. Code that a release needs moves from a notebook into `src/`.
+
 {% if host != 'gitlab' %}## Releasing
 
 A version tag (`v0.1.0`) runs the training again and publishes the three
