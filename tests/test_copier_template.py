@@ -4098,7 +4098,12 @@ def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
 
     out = render(tmp_path / "web-image", project_name="web.probe", archetype="web", owner="x")
     ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
-    steps = [step["run"] for step in ci["jobs"]["image"]["steps"] if "run" in step]
+    job = ci["jobs"]["image"]["steps"]
+    # The build and the start; the vulnerability scan after them fetches grype
+    # and its database, and its own tests run its verdict step (#172).
+    names = [step.get("name", "") for step in job]
+    scan = names.index("Install grype (official release, SHA256 verified)")
+    steps = [step["run"] for step in job[:scan] if "run" in step]
     assert len(steps) == 2, steps
     # The job's steps name the container and the image `image-under-test`.
     # Here that name becomes one this run made up, in every step and in the
