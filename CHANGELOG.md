@@ -6,6 +6,21 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.36.0] - 2026-11-03
+
+**A `cli` project's log lines move from stdout to stderr**: a script that read
+them from stdout reads stderr after the update (see Changed). Beyond that: a
+`web` project runs on your computer from its README and has 404 and 500
+pages and the viewport meta; a `cli` project's command has `--help` and
+`--version`; a `data-ml` project says where its data and notebooks live; a
+code of conduct can be asked for, and none is rendered (nor `SECURITY.md`)
+when the owner's `.github` repository publishes one; and a ticket split
+across pull requests divides its criteria, with the not-verified line always
+written. New questions default to what a project has today, so `copier
+update` needs no hands except where a project changed the files named
+below. `AGENTS.md` changed, so the plinth release that pins this one runs
+its eval suite.
+
 ### Added
 - A code of conduct, asked (coolbress/plinth#772): the new
   `code_of_conduct` question, off by default, renders the Contributor
