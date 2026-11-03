@@ -22,6 +22,16 @@ means `copier update` on an instance needs hands.
   older than its Dependabot pull request sees `image` fail until that pull
   request is merged, and a finding that does not apply goes in
   `.grype.yaml` with the reason.
+- **Each release carries a software bill of materials, `sbom.spdx.json`**
+  (SPDX, made with syft 1.55.0, a release binary checked against its
+  SHA256; coolbress/plinth-template#172). A `cli` or `library` release
+  lists the built wheel installed with its runtime dependencies at the
+  versions `uv.lock` names; a `backend` release lists the image as pushed,
+  read by its digest; a `data-ml` release, which publishes a model and no
+  image, lists the environment the model was trained in, and `SHA256SUMS`
+  and its signed record cover it. No new action: both tools come from their
+  own releases, so the Actions allowlist `/plinth:new-project` sets is
+  unchanged. An existing project gets it through `/plinth:template-update`.
 
 ## [1.36.0] - 2026-11-03
 
