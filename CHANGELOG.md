@@ -39,6 +39,20 @@ means `copier update` on an instance needs hands.
   `/plinth:template-update`; a project that changed the three page
   templates sees a conflict in them.
 
+### Changed
+- A `cli`, `library` or `backend` project's release steps no longer tell
+  the person to delete a `v*` tag: `/plinth:new-project` now raises a tag
+  ruleset for those archetypes that refuses to move or delete one
+  (coolbress/plinth#772), and on a test repository it refused the delete
+  the old text asked for. A wrong tag now stays and its version is used
+  up: the release workflow's messages and
+  `docs/how-to/publish-a-release.md` say to tag a version that has no tag
+  yet, and, for a PyPI publisher or a package link fixed afterwards, to
+  re-run the failed jobs. `data-ml` gets no tag ruleset, but its release
+  workflow shares the version check, so its two messages and how-to
+  bullets say the same. An existing project gets the new text through
+  `/plinth:template-update`.
+
 ## [1.35.0] - 2026-11-02
 
 A GitHub project can turn on the `third-party / review` caller with a

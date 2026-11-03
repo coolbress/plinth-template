@@ -112,13 +112,14 @@ Nothing is pushed until the checks before it have passed. The run says
 which step stopped.
 
 - **"The tag and the version differ."** The tag says one version,
-  `pyproject.toml` another. Decide which one is right. If the file is right,
-  delete the tag and push the right one. If the tag is right, change the
-  version in a pull request first, merge it, then delete the tag and push it
-  again. To delete a tag: `git push origin --delete v0.2.0`, then
-  `git tag -d v0.2.0`.
+  `pyproject.toml` another. The wrong tag stays: the repository's tag
+  ruleset (when plinth set one up) refuses to move or delete a `v*` tag, so
+  its version number is used up. If the file's version has no tag yet, tag
+  `origin/main` with it as in step 1. Otherwise raise the version in a pull
+  request to one with no tag, merge it, and tag that.
 - **"The tag is not on main."** The tag points at a commit that never went
-  through a pull request. Delete it and tag `origin/main` as in step 1.
+  through a pull request. It stays, as above: tag `origin/main` as in step
+  1, with a version that has no tag yet.
 - **"Run the image and read its first log line" failed.** The image builds
   but does not start. The `image` check on pull requests runs the same
   check, so the cause is usually something that changed outside one, such as
@@ -127,12 +128,12 @@ which step stopped.
   name already exists under the account and is not linked to this
   repository. On the package's page, **Package settings** > **Manage Actions
   access** > **Add repository**, choose this repository with the **Write**
-  role, then delete the tag and push it again.
+  role, then open the failed run and press **Re-run jobs** > **Re-run
+  failed jobs** (or `gh run rerun <run id> --failed`). The tag stays as it
+  is.
 
-Pushing the same tag again replaces the image under that version; the
-earlier one stays in the package, without a version, until you delete it.
-Deleting a tag turns its release page into a draft, so after pushing it
-again, delete the draft under **Releases**.
+A re-run pushes the image under that version again; an earlier one stays
+in the package, without a version, until you delete it.
 {% elif archetype == 'data-ml' -%}
 {%- set repo = (owner if owner else '<your GitHub account>') ~ '/' ~ project_name -%}
 # Publish a release of the model
@@ -304,13 +305,14 @@ Nothing is uploaded, and no release is made, until every check before the
 upload has passed. The run says which step stopped.
 
 - **"The tag and the version differ."** The tag says one version,
-  `pyproject.toml` another. Decide which one is right. If the file is right,
-  delete the tag and push the right one. If the tag is right, change the
-  version in a pull request first, merge it, then delete the tag and push it
-  again. To delete a tag: `git push origin --delete v0.2.0`, then
-  `git tag -d v0.2.0`.
+  `pyproject.toml` another. Leave the wrong tag: a repository with plinth's
+  tag ruleset refuses to move or delete a `v*` tag, so treat its version
+  number as used up. If the file's version has no tag yet, tag
+  `origin/main` with it as in step 1. Otherwise raise the version in a pull
+  request to one with no tag, merge it, and tag that.
 - **"The tag is not on main."** The tag points at a commit that never went
-  through a pull request. Delete it and tag `origin/main` as in step 1.
+  through a pull request. Leave it, as above: tag `origin/main` as in step
+  1, with a version that has no tag yet.
 - **"A file is missing" or "metrics.json is not a set of named numbers".**
   The training run did not write what a release publishes. Ask the agent to
   run `uv run python -m {{ package_name }} train` and look at `dist/model/`;
@@ -446,17 +448,20 @@ Nothing is uploaded until every check before the upload has passed. The run
 says which step stopped, in its summary.
 
 - **"The tag and the version differ."** The tag says one version,
-  `pyproject.toml` another. Decide which one is right. If the file is right,
-  delete the tag and push the right one. If the tag is right, change the
-  version in a pull request first, merge it, then delete the tag and push it
-  again. To delete a tag: `git push origin --delete v0.2.0`, then
-  `git tag -d v0.2.0`.
+  `pyproject.toml` another. The wrong tag stays: the repository's tag
+  ruleset (when plinth set one up) refuses to move or delete a `v*` tag, so
+  its version number is used up. If the file's version has no tag yet, tag
+  `origin/main` with it as in step 4. Otherwise raise the version in a pull
+  request to one with no tag, merge it, and tag that.
 - **"The tag is not on main."** The tag points at a commit that never went
-  through a pull request. Delete it and tag `origin/main` as in step 4.
+  through a pull request. It stays, as above: tag `origin/main` as in step
+  4, with a version that has no tag yet.
 - **"PyPI did not accept this release" and `invalid-publisher` in the log.**
   PyPI has no publisher that matches. Check every field of step 2 against
   this repository, for the right site (PyPI or TestPyPI), fix the one that
-  differs, then delete the tag and push it again.
+  differs, then open the failed run and press **Re-run jobs** > **Re-run
+  failed jobs** (or `gh run rerun <run id> --failed`). The tag stays as it
+  is.
 - **"File already exists".** That version was published before, and PyPI
   never takes the same version twice, even after a deletion. Raise the
   version (step 4.1) and tag again.

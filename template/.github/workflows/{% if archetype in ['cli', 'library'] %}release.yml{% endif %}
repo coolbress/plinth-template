@@ -45,7 +45,7 @@ jobs:
           tag="$GITHUB_REF_NAME"
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           if [ "$tag" != "v$version" ]; then
-            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. To release $version, tag a commit on main v$version. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it."
             exit 1
           fi
           echo "The tag $tag matches pyproject.toml's version $version."
@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."
@@ -105,7 +105,7 @@ jobs:
           {
             echo "### PyPI did not accept this release"
             echo
-            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then delete the tag and push it again."
+            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): the tag stays as it is."
             echo
             echo "If it says the file already exists, this version was published before: PyPI never takes a version twice. Raise the version in pyproject.toml and tag again."
             echo

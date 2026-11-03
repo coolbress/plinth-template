@@ -1049,7 +1049,11 @@ def test_a_tag_that_differs_from_pyproject_fails_and_says_which_to_change(
         assert "::error title=The tag and the version differ::" in said
         assert f'The tag is {tag}, but pyproject.toml says version = "0.1.0"' in said
         assert "Nothing was uploaded." in said
-        assert "push v0.1.0 instead" in said
+        assert "tag a commit on main v0.1.0" in said
+        # A v* tag cannot be deleted where plinth's tag ruleset is on
+        # (coolbress/plinth#772): the message never sends anyone to delete it.
+        assert "Leave this tag where it is" in said
+        assert "delete this tag" not in said.lower()
         assert "change version in pyproject.toml" in said
 
 
