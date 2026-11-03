@@ -2,7 +2,8 @@
 # when a version tag (`v1.2.3`) is pushed, with the run's own token and no
 # stored secret. Not a required check; no job is skipped with `if:`. On a
 # public repository the files also get a signed record (an attestation).
-# The person's steps: docs/how-to/publish-a-release.md.
+# Beside the model goes a software bill of materials (SBOM),
+# `sbom.spdx.json`. The person's steps: docs/how-to/publish-a-release.md.
 name: Release
 
 on:
@@ -20,7 +21,7 @@ concurrency:
 # What a release uploads besides SHA256SUMS. Never a pickle: loading one
 # runs whatever code it holds.
 env:
-  ASSETS: model.skops metrics.json MODEL_CARD.md
+  ASSETS: model.skops metrics.json MODEL_CARD.md sbom.spdx.json
 
 jobs:
   # A tag that fails here creates no release.
@@ -41,7 +42,7 @@ jobs:
           tag="$GITHUB_REF_NAME"
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           if [ "$tag" != "v$version" ]; then
-            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. To release $version, tag a commit on main v$version. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it."
             exit 1
           fi
           echo "The tag $tag matches pyproject.toml's version $version."
@@ -49,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."
@@ -79,6 +80,29 @@ jobs:
           package="$(basename "$(dirname "${found[0]}")")"
           uv sync --locked --no-dev
           uv run --locked --no-dev python -m "$package" train --out release
+      # A software bill of materials (SBOM) of the environment the model was
+      # trained in: uv.lock's runtime packages, the ones loading it needs.
+      # The release publishes the model, not an image, so this is what it
+      # was made with. One of the release's files: SHA256SUMS lists it and
+      # the signed record covers it.
+      - name: Install syft (official release, SHA256 verified)
+        env:
+          SYFT_VERSION: "1.55.0"
+          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/syft"; mkdir -p "$d"
+          f="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/$f"
+          echo "${SYFT_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" syft
+          echo "$d" >> "$GITHUB_PATH"
+      - name: Make the SBOM of the environment the model was trained in
+        run: |
+          set -euo pipefail
+          name="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["name"])')"
+          syft scan dir:.venv --source-name "$name" --source-version "${GITHUB_REF_NAME#v}" -o spdx-json=release/sbom.spdx.json
       - name: Check the files before anything is uploaded
         working-directory: release
         run: |

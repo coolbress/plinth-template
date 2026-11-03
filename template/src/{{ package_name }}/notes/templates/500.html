@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% comment %}Django renders this with no context and no request: only plain text and links here.{% endcomment %}
+{% block title %}Something went wrong{% endblock %}
+{% block main %}
+<h1>Something went wrong</h1>
+<p>The server hit an error on this page. Try again in a moment.</p>
+<p><a href="/">Back to the start</a></p>
+{% endblock %}

@@ -123,8 +123,131 @@ jobs:
           out="$(docker run --rm image-under-test)"
           printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
 {%- endif %}
+{%- raw %}
+      # Known vulnerabilities in the image that started: the base image's
+      # operating-system packages, Python itself, and the environment's
+      # Python packages. Dependabot raises the base image's digest; nothing
+      # else here read what that digest holds (coolbress/plinth-template#172).
+      #
+      # When it fails, measured on 2026-11-03 against python:3.12-slim:
+      # the digest this template pinned from 2026-09-07 had 64 high or
+      # critical findings with a published fix (OpenSSL, Perl, glibc, PCRE2,
+      # Python); the tag rebuilt on 2026-11-02 had none, and carried a Python
+      # fix first seen on 2026-10-29. Both had about 60 high findings Debian
+      # has not fixed or will not fix: those are listed, never failed, since
+      # nothing in this repository can remove them. A fix reaches this image
+      # in steps (the base image is rebuilt, then Dependabot's weekly run
+      # raises the digest, after its three-day wait), so a high or critical
+      # finding is a warning while its fix is 14 days old or less, and fails
+      # the check after that. A finding that does not apply goes in
+      # `.grype.yaml`, with the reason, as an `ignore` entry.
+      - name: Install grype (official release, SHA256 verified)
+        env:
+          GRYPE_VERSION: "0.121.0"
+          GRYPE_SHA256: "64e07133d3486115de647a66581461dccf5c732748a0a3119077395565f15519"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/grype"; mkdir -p "$d"
+          f="grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/$f"
+          echo "${GRYPE_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" grype
+          echo "$d" >> "$GITHUB_PATH"
+      # Its database comes over the network now. A scan that does not finish
+      # is reported by the next step and does not fail the check.
+      - name: Scan the image for known vulnerabilities
+        id: scan
+        continue-on-error: true
+        run: grype docker:image-under-test -o table -o "json=$RUNNER_TEMP/scan.json"
+      - name: Read the scan, and fail on a fix older than 14 days
+        shell: python
+        env:
+          SCAN: ${{ steps.scan.outcome }}
+          REPORT: ${{ runner.temp }}/scan.json
+          GRACE_DAYS: "14"
+        run: |
+          import datetime, json, os, sys
+
+          grace = int(os.environ["GRACE_DAYS"])
+          today = datetime.datetime.now(datetime.timezone.utc).date()
+          summary = open(os.environ.get("GITHUB_STEP_SUMMARY") or os.devnull, "a", encoding="utf-8")
+
+          def say(line):
+              summary.write(f"- {line}\n")
+              kind = {"fail": "error", "not yet confirmed": "warning"}.get(line.split(":", 1)[0])
+              if kind:
+                  print(f"::{kind}::" + line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+
+          summary.write("### Known vulnerabilities in the image\n\n")
+          try:
+              if os.environ["SCAN"] != "success":
+                  raise OSError
+              with open(os.environ["REPORT"], encoding="utf-8") as f:
+                  report = json.load(f)
+          except (OSError, ValueError):
+              say("not yet confirmed: image scan, grype did not finish (its database is fetched at run time; the scan step's log says why); a run where it finishes confirms it")
+              sys.exit(0)
+
+          late, recent, unfixed = {}, {}, {}
+          for m in report.get("matches") or []:
+              v, a = m["vulnerability"], m["artifact"]
+              if v.get("severity") not in ("Critical", "High"):
+                  continue
+              fix = v.get("fix") or {}
+              dates = [x["date"] for x in fix.get("available") or [] if x.get("date")]
+              since = min(dates) if dates else None
+              if fix.get("state") != "fixed":
+                  group = unfixed
+              elif since and (today - datetime.date.fromisoformat(since[:10])).days > grace:
+                  group = late
+              else:
+                  group = recent
+              row = group.setdefault((a["name"], a["version"], a.get("type", "")), {"ids": set(), "fixed": set(), "since": since, "severity": set()})
+              row["ids"].add(v["id"])
+              row["fixed"].update(fix.get("versions") or [])
+              row["severity"].add(v["severity"])
+              if since and (row["since"] is None or since < row["since"]):
+                  row["since"] = since
+
+          def named(group):
+              out = []
+              for (name, version, _), r in sorted(group.items()):
+                  when = f", since {r['since'][:10]}" if r["since"] else ", date not known"
+                  out.append(f"{name} {version} (fixed in {' or '.join(sorted(r['fixed']))}{when}: {', '.join(sorted(r['ids']))})")
+              return "; ".join(out)
+
+          how = ("a Debian package or Python itself is fixed by a newer base image: merge Dependabot's pull request that raises the digest in the Dockerfile, or raise it by hand; "
+                 "a Python package: `uv lock --upgrade-package <name>`; "
+                 "a finding that does not apply: an `ignore` entry with the reason in `.grype.yaml`")
+          desc = report.get("descriptor") or {}
+          built = ((desc.get("db") or {}).get("status") or {}).get("built", "unknown")[:10]
+          tool = f"grype {desc.get('version', '?')}, database built {built}"
+          count = lambda g: sum(len(r["ids"]) for r in g.values())
+          if late:
+              say(f"fail: image scan, {count(late)} high or critical vulnerabilities have had a fix for more than {grace} days: {named(late)}; {how} ({tool})")
+          if recent:
+              say(f"not yet confirmed: image scan, {count(recent)} high or critical vulnerabilities have a fix {grace} days old or less, or of no known date: {named(recent)}; reported and not blocking until the fix is {grace + 1} days old; {how} ({tool})")
+          if not late and not recent:
+              say(f"pass: image scan, no high or critical vulnerability with a fix ({tool}); {count(unfixed)} without a fix are listed below")
+
+          if unfixed or late or recent:
+              summary.write("\n| Fix | Severity | Package | Installed | Fixed in | Fix known since | Vulnerabilities |\n|---|---|---|---|---|---|---|\n")
+              for label, group in (("overdue", late), ("recent", recent), ("none", unfixed)):
+                  for (name, version, kind), r in sorted(group.items()):
+                      cells = [label, "/".join(sorted(r["severity"])), f"{name} ({kind})", version,
+                               " or ".join(sorted(r["fixed"])) or "-", (r["since"] or "-")[:10], ", ".join(sorted(r["ids"]))]
+                      summary.write("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |\n")
+          sys.exit(1 if late else 0)
+{%- endraw %}
 {%- endif %}
 
+{% if third_party_review -%}
+# The third-party review check, `third-party / review`, is in
+# `.github/workflows/third-party.yml`, called at the same commit as the `ci`
+# job above. It reports and is not required; requiring it is section 3 of
+# https://github.com/coolbress/plinth/blob/main/docs/how-to/configure-the-third-party-reviewer.md
+{% else -%}
 # Optional: a review signal from a third party on every ready pull request,
 # reported as the check `third-party / review`. Off by default: it needs a
 # reviewer account (the default is the Codex code reviewer, a ChatGPT
@@ -158,3 +281,4 @@ jobs:
 #       with:
 #         reviewer-logins: "chatgpt-codex-connector[bot]"   # whose signal counts
 #         ask-comment: "@codex review"                       # posted to summon it; empty never summons
+{% endif -%}
