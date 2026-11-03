@@ -372,6 +372,163 @@ def test_web_archetype_image_check_serves_and_is_asked(tmp_path: Path) -> None:
     assert "docker run --rm" not in job
 
 
+# ── the image's known vulnerabilities (#172) ──────────────────────────────
+
+#: Days a high or critical finding with a published fix is reported before it
+#: fails `image`: measured, see the comment above the scan in ci.yml.
+GRACE_DAYS = 14
+
+
+def _image_ci_steps(out: Path) -> dict[str, dict[str, Any]]:
+    ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    steps = ci["jobs"]["image"]["steps"]
+    return {s.get("name") or s.get("uses") or s["run"]: s for s in steps}
+
+
+def _finding(
+    severity: str,
+    name: str,
+    *,
+    state: str = "fixed",
+    days_ago: int | None = 30,
+    kind: str = "deb",
+    cve: str = "CVE-2026-0001",
+) -> dict[str, Any]:
+    """One match as grype 0.121's JSON report writes it (read from a scan of
+    python:3.12-slim on 2026-11-03), with the fix's date `days_ago` days back."""
+    available: list[dict[str, str]] = []
+    if state == "fixed" and days_ago is not None:
+        when = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days_ago * 86400))
+        available = [{"version": "2.0-1", "date": when, "kind": "advisory"}]
+    fix: dict[str, Any] = {"versions": ["2.0-1"] if state == "fixed" else [], "state": state}
+    if available:
+        fix["available"] = available
+    return {
+        "vulnerability": {"id": cve, "severity": severity, "fix": fix},
+        "artifact": {"name": name, "version": "1.0-1", "type": kind},
+    }
+
+
+def _read_scan(
+    out: Path, matches: list[dict[str, Any]] | None, outcome: str = "success"
+) -> tuple[subprocess.CompletedProcess[str], str]:
+    """The verdict step as rendered, run with Python on a report holding `matches`
+    (none: grype wrote no report)."""
+    steps = _image_ci_steps(out)
+    (name,) = [n for n in steps if n.startswith("Read the scan")]
+    step = steps[name]
+    assert step["shell"] == "python"
+    report = out / "scan.json"
+    report.unlink(missing_ok=True)
+    if matches is not None:
+        descriptor = {"version": "0.121.0", "db": {"status": {"built": "2026-11-02T06:26:52Z"}}}
+        report.write_text(json.dumps({"matches": matches, "descriptor": descriptor}), "utf-8")
+    summary = out / "scan-summary.md"
+    summary.unlink(missing_ok=True)
+    env = {**os.environ, "SCAN": outcome, "GITHUB_STEP_SUMMARY": str(summary)}
+    env |= {k: v for k, v in step["env"].items() if k not in ("SCAN", "REPORT")}
+    env["REPORT"] = str(report)
+    done = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", step["run"]], env=env, capture_output=True, text=True, check=False
+    )
+    return done, summary.read_text(encoding="utf-8") if summary.exists() else ""
+
+
+@pytest.mark.parametrize("archetype", ["backend", "data-ml", "web"])
+def test_image_check_scans_the_built_image_with_a_pinned_scanner(
+    tmp_path: Path, archetype: str
+) -> None:
+    """After the image is shown to start, grype reads it from the docker
+    daemon. The binary is the release's, checked against a SHA256 written
+    here; its database is fetched at run time. A scan that does not finish is
+    reported, not failed: the step goes on, and the verdict step reads it."""
+    out = render(tmp_path, archetype=archetype)
+    steps = _image_ci_steps(out)
+    names = list(steps)
+    install = steps["Install grype (official release, SHA256 verified)"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", install["env"]["GRYPE_VERSION"])
+    assert re.fullmatch(r"[0-9a-f]{64}", install["env"]["GRYPE_SHA256"])
+    assert "sha256sum -c -" in install["run"]
+    scan = steps["Scan the image for known vulnerabilities"]
+    assert scan["continue-on-error"] is True
+    assert "grype docker:image-under-test" in scan["run"]
+    (verdict,) = [n for n in names if n.startswith("Read the scan")]
+    assert steps[verdict]["env"]["SCAN"] == "${{ steps.scan.outcome }}"
+    assert steps[verdict]["env"]["GRACE_DAYS"] == str(GRACE_DAYS)
+    assert "if" not in steps[verdict], "the verdict is skipped"
+    (started,) = [n for n in names if "first log line" in n]
+    order = [started, "Install grype (official release, SHA256 verified)"]
+    order += ["Scan the image for known vulnerabilities", verdict]
+    assert [n for n in names if n in order] == order
+
+
+def test_image_scan_passes_with_no_fixable_high_or_critical(backend: Path) -> None:
+    """What a fresh python:3.12-slim showed on 2026-11-03: dozens of high
+    findings Debian has not fixed or will not fix, and lower ones with a fix.
+    Neither fails; the unfixed high ones are listed, not hidden."""
+    matches = [
+        _finding("High", "libsystemd0", state="wont-fix"),
+        _finding("High", "libgnutls30", state="not-fixed"),
+        _finding("Medium", "pip", kind="python", days_ago=400),
+        _finding("Low", "python", kind="binary", days_ago=200),
+    ]
+    done, summary = _read_scan(backend, matches)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "- pass: image scan, no high or critical vulnerability with a fix" in summary
+    assert "grype 0.121.0" in summary
+    assert "libsystemd0" in summary
+    assert "libgnutls30" in summary
+    assert "::warning" not in done.stdout
+    assert "::error" not in done.stdout
+
+
+@pytest.mark.parametrize("days_ago", [0, 3, GRACE_DAYS, None])
+def test_image_scan_reports_a_recent_fix_without_failing(
+    backend: Path, days_ago: int | None
+) -> None:
+    """A fix published in the last 14 days, or one grype gives no date for,
+    is a warning that names the package, its fix and what to do: the base
+    image is rebuilt, and Dependabot raises its digest, after the fix exists."""
+    matches = [_finding("Critical", "libssl3t64", days_ago=days_ago, cve="CVE-2026-63073")]
+    done, summary = _read_scan(backend, matches)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "- not yet confirmed: image scan, " in summary
+    assert "libssl3t64 1.0-1 (fixed in 2.0-1" in summary
+    assert "CVE-2026-63073" in summary
+    assert "Dependabot" in summary
+    assert done.stdout.count("::warning::") == 1
+    assert "::error" not in done.stdout
+
+
+@pytest.mark.parametrize("severity", ["High", "Critical"])
+def test_image_scan_fails_on_a_fix_older_than_the_grace(backend: Path, severity: str) -> None:
+    """A fix public for more than 14 days that the image still lacks fails
+    the check, and the line says what raises it, for each kind of package."""
+    matches = [
+        _finding(severity, "perl-base", days_ago=GRACE_DAYS + 1),
+        _finding(severity, "django", kind="python", days_ago=60, cve="GHSA-xxxx-yyyy-zzzz"),
+        _finding("High", "libgnutls30", state="not-fixed"),
+    ]
+    done, summary = _read_scan(backend, matches)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "- fail: image scan, 2 " in summary
+    assert "perl-base 1.0-1 (fixed in 2.0-1" in summary
+    assert "django 1.0-1 (fixed in 2.0-1" in summary
+    assert "uv lock --upgrade-package" in summary
+    assert ".grype.yaml" in summary
+    assert done.stdout.count("::error::") == 1
+
+
+def test_image_scan_that_did_not_finish_is_not_yet_confirmed(backend: Path) -> None:
+    """The database comes over the network at run time; a failed fetch is not
+    a finding, and does not turn the required check red."""
+    for outcome, matches in (("failure", None), ("success", None)):
+        done, summary = _read_scan(backend, matches, outcome)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert "- not yet confirmed: image scan, grype did not finish" in summary
+        assert done.stdout.count("::warning::") == 1
+
+
 def test_django_files_render_for_web_only(tmp_path: Path, rendered: Path, backend: Path) -> None:
     out = render(tmp_path / "web", archetype="web")
     django = (
@@ -867,6 +1024,65 @@ def test_third_party_review_is_offered_but_off(rendered: Path) -> None:
     assert not (rendered / ".github" / "workflows" / "third-party.yml").exists()
 
 
+THIRD_PARTY = Path(".github") / "workflows" / "third-party.yml"
+
+
+def test_the_third_party_question_is_github_only_and_off_by_default() -> None:
+    """`/plinth:new-project` passes `third_party_review=true` only when the person
+    says a reviewer is connected (coolbress/plinth#765); unasked, it is off."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    q = cfg["third_party_review"]
+    assert q["type"] == "bool"
+    assert q["default"] is False
+    assert q["when"] == "{{ host == 'github' }}"
+
+
+def test_third_party_review_on_renders_the_caller_at_the_ci_pin(tmp_path: Path) -> None:
+    """On: the caller is a live workflow, at the commit the ci job calls, with the
+    job name the check name comes from, and read access only."""
+    out = render(tmp_path / "on", third_party_review=True)
+    caller = (out / THIRD_PARTY).read_text(encoding="utf-8")
+    flow = yaml.safe_load(caller)
+    job = flow["jobs"]["third-party"]
+    assert job["uses"] == f"coolbress/plinth/.github/workflows/pr-review.yml@{_plinth_sha()}"
+    assert job["secrets"] == {"summons-token": "${{ secrets.SUMMONS_TOKEN }}"}
+    assert flow["permissions"] == {"contents": "read", "pull-requests": "read"}
+    # PyYAML reads the key `on` as True.
+    triggers = flow[True]
+    assert triggers["pull_request"]["types"] == [
+        "opened",
+        "synchronize",
+        "reopened",
+        "ready_for_review",
+    ]
+    assert triggers["pull_request_review"]["types"] == ["submitted"]
+    assert flow["concurrency"] == {
+        "group": "third-party-${{ github.event.pull_request.number }}",
+        "cancel-in-progress": False,
+    }
+    assert "{{" not in caller.replace("${{", ""), "a jinja expression was left unrendered"
+    # ci.yml no longer carries the how-to-turn-it-on block, and says where it is.
+    ci = (out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "pr-review.yml" not in ci
+    assert "`.github/workflows/third-party.yml`" in ci
+    assert "is not required" in ci
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    recorded = re.search(r"^third_party_review: true$", answers, re.M)
+    assert recorded, "an update would lose the answer"
+
+
+def test_third_party_review_off_records_the_answer(rendered: Path) -> None:
+    answers = (rendered / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^third_party_review: false$", answers, re.M)
+
+
+def test_third_party_review_is_not_rendered_on_gitlab(tmp_path: Path) -> None:
+    out = render(tmp_path / "gl", host="gitlab", third_party_review=True)
+    assert not (out / ".github").exists()
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert "third_party_review" not in answers
+
+
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
 
 RELEASE = Path(".github") / "workflows" / "release.yml"
@@ -990,7 +1206,11 @@ def test_a_tag_that_differs_from_pyproject_fails_and_says_which_to_change(
         assert "::error title=The tag and the version differ::" in said
         assert f'The tag is {tag}, but pyproject.toml says version = "0.1.0"' in said
         assert "Nothing was uploaded." in said
-        assert "push v0.1.0 instead" in said
+        assert "tag a commit on main v0.1.0" in said
+        # A v* tag cannot be deleted where plinth's tag ruleset is on
+        # (coolbress/plinth#772): the message never sends anyone to delete it.
+        assert "Leave this tag where it is" in said
+        assert "delete this tag" not in said.lower()
         assert "change version in pyproject.toml" in said
 
 
@@ -1232,6 +1452,104 @@ def test_data_ml_gets_the_model_on_either_host(tmp_path: Path, host: str) -> Non
     assert "## The model" in (out / "README.md").read_text(encoding="utf-8")
 
 
+def _git_in(out: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],  # noqa: S607
+        cwd=out,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "LC_ALL": "C"},
+    )
+
+
+def test_data_ml_keeps_data_out_of_git_but_says_where_it_lives(tmp_path: Path) -> None:
+    """Where data and notebooks live (#171; coolbress/plinth#708 left it for
+    later): everything under `data/` stays out of git except the README that
+    says what is there, a notebook is committed and its checkpoints are not.
+    The rules are read by git itself, on files placed where a person puts them."""
+    out = render(tmp_path / "dml", archetype="data-ml")
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "## Data and notebooks" in readme
+    assert "outputs cleared" in readme
+    assert (out / "data" / "README.md").is_file()
+    assert _git_in(out, "init", "-q").returncode == 0
+    placed = {
+        "data/raw/survey.csv": True,
+        "data/raw/nested/images/a.png": True,
+        "data/processed/train.parquet": True,
+        "data/big-download.zip": True,
+        "notebooks/.ipynb_checkpoints/explore-checkpoint.ipynb": True,
+        "data/README.md": False,
+        "data/.gitignore": False,
+        "notebooks/explore.ipynb": False,
+    }
+    for name in placed:
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
+        if not (out / name).exists():
+            (out / name).write_text("x\n", encoding="utf-8")
+    for name, ignored in placed.items():
+        found = _git_in(out, "check-ignore", "-q", "--no-index", name).returncode == 0
+        assert found is ignored, f"{name}: ignored={found}, expected {ignored}"
+    assert _git_in(out, "add", "-A").returncode == 0
+    staged = set(_git_in(out, "diff", "--cached", "--name-only").stdout.split())
+    assert {"data/README.md", "data/.gitignore", "notebooks/explore.ipynb"} <= staged
+    assert not {n for n, ignored in placed.items() if ignored} & staged
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("name", ["explore.ipynb", "분석.ipynb"])
+def test_a_notebook_committed_with_outputs_fails_the_tree_check(tmp_path: Path, name: str) -> None:
+    """The notebooks line is held by a test, not left to memory: a committed
+    notebook with an output fails `tests/test_tree_hygiene.py`, cleared it passes.
+    A name outside ASCII too: git quotes such a path unless asked for NUL-separated
+    output, and a quoted path matched no `.ipynb` suffix, so the check passed."""
+    out = render(tmp_path / "nb", archetype="data-ml")
+    cell: dict[str, Any] = {"cell_type": "code", "metadata": {}, "source": ["1 + 1"]}
+    notebook = out / "notebooks" / name
+    notebook.parent.mkdir()
+
+    def commit(outputs: list[Any], count: int | None) -> subprocess.CompletedProcess[str]:
+        nb = {
+            "cells": [cell | {"outputs": outputs, "execution_count": count}],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        notebook.write_text(json.dumps(nb), encoding="utf-8")
+        assert _git_in(out, "add", "-A").returncode == 0
+        assert _git_in(out, "commit", "-qm", "nb").returncode == 0
+        return subprocess.run(
+            ["uv", "run", "--quiet", "pytest", "-q", "tests/test_tree_hygiene.py"],  # noqa: S607
+            cwd=out,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    assert _git_in(out, "init", "-q").returncode == 0
+    shown = [
+        {
+            "output_type": "execute_result",
+            "data": {"text/plain": ["2"]},
+            "metadata": {},
+            "execution_count": 1,
+        }
+    ]
+    dirty = commit(shown, 1)
+    assert dirty.returncode == 1, dirty.stdout
+    assert f"notebooks/{name}" in dirty.stdout
+    clean = commit([], None)
+    assert clean.returncode == 0, clean.stdout
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "web"])
+def test_only_data_ml_gets_the_data_folder(tmp_path: Path, archetype: str) -> None:
+    out = render(tmp_path, archetype=archetype)
+    assert not (out / "data").exists()
+    assert "## Data and notebooks" not in (out / "README.md").read_text(encoding="utf-8")
+
+
 # ── releasing a data-ml model (coolbress/plinth#716) ──────────────────────
 
 #: Formats that run code when they are loaded. No release carries one.
@@ -1277,7 +1595,13 @@ def test_data_ml_release_runs_on_a_tag_only_and_uploads_no_pickle(
     create = _steps(data_ml, "publish")["Create the GitHub Release"]["run"]
     assert create.rstrip().endswith("$ASSETS SHA256SUMS"), create
     files = [*data["env"]["ASSETS"].split(), "SHA256SUMS"]
-    assert files == ["model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"]
+    assert files == [
+        "model.skops",
+        "metrics.json",
+        "MODEL_CARD.md",
+        "sbom.spdx.json",
+        "SHA256SUMS",
+    ]
     assert not [f for f in files if f.endswith(PICKLES)], f"the release uploads a pickle: {files}"
 
 
@@ -1320,6 +1644,7 @@ GOOD = {
     "model.skops": "model",
     "metrics.json": '{"accuracy": 0.97}\n',
     "MODEL_CARD.md": _card(MADE),
+    "sbom.spdx.json": '{"spdxVersion": "SPDX-2.3"}\n',
 }
 
 
@@ -1412,11 +1737,122 @@ def test_data_ml_release_without_a_signature_says_so_and_does_not_fail(data_ml: 
         done = _run_step(data_ml, "Say what was published", env, job="publish")
         assert done.returncode == 0, done.stdout + done.stderr
         text = summary.read_text(encoding="utf-8")
-        for name in ("model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"):
+        for name in (*GOOD, "SHA256SUMS"):
             assert f"https://github.com/someone/probe/releases/download/v0.1.0/{name}" in text
         assert "releases/latest/download/<name>" in text
         assert ("gh attestation verify model.skops --repo someone/probe" in text) is signed
         assert ("::notice title=Published without a signed record::" in done.stdout) is not signed
+
+
+# ── a software bill of materials with each release (#172) ─────────────────
+
+SBOM = "sbom.spdx.json"
+INSTALL_SYFT = "Install syft (official release, SHA256 verified)"
+
+
+def _all_release_steps(out: Path) -> list[tuple[str, dict[str, Any]]]:
+    return [(j, s) for j, job in _release(out)["jobs"].items() for s in job["steps"]]
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "data-ml"])
+def test_each_release_makes_an_sbom_with_a_pinned_syft_and_attaches_it(
+    tmp_path: Path, archetype: str
+) -> None:
+    """Every archetype that releases makes an SPDX SBOM with the same syft,
+    a release binary checked against a SHA256 written here, and the step
+    that creates the GitHub Release attaches it."""
+    out = render(tmp_path, archetype=archetype)
+    steps = _all_release_steps(out)
+    (install,) = [s for _, s in steps if s.get("name") == INSTALL_SYFT]
+    assert install["env"]["SYFT_VERSION"] == "1.55.0"
+    assert re.fullmatch(r"[0-9a-f]{64}", install["env"]["SYFT_SHA256"])
+    assert "sha256sum -c -" in install["run"]
+    made = [s for _, s in steps if "syft scan" in s.get("run", "")]
+    assert len(made) == 1
+    assert "-o spdx-json=" in made[0]["run"]
+    (create,) = [s for _, s in steps if s.get("name") == "Create the GitHub Release"]
+    attached = create["run"] + json.dumps(_release(out).get("env", {}))
+    assert SBOM in attached, create["run"]
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library"])
+def test_package_sbom_is_of_the_wheel_installed_and_never_goes_to_pypi(
+    tmp_path: Path, archetype: str
+) -> None:
+    """The wheel holds no list of what it installs, so the SBOM is of a fresh
+    environment with the built wheel installed at the lockfile's runtime
+    versions. It travels apart from `dist/`, which the publish job uploads
+    whole to PyPI, and PyPI refuses a file that is not a distribution."""
+    out = render(tmp_path, archetype=archetype)
+    build = _release(out)["jobs"]["build"]["steps"]
+    names = [s.get("name") or s.get("run") or s["uses"] for s in build]
+    sbom_step = "Make the SBOM of the wheel and what it installs"
+    (make,) = [s["run"] for s in build if s.get("name") == sbom_step]
+    assert "uv export --locked --no-dev --no-emit-project" in make
+    assert "dist/*.whl" in make
+    assert f"sbom/{SBOM}" in make
+    assert "dist/" not in make.split("syft scan", 1)[1]
+    assert names.index("uv build") < names.index(INSTALL_SYFT) < names.index(sbom_step)
+    uploads = [s["with"] for s in build if "upload-artifact" in s.get("uses", "")]
+    assert {u["name"]: u["path"] for u in uploads} == {"dist": "dist/", "sbom": "sbom/"}
+    release = _release(out)["jobs"]["github-release"]["steps"]
+    fetched = {s["with"]["name"] for s in release if "download-artifact" in s.get("uses", "")}
+    assert fetched == {"dist", "sbom"}
+    publish = _release(out)["jobs"]["publish"]["steps"]
+    assert [s["with"]["name"] for s in publish if "download-artifact" in s.get("uses", "")] == [
+        "dist"
+    ]
+    (create,) = [s for s in release if s.get("name") == "Create the GitHub Release"]
+    assert create["run"].rstrip().endswith(f"dist/* sbom/{SBOM}")
+
+
+def test_backend_sbom_is_of_the_pushed_image(backend: Path) -> None:
+    """Read from the image fetched by its pushed digest, after it started,
+    and handed to the job that creates the release."""
+    steps = _image_steps(backend)
+    names = list(steps)
+    make = steps["Make the SBOM of the pushed image"]
+    assert (
+        make["env"]["PUSHED"]
+        == steps["Pull the pushed image and read its first log line"]["env"]["PUSHED"]
+    )
+    assert 'syft scan "docker:$PUSHED"' in make["run"]
+    pulled = names.index("Pull the pushed image and read its first log line")
+    assert pulled < names.index(INSTALL_SYFT) < names.index("Make the SBOM of the pushed image")
+    upload = [s["with"] for s in steps.values() if "upload-artifact" in s.get("uses", "")]
+    assert upload == [{"name": "sbom", "path": "sbom/", "if-no-files-found": "error"}]
+    release = _release(backend)["jobs"]["github-release"]["steps"]
+    assert [s["with"]["name"] for s in release if "download-artifact" in s.get("uses", "")] == [
+        "sbom"
+    ]
+    summary = backend / "summary.md"
+    summary.unlink(missing_ok=True)
+    env = {
+        "REF": "ghcr.io/someone/backend:0.1.0",
+        "DIGEST": "sha256:" + "0" * 64,
+        "ATTESTED": "success",
+        "GITHUB_REPOSITORY": "someone/backend",
+        "GITHUB_STEP_SUMMARY": str(summary),
+    }
+    _run_image_step(backend, "Say what was published", env)
+    assert SBOM in summary.read_text(encoding="utf-8")
+
+
+def test_data_ml_sbom_is_of_the_training_environment_and_in_the_sums(data_ml: Path) -> None:
+    """A data-ml release publishes the model, not an image: its SBOM is of
+    the environment the model was trained in, the one loading it needs. It
+    is one of the release's files, so SHA256SUMS and its signed record
+    cover it."""
+    model = _steps(data_ml, "model")
+    names = list(model)
+    make = model["Make the SBOM of the environment the model was trained in"]["run"]
+    assert "syft scan dir:.venv" in make
+    assert f"release/{SBOM}" in make
+    order = ["Train the model", INSTALL_SYFT]
+    order += ["Make the SBOM of the environment the model was trained in"]
+    order += ["Check the files before anything is uploaded"]
+    assert [n for n in names if n in order] == order
+    assert SBOM in _release(data_ml)["env"]["ASSETS"].split()
 
 
 def test_data_ml_how_to_says_what_a_person_must_decide(data_ml: Path) -> None:
@@ -2286,6 +2722,31 @@ def test_assisted_by_has_one_example_and_one_line_per_model(tmp_path: Path, host
     assert "the Linux kernel's form" in agents
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
+    tmp_path: Path, host: str
+) -> None:
+    """An audit of 69 agent-written pull requests (#170): three of a split
+    ticket left the division of criteria implicit and a closing one did not
+    list what earlier ones had met; all four with no not-verified statement
+    were small, where with nothing to report the line was dropped."""
+    out = render(tmp_path / host, host=host)
+    noun, other = (
+        ("pull request", "merge request") if host == "github" else ("merge request", "pull request")
+    )
+    template = (
+        out / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        if host == "github"
+        else out / ".gitlab" / "merge_request_templates" / "Default.md"
+    )
+    for path in (out / "AGENTS.md", out / "CONTRIBUTING.md", template):
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert "which criteria it meets and which it leaves to a later one" in text, path.name
+        assert f"lists every criterion with the {noun} that met it" in text, path.name
+        assert "always there, as `Not verified: nothing` when that is true" in text, path.name
+        assert f"the {other} that met it" not in text, f"{path.name} names the other host"
+
+
 def test_text_others_write_is_data_and_named(rendered: Path, gitlab: Path) -> None:
     """Planted instructions were refused 24 of 24 times but named to the person
     11 of 24 (plinth #642); the line targets the report (#116)."""
@@ -2652,6 +3113,77 @@ def _forms_after_an_update(
     )
     folder = proj / ".github" / "ISSUE_TEMPLATE"
     return sorted(p.name for p in folder.rglob("*") if p.is_file())
+
+
+def test_no_code_of_conduct_unless_asked_for(rendered: Path) -> None:
+    """The recommended default is none (coolbress/plinth#772)."""
+    assert not (rendered / "CODE_OF_CONDUCT.md").exists()
+    answers = (rendered / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^code_of_conduct: false$", answers, re.M), "an update would ask again"
+
+
+def test_a_code_of_conduct_asked_for_names_its_contact(tmp_path: Path) -> None:
+    """Yes renders Contributor Covenant 3.0 with the contact in the report
+    line, and none of its placeholders; both answers are recorded."""
+    out = render(
+        tmp_path / "p", code_of_conduct=True, code_of_conduct_contact="conduct@example.org"
+    )
+    text = (out / "CODE_OF_CONDUCT.md").read_text(encoding="utf-8")
+    assert text.startswith("# Contributor Covenant 3.0 Code of Conduct")
+    assert "To report a possible violation, contact the maintainer at conduct@example.org." in text
+    assert "[NOTE:" not in text, "a placeholder of the Covenant is left in"
+    assert "licensed under CC BY-SA 4.0" in text, "the attribution the license asks for is gone"
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^code_of_conduct: true$", answers, re.M)
+    assert re.search(r"^code_of_conduct_contact: conduct@example.org$", answers, re.M)
+
+
+def test_a_code_of_conduct_needs_a_contact(tmp_path: Path) -> None:
+    """The Covenant without a place to report is the placeholder it ships with."""
+    with pytest.raises(ValueError, match="must say where reports go"):
+        render(tmp_path / "p", code_of_conduct=True, code_of_conduct_contact="  ")
+
+
+def test_the_owners_code_of_conduct_wins(tmp_path: Path) -> None:
+    """GitHub reads the owner's when the repository has none, so none is
+    rendered, even when a yes is passed, and the question is not asked."""
+    out = render(
+        tmp_path / "p",
+        owner_has_code_of_conduct=True,
+        code_of_conduct=True,
+        code_of_conduct_contact="conduct@example.org",
+    )
+    assert not (out / "CODE_OF_CONDUCT.md").exists()
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert "owner_has_code_of_conduct: true" in answers
+    assert not re.search(r"^code_of_conduct", answers, re.M), "asked although the owner has one"
+
+
+def test_the_owners_security_policy_wins(tmp_path: Path) -> None:
+    """SECURITY.md is rendered unless the owner publishes one (coolbress/plinth#772)."""
+    out = render(tmp_path / "p", owner="someone", owner_has_security_policy=True)
+    assert not (out / "SECURITY.md").exists()
+    assert "owner_has_security_policy: true" in (out / ".copier-answers.yml").read_text(
+        encoding="utf-8"
+    )
+    assert (render(tmp_path / "own", owner="someone") / "SECURITY.md").is_file()
+
+
+def test_on_gitlab_the_owner_answers_are_not_asked_and_both_files_follow_the_answer(
+    tmp_path: Path,
+) -> None:
+    """GitLab reads no `.github`, so SECURITY.md is always rendered there and
+    the code of conduct is still offered."""
+    out = render(
+        tmp_path / "gl",
+        host="gitlab",
+        owner_has_security_policy=True,
+        owner_has_code_of_conduct=True,
+        code_of_conduct=True,
+        code_of_conduct_contact="conduct@example.org",
+    )
+    assert (out / "SECURITY.md").is_file()
+    assert (out / "CODE_OF_CONDUCT.md").is_file()
 
 
 OWN_FORMS = ["bug.yml", "config.yml", "end-or-hand-over.yml", "feature.yml", "task.yml"]
@@ -3056,7 +3588,12 @@ def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> 
             files < sets[r] for r in E2E_ARCHETYPES
         )
         assert covered, f"no representative for {reps}"
-    assert sets["data-ml"] - sets["backend"] == {"MODEL_CARD.md", "tests/test_train.py"}
+    assert sets["data-ml"] - sets["backend"] == {
+        "MODEL_CARD.md",
+        "tests/test_train.py",
+        "data/.gitignore",
+        "data/README.md",
+    }
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
@@ -3187,6 +3724,119 @@ def test_web_entry_point_serves_render_s_own_host_only(tmp_path: Path) -> None:
             server.stdout.close()
 
 
+def _readme_block(readme: str, heading: str) -> tuple[str, list[str]]:
+    """The section under `heading` and the command lines of its first bash block,
+    each without its trailing comment."""
+    section = readme.split(f"\n{heading}\n", 1)[1].split("\n## ", 1)[0]
+    block = section.split("```bash\n", 1)[1].split("```", 1)[0]
+    return section, [re.sub(r"\s+# .*$", "", line) for line in block.splitlines() if line]
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_web_readme_local_steps_bring_the_app_up(tmp_path: Path) -> None:
+    """A fresh web render, the README's local steps run as written: before
+    them, `python -m <package>` with `DJANGO_DEBUG=1` refused for want of
+    production's settings and nothing said what else to do (#171). Two
+    lines are changed on the way: `createsuperuser` takes its answers from
+    the environment, having no terminal to ask in, and `runserver` gets a
+    free port instead of 8000. The URL the README names answers with the
+    log-in page, and the account just made logs in."""
+    import http.cookiejar
+    import signal
+    import socket
+    import urllib.parse
+    import urllib.request
+
+    out = render(tmp_path / "local", archetype="web")
+    section, lines = _readme_block(
+        (out / "README.md").read_text(encoding="utf-8"), "## Run it on your computer"
+    )
+    url = re.search(r"<(http://127\.0\.0\.1:8000/)>", section)
+    assert url, "the local steps do not say which URL to open"
+    assert [line.split()[-1] for line in lines[1:]] == ["migrate", "createsuperuser", "runserver"]
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    env.pop("VIRTUAL_ENV", None)
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, env=env, check=True)  # noqa: S607
+
+    def run(line: str, extra: dict[str, str] | None = None) -> None:
+        done = subprocess.run(  # noqa: S603
+            ["bash", "-c", line],  # noqa: S607
+            cwd=out,
+            env=env | (extra or {}),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 0, f"{line}\n{done.stdout}\n{done.stderr}"
+
+    run(lines[0])
+    written = (out / ".env").read_text(encoding="utf-8")
+    assert written.startswith("DJANGO_DEBUG=1\nDJANGO_SECRET_KEY="), written
+    # uv keeps the first of a repeated key: run again, the line leaves `.env` alone.
+    run(lines[0])
+    assert (out / ".env").read_text(encoding="utf-8") == written
+    run(lines[1])
+    password = "a long local password 1"  # noqa: S105
+    run(
+        f"{lines[2]} --noinput",
+        {
+            "DJANGO_SUPERUSER_USERNAME": "me",
+            "DJANGO_SUPERUSER_PASSWORD": password,
+            "DJANGO_SUPERUSER_EMAIL": "me@example.com",
+        },
+    )
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = subprocess.Popen(  # noqa: S603
+        ["bash", "-c", f"exec {lines[3]} --noreload 127.0.0.1:{port}"],  # noqa: S607
+        cwd=out,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        home = url.group(1).replace(":8000/", f":{port}/")
+        jar = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+        page = landed = ""
+        for _ in range(120):
+            try:
+                with opener.open(home, timeout=2) as r:
+                    page, landed = r.read().decode(), r.url
+                break
+            except OSError:
+                time.sleep(0.5)
+        assert "/accounts/login/" in landed, landed
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page)
+        assert token, page
+        form = {"username": "me", "password": password, "csrfmiddlewaretoken": token.group(1)}
+        request = urllib.request.Request(  # noqa: S310
+            landed, data=urllib.parse.urlencode(form).encode(), headers={"Referer": landed}
+        )
+        with opener.open(request, timeout=10) as r:
+            assert r.status == 200
+            assert urllib.parse.urlsplit(r.url).path == "/", r.url
+    finally:
+        os.killpg(server.pid, signal.SIGTERM)
+        server.wait(timeout=10)
+
+
+def test_dockerfile_comment_says_what_the_image_runs(tmp_path: Path, backend: Path) -> None:
+    """The web image serves Django under uvicorn; its Dockerfile said no
+    framework was chosen, which is true of `backend` only (#171)."""
+    web = (render(tmp_path / "web", archetype="web") / "Dockerfile").read_text(encoding="utf-8")
+    cmd = web.split("\nCMD ", 1)[0].rsplit("\n\n", 1)[1]
+    assert "No framework" not in web
+    assert "Django" in cmd, cmd
+    assert "uvicorn" in cmd, cmd
+    assert "No framework is chosen here." in (backend / "Dockerfile").read_text(encoding="utf-8")
+
+
 def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path) -> None:
     """What the first live deploy had to find out by hand (#105): the first
     account, the restore and its window, the wait and the real host."""
@@ -3253,6 +3903,9 @@ def test_tree_hygiene_skips_outside_a_repository_in_git_s_own_language(rendered:
         "this git prints its messages in English for fr, ko and de, so the case this "
         "test needs cannot be built here and the skip's locale handling goes unchecked"
     )
+    # Every test in the file reads `git ls-files`, so every one skips.
+    hygiene = (rendered / "tests" / "test_tree_hygiene.py").read_text(encoding="utf-8")
+    every = hygiene.count("\ndef test_")
     for language in translated:
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "-q", "tests/test_tree_hygiene.py"],
@@ -3263,7 +3916,7 @@ def test_tree_hygiene_skips_outside_a_repository_in_git_s_own_language(rendered:
             env=_speaking(language),
         )
         assert done.returncode == 0, f"LANGUAGE={language}\n{done.stdout}\n{done.stderr}"
-        assert "3 skipped" in done.stdout, f"LANGUAGE={language}: {done.stdout}"
+        assert f"{every} skipped" in done.stdout, f"LANGUAGE={language}: {done.stdout}"
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -3445,7 +4098,12 @@ def test_web_archetype_image_job_passes_as_rendered(tmp_path: Path) -> None:
 
     out = render(tmp_path / "web-image", project_name="web.probe", archetype="web", owner="x")
     ci = yaml.safe_load((out / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
-    steps = [step["run"] for step in ci["jobs"]["image"]["steps"] if "run" in step]
+    job = ci["jobs"]["image"]["steps"]
+    # The build and the start; the vulnerability scan after them fetches grype
+    # and its database, and its own tests run its verdict step (#172).
+    names = [step.get("name", "") for step in job]
+    scan = names.index("Install grype (official release, SHA256 verified)")
+    steps = [step["run"] for step in job[:scan] if "run" in step]
     assert len(steps) == 2, steps
     # The job's steps name the container and the image `image-under-test`.
     # Here that name becomes one this run made up, in every step and in the

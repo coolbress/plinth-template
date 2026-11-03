@@ -18,9 +18,10 @@ reads. `python -m <package> train` trains the model and writes
 `tests/test_entry_point.py` runs this module without arguments and compares
 what it prints with `tests/entry_point.expected`: change them with it.
 {%- elif archetype == 'cli' -%}
-Replace the body of `main()` with what the command does; the logging setup can
-stay. `tests/test_entry_point.py` runs this module and compares what it prints
-with `tests/entry_point.expected`: change them with it.
+`main()` reads the command line with argparse: `--help`, `--version` and one
+optional name. Replace the arguments and the body with what the command does;
+the logging setup can stay. `tests/test_entry_point.py` runs this module and
+compares what it logs with `tests/entry_point.expected`: change them with it.
 {%- else -%}
 No framework is chosen here; what serves the application is this project's
 decision, and a `uvicorn` or `flask` planted here would be a stub in every
@@ -31,8 +32,9 @@ them with it.
 {%- endif %}
 
 {% if archetype == 'cli' -%}
-Logs are one JSON object per line on stdout, so another program reads them as
-is. Standard library only.
+What the command produces goes to stdout, where a pipe or a file takes it; logs
+are one JSON object per line on stderr, so they never mix into that output
+(clig.dev). Standard library only.
 {%- else -%}
 Logs are one JSON object per line on stdout, so a container's output is
 collected as is. Standard library only.
@@ -42,7 +44,7 @@ the repository, in whatever the deployment uses.
 
 from __future__ import annotations
 
-{% if archetype == 'data-ml' -%}
+{% if archetype in ['cli', 'data-ml'] -%}
 import argparse
 {% endif -%}
 import json
@@ -51,6 +53,9 @@ import logging
 import os
 {%- endif %}
 import sys
+{%- if archetype == 'cli' %}
+from importlib.metadata import version
+{%- endif %}
 {%- if archetype == 'data-ml' %}
 from pathlib import Path
 {%- endif %}
@@ -83,8 +88,8 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure(level: int = logging.INFO) -> None:
-    """Point the root logger at stdout in JSON. Safe to call more than once."""
-    handler = logging.StreamHandler(sys.stdout)
+    """Point the root logger at {% if archetype == 'cli' %}stderr{% else %}stdout{% endif %} in JSON. Safe to call more than once."""
+    handler = logging.StreamHandler(sys.{% if archetype == 'cli' %}stderr{% else %}stdout{% endif %})
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers.clear()
@@ -140,6 +145,16 @@ def main(argv: list[str] | None = None) -> None:
         log.info("trained", extra={"out": str(args.out), **metrics})
         return
     log.info("started", extra={"greeting": greet("world")})
+{%- elif archetype == 'cli' -%}
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="{{ package_name }}", description="Greet someone.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {version('{{ package_name }}')}")
+    parser.add_argument("name", nargs="?", default="world", help="who to greet (default: world)")
+    args = parser.parse_args(argv)
+    configure()
+    greeting = greet(args.name)
+    logging.getLogger(__package__).info("started", extra={"greeting": greeting})
+    print(greeting)
 {%- else -%}
 def main() -> None:
     configure()

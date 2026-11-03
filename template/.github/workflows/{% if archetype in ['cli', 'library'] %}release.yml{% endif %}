@@ -10,7 +10,9 @@
 # publish job asks GitHub for a short-lived identity token (`id-token: write`)
 # and PyPI accepts it only from the repository, workflow file and environment
 # registered as the project's publisher. The action also signs what it
-# uploads (attestations), and PyPI shows that on the project page.
+# uploads (attestations), and PyPI shows that on the project page. The
+# GitHub Release also carries an SBOM, `sbom.spdx.json`: what installing the
+# wheel puts in an environment.
 name: Release
 
 on:
@@ -45,7 +47,7 @@ jobs:
           tag="$GITHUB_REF_NAME"
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           if [ "$tag" != "v$version" ]; then
-            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. To release $version, tag a commit on main v$version. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it."
             exit 1
           fi
           echo "The tag $tag matches pyproject.toml's version $version."
@@ -53,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."
@@ -71,10 +73,43 @@ jobs:
           tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
           echo "$d" >> "$GITHUB_PATH"
       - run: uv build
+      # A software bill of materials (SBOM), attached to the GitHub Release.
+      # The wheel names what it needs, not what it installs, so the SBOM is
+      # of a fresh environment with the built wheel installed at the runtime
+      # versions uv.lock names. It travels apart from dist/: the publish job
+      # uploads dist/ whole, and PyPI refuses a file that is not a package.
+      - name: Install syft (official release, SHA256 verified)
+        env:
+          SYFT_VERSION: "1.55.0"
+          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/syft"; mkdir -p "$d"
+          f="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/$f"
+          echo "${SYFT_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" syft
+          echo "$d" >> "$GITHUB_PATH"
+      - name: Make the SBOM of the wheel and what it installs
+        run: |
+          set -euo pipefail
+          env="$RUNNER_TEMP/sbom-env"
+          uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
+          uv venv --quiet "$env"
+          uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl
+          name="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["name"])')"
+          mkdir -p sbom
+          syft scan "dir:$env" --source-name "$name" --source-version "${GITHUB_REF_NAME#v}" -o spdx-json=sbom/sbom.spdx.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/
           if-no-files-found: error
 
   # The only job that can speak for this repository to PyPI, and it runs no
@@ -105,7 +140,7 @@ jobs:
           {
             echo "### PyPI did not accept this release"
             echo
-            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then delete the tag and push it again."
+            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): the tag stays as it is."
             echo
             echo "If it says the file already exists, this version was published before: PyPI never takes a version twice. Raise the version in pyproject.toml and tag again."
             echo
@@ -125,8 +160,13 @@ jobs:
         with:
           name: dist
           path: dist/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: sbom/
+      # The wheel and sdist PyPI has, and the SBOM beside them.
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/* sbom/sbom.spdx.json

@@ -6,6 +6,169 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-11-03
+
+**The `image` check of a `backend`, `data-ml` or `web` project can now fail
+on a known vulnerability**: a high or critical finding whose fix has been out
+for more than 14 days fails it. Merging the open Dependabot pull request for
+the base image clears what the base image carries; a finding that does not
+apply is listed in `.grype.yaml` with its reason. Each release also carries
+an SBOM, `sbom.spdx.json`. No new action, so the Actions allowlist is
+unchanged, and no question changes, so `copier update` needs no hands.
+
+### Added
+- **The `image` check of a `backend`, `data-ml` or `web` project scans
+  the image it built** for known vulnerabilities, with grype 0.121.0, a
+  release binary checked against its SHA256; its database is fetched at
+  run time (coolbress/plinth-template#172). The check's summary lists every
+  high and critical finding. One whose fix has been published for more
+  than 14 days fails the check; a newer one is a warning, and one with no
+  fix is listed and never fails. A scan that does not finish is a warning.
+  Measured on 2026-11-03: `python:3.12-slim` rebuilt on 2026-11-02 had no
+  high or critical finding with a fix, the digest this template pinned
+  from 2026-09-07 had 64, and both had about 60 with none. The template's
+  base image moves to the 2026-11-02 digest. An existing project gets the
+  scan through `/plinth:template-update`; one whose base-image digest is
+  older than its Dependabot pull request sees `image` fail until that pull
+  request is merged, and a finding that does not apply goes in
+  `.grype.yaml` with the reason.
+- **Each release carries a software bill of materials, `sbom.spdx.json`**
+  (SPDX, made with syft 1.55.0, a release binary checked against its
+  SHA256; coolbress/plinth-template#172). A `cli` or `library` release
+  lists the built wheel installed with its runtime dependencies at the
+  versions `uv.lock` names; a `backend` release lists the image as pushed,
+  read by its digest; a `data-ml` release, which publishes a model and no
+  image, lists the environment the model was trained in, and `SHA256SUMS`
+  and its signed record cover it. No new action: both tools come from their
+  own releases, so the Actions allowlist `/plinth:new-project` sets is
+  unchanged. An existing project gets it through `/plinth:template-update`.
+
+## [1.36.0] - 2026-11-03
+
+**A `cli` project's log lines move from stdout to stderr**: a script that read
+them from stdout reads stderr after the update (see Changed). Beyond that: a
+`web` project runs on your computer from its README and has 404 and 500
+pages and the viewport meta; a `cli` project's command has `--help` and
+`--version`; a `data-ml` project says where its data and notebooks live; a
+code of conduct can be asked for, and none is rendered (nor `SECURITY.md`)
+when the owner's `.github` repository publishes one; and a ticket split
+across pull requests divides its criteria, with the not-verified line always
+written. New questions default to what a project has today, so `copier
+update` needs no hands except where a project changed the files named
+below. `AGENTS.md` changed, so the plinth release that pins this one runs
+its eval suite.
+
+### Added
+- A code of conduct, asked (coolbress/plinth#772): the new
+  `code_of_conduct` question, off by default, renders the Contributor
+  Covenant 3.0 as `CODE_OF_CONDUCT.md` with the address reports go to,
+  `code_of_conduct_contact`, in its report line; its two placeholders are
+  filled or dropped. `owner_has_code_of_conduct` and
+  `owner_has_security_policy`, answered by plinth like the two owner answers
+  before them, render no `CODE_OF_CONDUCT.md` (and ask nothing about it) or
+  no `SECURITY.md` when the owner's `.github` repository publishes one,
+  since GitHub reads the owner's for a repository that has none. On GitLab,
+  which reads no `.github`, both files follow the project's own answers.
+  All four answers are recorded. An existing project gets the questions
+  through `/plinth:template-update` with no hands: unanswered, each keeps
+  what the project has (its `SECURITY.md`, no code of conduct).
+- A `web` project's README has a "Run it on your computer" section: the
+  two lines of `.env` for this computer (debug on, a secret key of its own),
+  `manage.py migrate`, `createsuperuser` and `runserver`, and the URL to
+  open, <http://127.0.0.1:8000/>. The README's one local command was
+  `python -m <package>`, which refuses to start without production's
+  settings, and that refusal stays; the README now says why
+  (coolbress/plinth-template#171). `.env.example` says the same for local
+  work. A test runs the section's steps on a fresh render and logs in. An
+  existing project gets it through `/plinth:template-update`.
+- A `web` project answers a missing page from `404.html` and a server error
+  from `500.html` instead of Django's bare default, as Django's deployment
+  checklist asks, and every page carries the viewport `<meta>`, so a phone
+  draws it at its own width (coolbress/plinth-template#171). The pages now
+  extend one `base.html` that holds `lang`, the viewport and `<main>`. The
+  tests beside the existing page tests check both error pages and the
+  viewport on every page. An existing project gets it through
+  `/plinth:template-update`; a project that changed the three page
+  templates sees a conflict in them.
+- A `data-ml` project says where its data and notebooks live
+  (coolbress/plinth-template#171; coolbress/plinth#708 left it for a later
+  ticket). `data/` holds `raw/` and `processed/`, and its own `.gitignore`
+  keeps everything there out of git but `data/README.md`, which says where
+  each file came from. Notebooks are committed with their outputs cleared:
+  `tests/test_tree_hygiene.py` fails on one that still has them, in every
+  archetype, and `.ipynb_checkpoints/` is ignored. A test places files where
+  a person puts them and asks git which are ignored. An existing project
+  gets it through `/plinth:template-update`; data already committed under
+  `data/` stays tracked until `git rm --cached` removes it.
+- A ticket split across several pull or merge requests divides its
+  acceptance criteria in the open, and every description keeps its
+  not-verified line (coolbress/plinth-template#170). An audit of 69 merged
+  agent-written pull requests in a project made with plinth found the
+  misses in two places: a split ticket's pull requests left implicit which
+  criteria each met, and a closing one did not list what earlier ones had
+  met; and small fixes and docs-only changes dropped the not-verified line
+  when there was nothing to report. `AGENTS.md`, `CONTRIBUTING.md` step 5
+  and the pull-request and merge-request templates now say: each one of a
+  split says which criteria it meets and which it leaves to a later one,
+  the one that closes the issue lists every criterion with the one that met
+  it, and the line is always there, as `Not verified: nothing` when that is
+  true. A render test checks both rules on both hosts. An existing project
+  gets it through `/plinth:template-update`.
+
+### Changed
+- **A `cli` project's log lines move from stdout to stderr.** Before, the
+  command wrote its JSON log lines to stdout; now stdout carries only what
+  the command produces, and the log lines go to stderr (clig.dev). A
+  script, pipe or log collector that read them from stdout must read stderr
+  after the update: nothing fails, they simply stop arriving where they
+  were. `copier update` applies it without hands; a project that rewrote
+  `main()` or `tests/test_entry_point.py` sees a conflict there
+  (coolbress/plinth-template#171). An existing project gets it through
+  `/plinth:template-update`.
+- A `cli` project's command reads its command line with argparse:
+  `--help` and `--version` print and exit 0, a wrong option exits 2 with the
+  usage, and an optional name says who to greet. Before, `<command> --help`
+  ignored its argument, printed a log line and exited 0. The run-it test and
+  `tests/entry_point.expected` are kept and now read stderr, and new tests
+  cover the four cases.
+
+### Fixed
+- A `web` project's `Dockerfile` said no framework was chosen; the image
+  serves the Django project with uvicorn, and the comment now says so
+  (coolbress/plinth-template#171). `backend` keeps the old line, which is
+  true of it. An existing project gets it through `/plinth:template-update`.
+
+### Changed
+- A project's release steps no longer tell the person to delete a `v*`
+  tag: `/plinth:new-project` now raises a tag ruleset for every archetype
+  that releases from a tag (`cli`, `library`, `backend`, `data-ml`) that
+  refuses to move or delete one
+  (coolbress/plinth#772), and on a test repository it refused the delete
+  the old text asked for. A wrong tag now stays and its version is used
+  up: the release workflow's messages and
+  `docs/how-to/publish-a-release.md` say to tag a version that has no tag
+  yet, and, for a PyPI publisher or a package link fixed afterwards, to
+  re-run the failed jobs. An existing project gets the new text through
+  `/plinth:template-update`.
+
+## [1.35.0] - 2026-11-02
+
+A GitHub project can turn on the `third-party / review` caller with a
+`third_party_review` question instead of uncommenting `ci.yml` by hand, and
+`AGENTS.md` and `CONTRIBUTING.md` give the `Assisted-by` trailer one example
+and one line for each model the work used. The question defaults to off, so
+`copier update` needs no hands; an instance that wants the caller passes
+`--data third_party_review=true` once. `AGENTS.md` changed, so the plinth
+release that pins this one runs its eval suite.
+
+### Added
+- A `third_party_review` question, GitHub only and off by default. On, it
+  renders `.github/workflows/third-party.yml`, which calls plinth's
+  `pr-review.yml` at the commit the `ci` job calls, so each pull request gets
+  a `third-party / review` result. It reports and is not required: the
+  ruleset does not name it. `/plinth:new-project` passes it when the person
+  says a reviewer is already connected (coolbress/plinth#765).
+
 ### Changed
 - `AGENTS.md` and `CONTRIBUTING.md` give the `Assisted-by` trailer the
   Linux kernel's form with one example, `Assisted-by: Claude:claude-opus-5-5`,
@@ -13,8 +176,9 @@ means `copier update` on an instance needs hands.
   (coolbress/plinth-template#163). The example lived only in a comment of the
   pull-request and merge-request templates, which a session writing the
   description through `gh pr create --body` or `glab mr create --description`
-  never sees, and sessions named the same tool three ways. The templates' example now agrees. An existing project
-  gets it through `/plinth:template-update`.
+  never sees, and sessions named the same tool three ways. The templates'
+  example now agrees. An existing project gets it through
+  `/plinth:template-update`.
 
 ## [1.34.0] - 2026-11-02
 
