@@ -110,6 +110,13 @@ _exclude:
   # The issue folder needs `/**`: a bare directory name matches nothing here.
   - "{% if owner_has_pr_template | string | lower == 'true' %}.github/PULL_REQUEST_TEMPLATE.md{% endif %}"
   - "{% if owner_has_issue_forms | string | lower == 'true' %}.github/ISSUE_TEMPLATE/**{% endif %}"
+  # The same for the security policy and the code of conduct, which GitHub
+  # also reads from the owner's `.github` when the repository has none
+  # (coolbress/plinth#772). A code of conduct is rendered only when asked for,
+  # and never over the owner's.
+  # GitLab reads no `.github`, so there both follow the instance alone.
+  - "{% if host != 'gitlab' and owner_has_security_policy | string | lower == 'true' %}SECURITY.md{% endif %}"
+  - "{% if (host != 'gitlab' and owner_has_code_of_conduct | string | lower == 'true') or code_of_conduct | string | lower != 'true' %}CODE_OF_CONDUCT.md{% endif %}"
   # One host's files only. On GitLab nothing under `.github/` is written: no
   # workflow, Dependabot, issue form or pull-request template, which GitLab
   # would not read. On GitHub no `.gitlab-ci.yml` or `.gitlab/`.
@@ -352,6 +359,50 @@ owner_has_issue_forms:
     .github/ISSUE_TEMPLATE? Then this project writes none: one local form
     hides every shared one. Press Enter for no: this project writes its own.
   default: false
+
+# The owner's security policy and code of conduct, answered by the door like
+# the two above and recorded for the same reason (coolbress/plinth#772). True
+# only when the owner publishes one and the instance has none of its own: on
+# an update, true excludes the instance's own file, and copier deletes it.
+owner_has_security_policy:
+  type: bool
+  when: "{{ host == 'github' }}"
+  help: |
+    Does the owner's public .github repository publish SECURITY.md? Then
+    this project writes none, so the owner's applies. Press Enter for no:
+    this project writes its own.
+  default: false
+
+owner_has_code_of_conduct:
+  type: bool
+  when: "{{ host == 'github' }}"
+  help: |
+    Does the owner's public .github repository publish CODE_OF_CONDUCT.md?
+    Then this project writes none and is not asked for one, so the owner's
+    applies. Press Enter for no.
+  default: false
+
+# Optional, asked (coolbress/plinth#772): a code of conduct is a choice a
+# person can judge on day one, so `/plinth:new-project` asks it under
+# Customize; the recommended default is none. Yes renders Contributor
+# Covenant 3.0, which must name where reports go.
+code_of_conduct:
+  type: bool
+  when: "{{ host == 'gitlab' or owner_has_code_of_conduct | string | lower != 'true' }}"
+  help: |
+    Add a code of conduct, the Contributor Covenant 3.0? It says how people
+    are expected to behave in the project and where to report someone who
+    does not. Press Enter for no.
+  default: false
+
+code_of_conduct_contact:
+  type: str
+  when: "{{ (host == 'gitlab' or owner_has_code_of_conduct | string | lower != 'true') and code_of_conduct | string | lower == 'true' }}"
+  help: |
+    Where should reports under the code of conduct go? An email address or
+    a web page. It is written in CODE_OF_CONDUCT.md, which anyone who can
+    read the repository can read.
+  validator: "{% if not code_of_conduct_contact | trim %}The code of conduct must say where reports go: give an email address or a web page.{% endif %}"
 
 # Where a security report goes (coolbress/plinth#747). SECURITY.md names
 # GitHub's private reporting form, Security → Report a vulnerability, which

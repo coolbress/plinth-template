@@ -1049,7 +1049,11 @@ def test_a_tag_that_differs_from_pyproject_fails_and_says_which_to_change(
         assert "::error title=The tag and the version differ::" in said
         assert f'The tag is {tag}, but pyproject.toml says version = "0.1.0"' in said
         assert "Nothing was uploaded." in said
-        assert "push v0.1.0 instead" in said
+        assert "tag a commit on main v0.1.0" in said
+        # A v* tag cannot be deleted where plinth's tag ruleset is on
+        # (coolbress/plinth#772): the message never sends anyone to delete it.
+        assert "Leave this tag where it is" in said
+        assert "delete this tag" not in said.lower()
         assert "change version in pyproject.toml" in said
 
 
@@ -2834,6 +2838,77 @@ def _forms_after_an_update(
     )
     folder = proj / ".github" / "ISSUE_TEMPLATE"
     return sorted(p.name for p in folder.rglob("*") if p.is_file())
+
+
+def test_no_code_of_conduct_unless_asked_for(rendered: Path) -> None:
+    """The recommended default is none (coolbress/plinth#772)."""
+    assert not (rendered / "CODE_OF_CONDUCT.md").exists()
+    answers = (rendered / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^code_of_conduct: false$", answers, re.M), "an update would ask again"
+
+
+def test_a_code_of_conduct_asked_for_names_its_contact(tmp_path: Path) -> None:
+    """Yes renders Contributor Covenant 3.0 with the contact in the report
+    line, and none of its placeholders; both answers are recorded."""
+    out = render(
+        tmp_path / "p", code_of_conduct=True, code_of_conduct_contact="conduct@example.org"
+    )
+    text = (out / "CODE_OF_CONDUCT.md").read_text(encoding="utf-8")
+    assert text.startswith("# Contributor Covenant 3.0 Code of Conduct")
+    assert "To report a possible violation, contact the maintainer at conduct@example.org." in text
+    assert "[NOTE:" not in text, "a placeholder of the Covenant is left in"
+    assert "licensed under CC BY-SA 4.0" in text, "the attribution the license asks for is gone"
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert re.search(r"^code_of_conduct: true$", answers, re.M)
+    assert re.search(r"^code_of_conduct_contact: conduct@example.org$", answers, re.M)
+
+
+def test_a_code_of_conduct_needs_a_contact(tmp_path: Path) -> None:
+    """The Covenant without a place to report is the placeholder it ships with."""
+    with pytest.raises(ValueError, match="must say where reports go"):
+        render(tmp_path / "p", code_of_conduct=True, code_of_conduct_contact="  ")
+
+
+def test_the_owners_code_of_conduct_wins(tmp_path: Path) -> None:
+    """GitHub reads the owner's when the repository has none, so none is
+    rendered, even when a yes is passed, and the question is not asked."""
+    out = render(
+        tmp_path / "p",
+        owner_has_code_of_conduct=True,
+        code_of_conduct=True,
+        code_of_conduct_contact="conduct@example.org",
+    )
+    assert not (out / "CODE_OF_CONDUCT.md").exists()
+    answers = (out / ".copier-answers.yml").read_text(encoding="utf-8")
+    assert "owner_has_code_of_conduct: true" in answers
+    assert not re.search(r"^code_of_conduct", answers, re.M), "asked although the owner has one"
+
+
+def test_the_owners_security_policy_wins(tmp_path: Path) -> None:
+    """SECURITY.md is rendered unless the owner publishes one (coolbress/plinth#772)."""
+    out = render(tmp_path / "p", owner="someone", owner_has_security_policy=True)
+    assert not (out / "SECURITY.md").exists()
+    assert "owner_has_security_policy: true" in (out / ".copier-answers.yml").read_text(
+        encoding="utf-8"
+    )
+    assert (render(tmp_path / "own", owner="someone") / "SECURITY.md").is_file()
+
+
+def test_on_gitlab_the_owner_answers_are_not_asked_and_both_files_follow_the_answer(
+    tmp_path: Path,
+) -> None:
+    """GitLab reads no `.github`, so SECURITY.md is always rendered there and
+    the code of conduct is still offered."""
+    out = render(
+        tmp_path / "gl",
+        host="gitlab",
+        owner_has_security_policy=True,
+        owner_has_code_of_conduct=True,
+        code_of_conduct=True,
+        code_of_conduct_contact="conduct@example.org",
+    )
+    assert (out / "SECURITY.md").is_file()
+    assert (out / "CODE_OF_CONDUCT.md").is_file()
 
 
 OWN_FORMS = ["bug.yml", "config.yml", "end-or-hand-over.yml", "feature.yml", "task.yml"]

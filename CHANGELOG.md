@@ -7,6 +7,19 @@ means `copier update` on an instance needs hands.
 ## [Unreleased]
 
 ### Added
+- A code of conduct, asked (coolbress/plinth#772): the new
+  `code_of_conduct` question, off by default, renders the Contributor
+  Covenant 3.0 as `CODE_OF_CONDUCT.md` with the address reports go to,
+  `code_of_conduct_contact`, in its report line; its two placeholders are
+  filled or dropped. `owner_has_code_of_conduct` and
+  `owner_has_security_policy`, answered by plinth like the two owner answers
+  before them, render no `CODE_OF_CONDUCT.md` (and ask nothing about it) or
+  no `SECURITY.md` when the owner's `.github` repository publishes one,
+  since GitHub reads the owner's for a repository that has none. On GitLab,
+  which reads no `.github`, both files follow the project's own answers.
+  All four answers are recorded. An existing project gets the questions
+  through `/plinth:template-update` with no hands: unanswered, each keeps
+  what the project has (its `SECURITY.md`, no code of conduct).
 - A `web` project's README has a "Run it on your computer" section: the
   two lines of `.env` for this computer (debug on, a secret key of its own),
   `manage.py migrate`, `createsuperuser` and `runserver`, and the URL to
@@ -72,6 +85,19 @@ means `copier update` on an instance needs hands.
   serves the Django project with uvicorn, and the comment now says so
   (coolbress/plinth-template#171). `backend` keeps the old line, which is
   true of it. An existing project gets it through `/plinth:template-update`.
+
+### Changed
+- A project's release steps no longer tell the person to delete a `v*`
+  tag: `/plinth:new-project` now raises a tag ruleset for every archetype
+  that releases from a tag (`cli`, `library`, `backend`, `data-ml`) that
+  refuses to move or delete one
+  (coolbress/plinth#772), and on a test repository it refused the delete
+  the old text asked for. A wrong tag now stays and its version is used
+  up: the release workflow's messages and
+  `docs/how-to/publish-a-release.md` say to tag a version that has no tag
+  yet, and, for a PyPI publisher or a package link fixed afterwards, to
+  re-run the failed jobs. An existing project gets the new text through
+  `/plinth:template-update`.
 
 ## [1.35.0] - 2026-11-02
 

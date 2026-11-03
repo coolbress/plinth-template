@@ -54,7 +54,7 @@ jobs:
           tag="$GITHUB_REF_NAME"
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           if [ "$tag" != "v$version" ]; then
-            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. To release $version, delete this tag and push v$version instead. To release ${tag#v}, change version in pyproject.toml to \"${tag#v}\" in a pull request, merge it, delete this tag, and tag the merged commit again."
+            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. To release $version, tag a commit on main v$version. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it."
             exit 1
           fi
           echo "The tag $tag matches pyproject.toml's version $version."
@@ -62,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Delete this tag and tag a commit on main."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."
