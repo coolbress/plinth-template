@@ -7,6 +7,15 @@ means `copier update` on an instance needs hands.
 ## [Unreleased]
 
 ### Added
+- A `web` project's README has a "Run it on your computer" section: the
+  two lines of `.env` for this computer (debug on, a secret key of its own),
+  `manage.py migrate`, `createsuperuser` and `runserver`, and the URL to
+  open, <http://127.0.0.1:8000/>. The README's one local command was
+  `python -m <package>`, which refuses to start without production's
+  settings, and that refusal stays; the README now says why
+  (coolbress/plinth-template#171). `.env.example` says the same for local
+  work. A test runs the section's steps on a fresh render and logs in. An
+  existing project gets it through `/plinth:template-update`.
 - A `web` project answers a missing page from `404.html` and a server error
   from `500.html` instead of Django's bare default, as Django's deployment
   checklist asks, and every page carries the viewport `<meta>`, so a phone
