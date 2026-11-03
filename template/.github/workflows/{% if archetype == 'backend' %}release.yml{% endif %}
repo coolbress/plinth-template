@@ -13,7 +13,9 @@
 # public repository the image also gets a signed record of the workflow and
 # commit that built it (an attestation). GitHub signs these for private
 # repositories only on GitHub Enterprise Cloud, so a private repository on
-# another plan gets the image without the record, and the run says so.
+# another plan gets the image without the record, and the run says so. The
+# GitHub Release carries the image's software bill of materials (SBOM),
+# `sbom.spdx.json`.
 name: Release
 
 on:
@@ -115,6 +117,33 @@ jobs:
           set -euo pipefail
           out="$(docker run --rm --pull always "$PUSHED")"
           printf '%s\n' "$out" | head -1 | grep -F '"message": "started"'
+      # A software bill of materials (SBOM) of the image as pushed, read from
+      # the copy fetched by its digest above, for the GitHub Release.
+      - name: Install syft (official release, SHA256 verified)
+        env:
+          SYFT_VERSION: "1.55.0"
+          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/syft"; mkdir -p "$d"
+          f="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$d/$f" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/$f"
+          echo "${SYFT_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" syft
+          echo "$d" >> "$GITHUB_PATH"
+      - name: Make the SBOM of the pushed image
+        env:
+          PUSHED: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          syft scan "docker:$PUSHED" -o spdx-json=sbom/sbom.spdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error
       # On a public repository a failed signature fails the run. A private
       # one owned by a personal account is not asked: GitHub refuses it there
       # ("Feature not available for user-owned private repositories"). A
@@ -141,6 +170,8 @@ jobs:
             echo
             echo "Fetch it with \`docker pull $REF\` (digest \`$DIGEST\`)."
             echo
+            echo "The release carries its software bill of materials, \`sbom.spdx.json\`: every package in the image."
+            echo
             if [ "$ATTESTED" = success ]; then
               echo "It has a signed record of the workflow and commit that built it. Check it with \`gh attestation verify oci://$REF --repo $GITHUB_REPOSITORY\`."
             else
@@ -161,6 +192,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: sbom/
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -168,4 +203,4 @@ jobs:
           REF: ${{ needs.image.outputs.ref }}
         run: |
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
-            --notes "The image: \`docker pull $REF\`"
+            --notes "The image: \`docker pull $REF\`" sbom/sbom.spdx.json
