@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   ci:
-    uses: coolbress/plinth/.github/workflows/python-ci.yml@80453894e5a01922acfcc602dc332caf181db98d # v2.7.1
+    uses: coolbress/plinth/.github/workflows/python-ci.yml@40427229bbb2f425f38ac9b498700b51b41d7cb6 # v2.18.0
     # A called workflow cannot widen what its caller grants: the label check
     # in `ci / floor-check` needs `issues: read`. `ci / diff-size` reads the
     # reviews and re-runs a red run after an approval (plinth #586); from
