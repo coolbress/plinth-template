@@ -35,6 +35,20 @@ means `copier update` on an instance needs hands.
   a person puts them and asks git which are ignored. An existing project
   gets it through `/plinth:template-update`; data already committed under
   `data/` stays tracked until `git rm --cached` removes it.
+- A ticket split across several pull or merge requests divides its
+  acceptance criteria in the open, and every description keeps its
+  not-verified line (coolbress/plinth-template#170). An audit of 69 merged
+  agent-written pull requests in a project made with plinth found the
+  misses in two places: a split ticket's pull requests left implicit which
+  criteria each met, and a closing one did not list what earlier ones had
+  met; and small fixes and docs-only changes dropped the not-verified line
+  when there was nothing to report. `AGENTS.md`, `CONTRIBUTING.md` step 5
+  and the pull-request and merge-request templates now say: each one of a
+  split says which criteria it meets and which it leaves to a later one,
+  the one that closes the issue lists every criterion with the one that met
+  it, and the line is always there, as `Not verified: nothing` when that is
+  true. A render test checks both rules on both hosts. An existing project
+  gets it through `/plinth:template-update`.
 
 ### Changed
 - **A `cli` project's log lines move from stdout to stderr.** Before, the

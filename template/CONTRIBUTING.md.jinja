@@ -68,12 +68,19 @@ one narrow ignore in `pyproject.toml`, with its reason.
 
    ## How it was verified
 
-   What was run and what it showed; important unverified items and follow-ups.
+   What was run and what it showed, and follow-ups.
+   Not verified: what was not checked, or nothing
 
    Closes #N
 
    Assisted-by: <agent>:<model>
    ```
+
+   The not-verified line is always there, as `Not verified: nothing` when that
+   is true: a small fix or a docs-only change drops it most often. When a
+   ticket is split across several {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %}s, each one says which
+   criteria it meets and which it leaves to a later one, and the one that
+   closes the issue lists every criterion with the {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %} that met it.
 
    The issue link goes after the verification section, directly above the
    attribution. {% if host == 'gitlab' %}`Closes #N` only when the merge request completes that issue;{% else %}`Closes #N` only when the pull request completes that issue;{% endif %}
