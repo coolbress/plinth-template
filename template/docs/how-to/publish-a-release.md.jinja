@@ -106,17 +106,6 @@ GitHub Enterprise Cloud plan. On any other plan the run publishes the image
 without one, does not fail, and says so in its summary: "Published without a
 signed record".
 
-## 5. What is in the image
-
-Each release page on GitHub carries `sbom.spdx.json`, a software bill of
-materials (SBOM): every package in the image as it was pushed, the
-operating system's and Python's, with versions, in the SPDX format. A
-scanner reads it to tell whether a newly published vulnerability touches a
-release, without fetching the image. The `image` check on every pull
-request already scans the image itself: a high or critical vulnerability
-whose fix has been out for more than 14 days fails it, and the check's
-summary lists the rest.
-
 ## When a release fails
 
 Nothing is pushed until the checks before it have passed. The run says
@@ -151,25 +140,23 @@ in the package, without a version, until you delete it.
 
 A release is a page on GitHub that holds one version of this project's
 model, so that anyone allowed to read the repository can download exactly
-that version later. Each release here holds five files:
+that version later. Each release here holds four files:
 
 | File | What it is |
 |---|---|
 | `model.skops` | The trained model, saved with skops |
 | `metrics.json` | How well it did on the part of the data it never trained on, as named numbers |
 | `MODEL_CARD.md` | What the model is, what it was trained on, those results, and how it was made: the scikit-learn and skops versions, the commit and the seed |
-| `sbom.spdx.json` | The software bill of materials (SBOM): every Python package, with its version, in the environment the model was trained in |
-| `SHA256SUMS` | A fingerprint of each of the other four, to check a download is whole and unchanged |
+| `SHA256SUMS` | A fingerprint of each of the other three, to check a download is whole and unchanged |
 
 How it works, in one paragraph: you push a version tag, such as `v0.2.0`.
 The workflow `.github/workflows/release.yml` then checks the tag, trains the
-model again from the tagged code (`python -m {{ package_name }} train`), lists
-the environment it trained in, checks that the four files are there, that
-`metrics.json` reads as numbers and that the card says how the model was
-made from the tagged commit, and only then makes the release, with the card
-and the metrics as its notes. No password or token is stored anywhere: the
-run uses its own token, which GitHub makes for that run and which stops
-working when it ends.
+model again from the tagged code (`python -m {{ package_name }} train`), checks
+that the three files are there, that `metrics.json` reads as numbers and
+that the card says how the model was made from the tagged commit, and only
+then makes the release, with the card and the metrics as its notes. No
+password or token is stored anywhere: the run uses its own token, which
+GitHub makes for that run and which stops working when it ends.
 
 Nothing has to be set up before the first tag.
 
@@ -212,19 +199,14 @@ version:
 https://github.com/{{ repo }}/releases/latest/download/model.skops
 ```
 
-Put `metrics.json`, `MODEL_CARD.md`, `sbom.spdx.json` or `SHA256SUMS` in place of
+Put `metrics.json`, `MODEL_CARD.md` or `SHA256SUMS` in place of
 `model.skops` for the others; for one version, use
 `releases/download/v0.2.0/<name>`. From a **public** repository anyone can
 download them. From a **private** one only people who can read the
 repository can, through GitHub's own tool, logged in:
 `gh release download v0.2.0 --repo {{ repo }}`.
 
-`sbom.spdx.json` is a software bill of materials (SBOM): every Python
-package, with its version, in the environment the model was trained in,
-which is also what loading it needs. A scanner reads it to tell whether a
-newly published vulnerability touches a release.
-
-To check that what you downloaded is whole and unchanged, keep the five
+To check that what you downloaded is whole and unchanged, keep the four
 files in one folder and run `sha256sum --check SHA256SUMS` (on a Mac,
 `shasum -a 256 --check SHA256SUMS`). Each line must say `OK`.
 
@@ -458,11 +440,7 @@ Do not add a secret here: Trusted Publishing needs none.
    release page with its notes is under **Releases** on GitHub. On PyPI,
    open the file under **Download files** and **View details**: the
    provenance shown there is the signed record that this repository's
-   workflow built it. The GitHub release page also carries
-   `sbom.spdx.json`, a software bill of materials (SBOM): the package and
-   every package installing it brings, at the versions `uv.lock` names. A
-   scanner reads it to tell whether a newly published vulnerability touches
-   a release.
+   workflow built it.
 
 ## When a release fails
 

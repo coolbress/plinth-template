@@ -1595,13 +1595,7 @@ def test_data_ml_release_runs_on_a_tag_only_and_uploads_no_pickle(
     create = _steps(data_ml, "publish")["Create the GitHub Release"]["run"]
     assert create.rstrip().endswith("$ASSETS SHA256SUMS"), create
     files = [*data["env"]["ASSETS"].split(), "SHA256SUMS"]
-    assert files == [
-        "model.skops",
-        "metrics.json",
-        "MODEL_CARD.md",
-        "sbom.spdx.json",
-        "SHA256SUMS",
-    ]
+    assert files == ["model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"]
     assert not [f for f in files if f.endswith(PICKLES)], f"the release uploads a pickle: {files}"
 
 
@@ -1644,7 +1638,6 @@ GOOD = {
     "model.skops": "model",
     "metrics.json": '{"accuracy": 0.97}\n',
     "MODEL_CARD.md": _card(MADE),
-    "sbom.spdx.json": '{"spdxVersion": "SPDX-2.3"}\n',
 }
 
 
@@ -1737,122 +1730,11 @@ def test_data_ml_release_without_a_signature_says_so_and_does_not_fail(data_ml: 
         done = _run_step(data_ml, "Say what was published", env, job="publish")
         assert done.returncode == 0, done.stdout + done.stderr
         text = summary.read_text(encoding="utf-8")
-        for name in (*GOOD, "SHA256SUMS"):
+        for name in ("model.skops", "metrics.json", "MODEL_CARD.md", "SHA256SUMS"):
             assert f"https://github.com/someone/probe/releases/download/v0.1.0/{name}" in text
         assert "releases/latest/download/<name>" in text
         assert ("gh attestation verify model.skops --repo someone/probe" in text) is signed
         assert ("::notice title=Published without a signed record::" in done.stdout) is not signed
-
-
-# ── a software bill of materials with each release (#172) ─────────────────
-
-SBOM = "sbom.spdx.json"
-INSTALL_SYFT = "Install syft (official release, SHA256 verified)"
-
-
-def _all_release_steps(out: Path) -> list[tuple[str, dict[str, Any]]]:
-    return [(j, s) for j, job in _release(out)["jobs"].items() for s in job["steps"]]
-
-
-@pytest.mark.parametrize("archetype", ["cli", "library", "backend", "data-ml"])
-def test_each_release_makes_an_sbom_with_a_pinned_syft_and_attaches_it(
-    tmp_path: Path, archetype: str
-) -> None:
-    """Every archetype that releases makes an SPDX SBOM with the same syft,
-    a release binary checked against a SHA256 written here, and the step
-    that creates the GitHub Release attaches it."""
-    out = render(tmp_path, archetype=archetype)
-    steps = _all_release_steps(out)
-    (install,) = [s for _, s in steps if s.get("name") == INSTALL_SYFT]
-    assert install["env"]["SYFT_VERSION"] == "1.55.0"
-    assert re.fullmatch(r"[0-9a-f]{64}", install["env"]["SYFT_SHA256"])
-    assert "sha256sum -c -" in install["run"]
-    made = [s for _, s in steps if "syft scan" in s.get("run", "")]
-    assert len(made) == 1
-    assert "-o spdx-json=" in made[0]["run"]
-    (create,) = [s for _, s in steps if s.get("name") == "Create the GitHub Release"]
-    attached = create["run"] + json.dumps(_release(out).get("env", {}))
-    assert SBOM in attached, create["run"]
-
-
-@pytest.mark.parametrize("archetype", ["cli", "library"])
-def test_package_sbom_is_of_the_wheel_installed_and_never_goes_to_pypi(
-    tmp_path: Path, archetype: str
-) -> None:
-    """The wheel holds no list of what it installs, so the SBOM is of a fresh
-    environment with the built wheel installed at the lockfile's runtime
-    versions. It travels apart from `dist/`, which the publish job uploads
-    whole to PyPI, and PyPI refuses a file that is not a distribution."""
-    out = render(tmp_path, archetype=archetype)
-    build = _release(out)["jobs"]["build"]["steps"]
-    names = [s.get("name") or s.get("run") or s["uses"] for s in build]
-    sbom_step = "Make the SBOM of the wheel and what it installs"
-    (make,) = [s["run"] for s in build if s.get("name") == sbom_step]
-    assert "uv export --locked --no-dev --no-emit-project" in make
-    assert "dist/*.whl" in make
-    assert f"sbom/{SBOM}" in make
-    assert "dist/" not in make.split("syft scan", 1)[1]
-    assert names.index("uv build") < names.index(INSTALL_SYFT) < names.index(sbom_step)
-    uploads = [s["with"] for s in build if "upload-artifact" in s.get("uses", "")]
-    assert {u["name"]: u["path"] for u in uploads} == {"dist": "dist/", "sbom": "sbom/"}
-    release = _release(out)["jobs"]["github-release"]["steps"]
-    fetched = {s["with"]["name"] for s in release if "download-artifact" in s.get("uses", "")}
-    assert fetched == {"dist", "sbom"}
-    publish = _release(out)["jobs"]["publish"]["steps"]
-    assert [s["with"]["name"] for s in publish if "download-artifact" in s.get("uses", "")] == [
-        "dist"
-    ]
-    (create,) = [s for s in release if s.get("name") == "Create the GitHub Release"]
-    assert create["run"].rstrip().endswith(f"dist/* sbom/{SBOM}")
-
-
-def test_backend_sbom_is_of_the_pushed_image(backend: Path) -> None:
-    """Read from the image fetched by its pushed digest, after it started,
-    and handed to the job that creates the release."""
-    steps = _image_steps(backend)
-    names = list(steps)
-    make = steps["Make the SBOM of the pushed image"]
-    assert (
-        make["env"]["PUSHED"]
-        == steps["Pull the pushed image and read its first log line"]["env"]["PUSHED"]
-    )
-    assert 'syft scan "docker:$PUSHED"' in make["run"]
-    pulled = names.index("Pull the pushed image and read its first log line")
-    assert pulled < names.index(INSTALL_SYFT) < names.index("Make the SBOM of the pushed image")
-    upload = [s["with"] for s in steps.values() if "upload-artifact" in s.get("uses", "")]
-    assert upload == [{"name": "sbom", "path": "sbom/", "if-no-files-found": "error"}]
-    release = _release(backend)["jobs"]["github-release"]["steps"]
-    assert [s["with"]["name"] for s in release if "download-artifact" in s.get("uses", "")] == [
-        "sbom"
-    ]
-    summary = backend / "summary.md"
-    summary.unlink(missing_ok=True)
-    env = {
-        "REF": "ghcr.io/someone/backend:0.1.0",
-        "DIGEST": "sha256:" + "0" * 64,
-        "ATTESTED": "success",
-        "GITHUB_REPOSITORY": "someone/backend",
-        "GITHUB_STEP_SUMMARY": str(summary),
-    }
-    _run_image_step(backend, "Say what was published", env)
-    assert SBOM in summary.read_text(encoding="utf-8")
-
-
-def test_data_ml_sbom_is_of_the_training_environment_and_in_the_sums(data_ml: Path) -> None:
-    """A data-ml release publishes the model, not an image: its SBOM is of
-    the environment the model was trained in, the one loading it needs. It
-    is one of the release's files, so SHA256SUMS and its signed record
-    cover it."""
-    model = _steps(data_ml, "model")
-    names = list(model)
-    make = model["Make the SBOM of the environment the model was trained in"]["run"]
-    assert "syft scan dir:.venv" in make
-    assert f"release/{SBOM}" in make
-    order = ["Train the model", INSTALL_SYFT]
-    order += ["Make the SBOM of the environment the model was trained in"]
-    order += ["Check the files before anything is uploaded"]
-    assert [n for n in names if n in order] == order
-    assert SBOM in _release(data_ml)["env"]["ASSETS"].split()
 
 
 def test_data_ml_how_to_says_what_a_person_must_decide(data_ml: Path) -> None:
