@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **`AGENTS.md` explains the everyday terms the first time it uses them**
+  (coolbress/plinth#809): repository, issue, pull request, branch, commit,
+  check, CI, merge, ruleset, draft, review and template update (on GitLab,
+  merge request, job and protected branch in their places) get their
+  plain explanation from plinth's term table once, in the person's
+  language, with the English term kept in brackets after the translation so
+  it matches the host's screen. The rule joins the language line, so
+  `AGENTS.md` keeps its line count. An existing project gets it through
+  `/plinth:template-update`.
+
 ### Changed
 - **`AGENTS.md` makes a fresh-context review the default** before the
   description is written: a new subagent given only the diff, the issue's
