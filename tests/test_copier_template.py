@@ -2611,6 +2611,9 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "Do not invent types",
         "a description that no longer matches the diff",
         "Never ask for administration",
+        # the first-use rule and the term table it points at (plinth #809)
+        "plinth/blob/main/docs/reference/terms.md",
+        "keep the English term in brackets after the translation",
     ):
         assert must in text, f"AGENTS.md no longer says: {must}"
     assert "when planning" not in text.lower(), "the planning block moved out of AGENTS.md"
