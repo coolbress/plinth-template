@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+- **`AGENTS.md` makes a fresh-context review the default** before the
+  description is written: a new subagent given only the diff, the issue's
+  acceptance criteria and the Code Review Rules, never the conversation that
+  wrote the change. `/implement`'s `/code-review` stays, named as not
+  independent; a third-party reviewer stays opt-in, named as the more
+  independent one. Guidance only: no check, hook or dependency enforces it
+  (coolbress/plinth#808).
+
 ## [1.37.0] - 2026-11-03
 
 **The `image` check of a `backend`, `data-ml` or `web` project can now fail
