@@ -6,6 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.38.0] - 2026-11-04
+
+**A project's agent now asks for a fresh-context review by default, explains
+everyday terms the first time it uses them, and closes a record with its
+`## Decision` alone; the pull-request and merge-request forms ask what the
+person checked and which review ran.** All of it is guidance or a form: no
+check, job or question changes, and no action is added, so the Actions
+allowlist is unchanged and `copier update` needs no hands. `AGENTS.md`
+keeps its line count.
+
 ### Added
 
 - **`AGENTS.md` explains the everyday terms the first time it uses them**
