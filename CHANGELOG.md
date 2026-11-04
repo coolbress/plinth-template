@@ -14,6 +14,10 @@ means `copier update` on an instance needs hands.
   independent; a third-party reviewer stays opt-in, named as the more
   independent one. Guidance only: no check, hook or dependency enforces it
   (coolbress/plinth#808).
+- **`AGENTS.md` says a record ends in its `## Decision`**: its line on closing
+  an issue now names the exception `docs/agents/issue-tracker.md` already
+  made, so a `research`, `prototype` or `grilling` child no longer also takes
+  an `## Outcome`. Closed records that carry both are left as they are (#188).
 
 ## [1.37.0] - 2026-11-03
 
