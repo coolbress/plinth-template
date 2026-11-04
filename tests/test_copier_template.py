@@ -982,6 +982,27 @@ def test_the_documents_say_who_can_move_the_wall(rendered: Path) -> None:
     assert "not the administrator" in contributing
 
 
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_a_record_ends_in_its_decision_in_both_documents(
+    request: pytest.FixtureRequest, instance: str
+) -> None:
+    """`AGENTS.md` told every closed issue to take `## Outcome` while
+    `issue-tracker.md` ends a record in `## Decision`; agents followed the
+    line they read every session and wrote both (#188)."""
+    out: Path = request.getfixturevalue(instance)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    ending = [ln for ln in agents.splitlines() if "Closing an issue writes its ending" in ln]
+    assert len(ending) == 1, "AGENTS.md has no one line on an issue's ending"
+    assert (
+        "A record (a `research`, `prototype` or `grilling` child) ends in `## Decision` "
+        "instead and does not also take an `## Outcome`." in ending[0]
+    ), "AGENTS.md does not name the record exception"
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    assert "`## Decision` is its ending, so it does not also take an `## Outcome`" in tracker, (
+        "issue-tracker.md no longer ends a record in its Decision"
+    )
+
+
 def test_ci_keeps_the_caller_job_named_ci(rendered: Path) -> None:
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert re.search(r"^jobs:\n  ci:\n", ci, re.M), (
