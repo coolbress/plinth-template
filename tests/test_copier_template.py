@@ -2583,6 +2583,10 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         "## Code Review Rules",
         "irreversible or reaching others, recoverable with one command, or hypothetical",
         "Assisted-by:",
+        # the default review sees the diff, not the authoring conversation (plinth #808)
+        "The default review is a fresh-context review",
+        "never this conversation",
+        "so it is not independent",
         "Do not invent types",
         "a description that no longer matches the diff",
         "Never ask for administration",
