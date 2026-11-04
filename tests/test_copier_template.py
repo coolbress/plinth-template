@@ -2775,6 +2775,38 @@ def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
         assert f"the {other} that met it" not in text, f"{path.name} names the other host"
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_the_description_form_asks_what_was_checked_and_which_review_ran(
+    tmp_path: Path, host: str
+) -> None:
+    """The person's own check and the review left no trace when skipped
+    (coolbress/plinth#810): plinth's description check reads a `What I checked
+    myself` section and a `Review:` line, and warns when one is empty or says
+    only "done". The form carries both, each with what goes in it."""
+    out = render(tmp_path / host, host=host)
+    template = (
+        out / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        if host == "github"
+        else out / ".gitlab" / "merge_request_templates" / "Default.md"
+    )
+    text = template.read_text(encoding="utf-8")
+    assert "\n## What I checked myself\n" in text
+    section = text.split("## What I checked myself", 1)[1].split("\n## ", 1)[0]
+    flat = " ".join(section.split())
+    for must in ("you ran, opened or read", "what you saw", "`Skipped: <reason>`", '"done"'):
+        assert must in flat, f"the What I checked myself section no longer says {must}"
+    review = [line for line in text.splitlines() if line.startswith("Review:")]
+    assert len(review) == 1, "the form has no single Review: line"
+    for answer in (
+        "fresh-context",
+        "third-party (<name>)",
+        "same-session (not independent)",
+        "none (<reason>)",
+    ):
+        assert answer in review[0], f"the Review: line does not offer {answer}"
+    assert text.index("Review:") < text.index("Then these two"), "Review: is below the ending"
+
+
 def test_text_others_write_is_data_and_named(rendered: Path, gitlab: Path) -> None:
     """Planted instructions were refused 24 of 24 times but named to the person
     11 of 24 (plinth #642); the line targets the report (#116)."""

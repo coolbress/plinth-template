@@ -17,6 +17,14 @@ means `copier update` on an instance needs hands.
   it matches the host's screen. The rule joins the language line, so
   `AGENTS.md` keeps its line count. An existing project gets it through
   `/plinth:template-update`.
+- **The pull-request and merge-request forms ask what the person checked
+  and which review ran** (coolbress/plinth#810): a `What I checked myself`
+  section (what was run, opened or read and what it showed, or
+  `Skipped: <reason>`) and a `Review:` line (`fresh-context`,
+  `third-party (<name>)`, `same-session (not independent)` or
+  `none (<reason>)`). plinth's description check reads both and warns,
+  without failing, when one is empty or says only "done". An existing
+  project gets the forms through `/plinth:template-update`.
 
 ### Changed
 - **`AGENTS.md` makes a fresh-context review the default** before the
