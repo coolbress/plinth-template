@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -1367,6 +1368,47 @@ def test_behind_opens_one_issue_with_both_tags_the_notes_and_the_command(
     assert "copier update" not in body
 
 
+@pytest.mark.parametrize("recorded", ["v1.37.0", "v1.38.0"], ids=["behind", "same-tag"])
+def test_the_reminder_gives_the_updates_in_order_and_says_where_the_pin_pull_request_is(
+    rendered: Path, tmp_path: Path, recorded: str
+) -> None:
+    """A person whose plugin is old followed the reminder and found nothing
+    to do: the body names the plugin first, then the template update, then
+    the plinth pin (#206). The job cannot read pull requests with its
+    permissions (measured on a private repository: `gh pr list` and the REST
+    list answer 403, and the issues list leaves pull requests out), so it
+    asks nothing and the body says where to look."""
+    run, calls, body, _ = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE, recorded=recorded)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert not [c for c in calls if not c.startswith("issue ")], calls
+    flat = " ".join(body.split())
+    in_order = (
+        "1. **Update plinth on your computer.**",
+        "`claude plugin marketplace update plinth`",
+        "`claude plugin update plinth@plinth`",
+        "`/reload-plugins`",
+        "2. **Apply the template update.**",
+        "`/plinth:template-update`",
+        "3. **Merge the plinth pin pull request, if one is open.**",
+    )
+    positions = [flat.find(phrase) for phrase in in_order]
+    assert -1 not in positions, f"missing: {in_order[positions.index(-1)]}"
+    assert positions == sorted(positions), positions
+    assert (
+        "https://github.com/someone/probe/blob/HEAD/docs/how-to/keep-this-project-current.md"
+        in flat
+    )
+    assert (
+        "https://github.com/someone/probe/pulls?q=is%3Apr+is%3Aopen+author%3Aapp%2Fdependabot"
+        "+coolbress%2Fplinth" in flat
+    )
+    assert "merged on green like any other" in flat
+    # The local plugin picks step 2's tag and the pin picks this issue's, and
+    # "ahead" leaves the issue open: the body cannot promise it always closes.
+    assert "A newer plinth from step 1 can move this repository past the tag named here" in flat
+    assert "close it by hand" in flat
+
+
 def test_an_open_reminder_is_updated_and_no_second_one_opened(
     rendered: Path, tmp_path: Path
 ) -> None:
@@ -1733,6 +1775,109 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     broken = [ln for ln in agents if ln.startswith("- Something is broken:")]
     assert len(broken) == 1, "AGENTS.md has no one line for when something is broken"
     assert _UNDO_POINTER in broken[0], "AGENTS.md does not point at the page"
+
+
+# ── keeping a project current (#206) ──────────────────────────────────────
+
+KEEP_HOWTO = Path("docs") / "how-to" / "keep-this-project-current.md"
+
+_KEEP_STEP_ONE = (
+    "claude plugin marketplace update plinth",
+    "claude plugin update plinth@plinth",
+    "/reload-plugins",
+    "claude plugin update <name>@plinth",
+    "claude plugin list",
+    "https://github.com/coolbress/plinth/releases",
+)
+
+_KEEP_STEPS = {
+    "github": (
+        ("## 1. Update plinth on your computer", _KEEP_STEP_ONE),
+        (
+            "## 2. Update the template",
+            ("/plinth:template-update", "draft pull request", "`_commit`", "nothing to update"),
+        ),
+        (
+            "## 3. Merge the plinth pin pull request",
+            (
+                "`.github/workflows/ci.yml` and `label.yml`",
+                "gh pr list --author app/dependabot --search coolbress/plinth",
+                "merged on green like any other",
+                "`CONTRIBUTING.md` step 7",
+                "once a week",
+            ),
+        ),
+    ),
+    "gitlab": (
+        ("## 1. Update plinth on your computer", _KEEP_STEP_ONE),
+        (
+            "## 2. Update the template",
+            ("/plinth:floor-check", "`copier update`", "merge request", "`_commit`"),
+        ),
+        (
+            "## 3. Raise the plinth pin",
+            (
+                "Dependabot does not run on GitLab",
+                "`.gitlab-ci.yml`",
+                "git ls-remote https://github.com/coolbress/plinth",
+                "openssl dgst -sha256 -binary",
+                "`CONTRIBUTING.md` step 7",
+            ),
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("archetype", "hosting", "host"),
+    [
+        *[
+            (a, None, h)
+            for a in ("cli", "library", "backend", "data-ml")
+            for h in ("github", "gitlab")
+        ],
+        ("web", "render", "github"),  # `web` is GitHub only
+        ("web", "elsewhere", "github"),
+    ],
+)
+def test_every_render_says_how_to_keep_itself_current_in_order(
+    tmp_path: Path, archetype: str, hosting: str | None, host: str
+) -> None:
+    """Three updates reach a project and nothing in it said so in one place
+    or in order (#206). Each render's page has the three steps, in order, and
+    each says what it brings, what to run and how to tell it is done, with
+    this host's commands and not the other's. `AGENTS.md` points at the page
+    from an existing line, since the file is at its cap."""
+    data: dict[str, str] = {"archetype": archetype, "host": host}
+    if hosting:
+        data["hosting"] = hosting
+    if hosting == "elsewhere":
+        data["hosting_elsewhere"] = "vps"
+    out = render(tmp_path, **data)
+    page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
+    assert page.startswith("# Keep this project current")
+    assert page.count("\n## ") == 3, "the page has exactly the three steps"
+    sections = re.split(r"\n(?=## )", page)[1:]
+    for section, (heading, phrases) in zip(sections, _KEEP_STEPS[host], strict=True):
+        flat = " ".join(section.split())
+        assert section.startswith(heading + "\n"), f"{heading!r} is not next: {section[:40]!r}"
+        for label in ("**What it brings:**", "**What to run:**", "**Done when:**"):
+            assert label in flat, f"{heading} lacks {label}"
+        for phrase in phrases:
+            assert phrase in flat, f"{heading} lacks: {phrase}"
+    # The plugin's steps run in this order: measured, an update alone can
+    # keep the old version when the marketplace copy is stale.
+    first = sections[0]
+    assert first.index("marketplace update") < first.index("plugin update") < first.index("/reload")
+    assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
+    assert ("/plinth:template-update" in page) is (host == "github"), f"needs gh, on {host}"
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    pointer = (
+        "Asked how to update this project: the three steps in order in "
+        "[docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
+    )
+    assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
 
 
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
@@ -4914,6 +5059,171 @@ def test_the_default_checksum_is_the_file_at_the_default_pin() -> None:
         body = response.read()
     expected = base64.b64encode(hashlib.sha256(body).digest()).decode()
     assert _default("plinth_gitlab_integrity") == expected
+
+
+# ── what a release says it was tested with ────────────────────────────────
+
+
+def _release_pin_problem(
+    changelog: str,
+    read_tags: Callable[[], set[str]],
+    default: str,
+    pins: set[str],
+    head_branch: str,
+) -> str | None:
+    """Why this state may not be released, or None.
+
+    Compared only while a release is being cut, when CHANGELOG.md's newest
+    section has no tag yet. Between releases Dependabot raises the workflows'
+    pins and the default rightly stays where the last release left it, so an
+    unconditional comparison would turn every raise red. Dependabot's own
+    pull request is left out in that window too: `main` runs this after its
+    merge, which still stops the tag.
+    """
+    if pins == {default} or head_branch.startswith("dependabot/"):
+        return None
+    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
+    assert newest, "CHANGELOG.md has no version section"
+    version = f"v{newest.group(1)}"
+    if version in read_tags():
+        return None
+    return (
+        f"CHANGELOG.md's newest section {version} has no tag yet, so a release is "
+        f"being cut, and copier.yml's plinth_sha default {default} is not what "
+        f".github/workflows calls: {sorted(pins)}. Raise plinth_sha to that pin and "
+        "plinth_gitlab_integrity to that commit's checksum (CONTRIBUTING.md, Cut a release)."
+    )
+
+
+def _template_tags() -> set[str]:
+    """The tags on GitHub: the test job's checkout carries none.
+
+    Tried three times, briefly: a read has hung past a minute, and an unread
+    tag list must stop the test rather than pass it.
+    """
+    why = ""
+    for _ in range(3):
+        try:
+            listed = subprocess.run(
+                [  # noqa: S607
+                    "git",
+                    "ls-remote",
+                    "--tags",
+                    "--refs",
+                    "https://github.com/coolbress/plinth-template.git",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired as error:
+            why = str(error)
+            continue
+        if listed.returncode == 0:
+            return {line.rsplit("refs/tags/", 1)[1] for line in listed.stdout.splitlines()}
+        why = listed.stderr
+    raise AssertionError(f"could not read the tags: {why}")
+
+
+def _own_workflow_pins() -> set[str]:
+    """Every commit this repository's own workflows call plinth at."""
+    return {
+        pin
+        for path in (TEMPLATE_ROOT / ".github" / "workflows").glob("*.yml")
+        for pin in re.findall(
+            r"^\s*uses: coolbress/plinth/\.github/workflows/[^@\s]+@(\S+)",
+            path.read_text(encoding="utf-8"),
+            re.M,
+        )
+    }
+
+
+def _pull_request_head() -> str:
+    """The head branch of the pull request this run is for, "" when there is none.
+
+    Read from the event, not `GITHUB_HEAD_REF`: CI also runs on a review, and
+    that variable is set only for `pull_request` events.
+    """
+    path = os.environ.get("GITHUB_EVENT_PATH")
+    if not path:
+        return ""
+    pull_request = json.loads(Path(path).read_text(encoding="utf-8")).get("pull_request")
+    return str(pull_request["head"]["ref"]) if pull_request else ""
+
+
+def test_a_release_carries_the_plinth_pin_its_own_ci_calls() -> None:
+    """coolbress/plinth reads the `plinth_sha` default at a tag as the commit
+    that tag was tested with, and offers it to a project. The default's own
+    checksum is held at every commit by the test above."""
+    problem = _release_pin_problem(
+        (TEMPLATE_ROOT / "CHANGELOG.md").read_text(encoding="utf-8"),
+        _template_tags,
+        _default("plinth_sha"),
+        _own_workflow_pins(),
+        _pull_request_head(),
+    )
+    assert problem is None, problem
+
+
+_RELEASED = "## [Unreleased]\n\n## [1.2.0] - 2026-01-02\n\n## [1.1.0] - 2026-01-01\n"
+_DEFAULT_PIN, _RAISED_PIN = "a" * 40, "b" * 40
+
+
+@pytest.mark.parametrize(
+    ("tags", "pins", "head", "stopped"),
+    [
+        ({"v1.1.0"}, {_RAISED_PIN}, "docs/changelog", True),
+        ({"v1.1.0"}, {_RAISED_PIN}, "", True),
+        ({"v1.1.0"}, {_DEFAULT_PIN, _RAISED_PIN}, "docs/changelog", True),
+        ({"v1.1.0"}, set(), "docs/changelog", True),
+        ({"v1.1.0"}, {_DEFAULT_PIN}, "docs/changelog", False),
+        ({"v1.1.0", "v1.2.0"}, {_RAISED_PIN}, "ci/raise", False),
+        ({"v1.1.0", "v1.2.0"}, {_RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+        ({"v1.1.0"}, {_RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+    ],
+)
+def test_the_release_check_stops_only_a_release_whose_pins_differ(
+    tags: set[str], pins: set[str], head: str, stopped: bool
+) -> None:
+    problem = _release_pin_problem(_RELEASED, lambda: tags, _DEFAULT_PIN, pins, head)
+    assert (problem is not None) is stopped, problem
+    if stopped:
+        assert "v1.2.0" in problem  # type: ignore[operator]
+
+
+def test_a_dependabot_raise_is_not_failed_by_reading_the_tags() -> None:
+    """Nor by the network: its pull request and agreeing pins never read them."""
+
+    def unreadable() -> set[str]:
+        raise AssertionError("the tags were read")
+
+    head = "dependabot/github_actions/actions-1"
+    assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_RAISED_PIN}, head) is None
+    assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_DEFAULT_PIN}, "") is None
+
+
+@pytest.mark.parametrize(
+    ("event", "head"),
+    [
+        ({"pull_request": {"head": {"ref": "dependabot/x"}}, "action": "opened"}, "dependabot/x"),
+        ({"pull_request": {"head": {"ref": "dependabot/x"}}, "review": {}}, "dependabot/x"),
+        ({"ref": "refs/heads/main"}, ""),
+    ],
+)
+def test_the_head_branch_comes_from_the_event(
+    event: dict[str, Any], head: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "event.json"
+    path.write_text(json.dumps(event), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+    assert _pull_request_head() == head
+
+
+def test_no_event_is_no_head_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
+    assert _pull_request_head() == ""
 
 
 def test_a_pin_and_its_checksum_are_rendered_and_recorded(tmp_path: Path) -> None:

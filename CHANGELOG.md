@@ -6,6 +6,38 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **A project says how to keep itself current** (#206):
+  `docs/how-to/keep-this-project-current.md`, in every archetype on both
+  hosts, gives the three updates in order, each with what it brings, what to
+  run and how to tell it is done: plinth on the person's computer, the
+  template, and the plinth pin. On GitHub the pin is the Dependabot pull
+  request merged on green like any other. On GitLab, where
+  `/plinth:template-update` and Dependabot do not run, the page gives
+  `/plinth:floor-check`'s `copier update` line and the commands that raise the
+  pin and its checksum. `AGENTS.md` points at it from an existing line, so it
+  keeps its line count. No automatic update is added. An existing project gets
+  this through `/plinth:template-update`.
+
+### Changed
+
+- **The monthly template reminder gives the same order** (#206): its issue
+  lists the plugin update, then `/plinth:template-update`, then the plinth pin
+  pull request, and links the how-to. The job's permissions cannot read pull
+  requests (measured on a private repository) and are not widened, so the
+  issue links to Dependabot's open ones that name plinth instead of naming
+  one. An existing project gets this through `/plinth:template-update`.
+
+- **A new project calls the plinth commit this template was tested with**
+  (#205). `plinth_sha`'s default had stayed at plinth v2.6.0 while this
+  repository's own CI moved on, so tags v1.21.0 to v1.40.0 all claimed to be
+  tested with v2.6.0 and `/plinth:template-update` had no newer tested pin to
+  offer from them. It and `plinth_gitlab_integrity` are now plinth v2.27.0 and that commit's checksum,
+  and a test fails a release whose default differs from the pin this
+  repository's own workflows call. A project's recorded pin is untouched by an
+  update that passes it, as before.
+
 ### Fixed
 
 - A `data-ml` project's README no longer says a release publishes "the three
