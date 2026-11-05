@@ -6,6 +6,29 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **A project says how to keep itself current** (#206):
+  `docs/how-to/keep-this-project-current.md`, in every archetype on both
+  hosts, gives the three updates in order, each with what it brings, what to
+  run and how to tell it is done: plinth on the person's computer, the
+  template, and the plinth pin. On GitHub the pin is the Dependabot pull
+  request merged on green like any other. On GitLab, where
+  `/plinth:template-update` and Dependabot do not run, the page gives
+  `/plinth:floor-check`'s `copier update` line and the commands that raise the
+  pin and its checksum. `AGENTS.md` points at it from an existing line, so it
+  keeps its line count. No automatic update is added. An existing project gets
+  this through `/plinth:template-update`.
+
+### Changed
+
+- **The monthly template reminder gives the same order** (#206): its issue
+  lists the plugin update, then `/plinth:template-update`, then the plinth pin
+  pull request, and links the how-to. The job's permissions cannot read pull
+  requests (measured on a private repository) and are not widened, so the
+  issue links to Dependabot's open ones that name plinth instead of naming
+  one. An existing project gets this through `/plinth:template-update`.
+
 ## [1.40.0] - 2026-11-05
 
 **Every project now carries a way back from a merged change, keeps the person's computer out of its public records, and its monthly template reminder closes itself once the project is current.** All three are guidance, a form line or the existing reminder workflow: no check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `AGENTS.md` keeps its line count. `docs/how-to/` is now in every render.

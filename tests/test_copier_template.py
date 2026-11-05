@@ -1367,6 +1367,43 @@ def test_behind_opens_one_issue_with_both_tags_the_notes_and_the_command(
     assert "copier update" not in body
 
 
+@pytest.mark.parametrize("recorded", ["v1.37.0", "v1.38.0"], ids=["behind", "same-tag"])
+def test_the_reminder_gives_the_updates_in_order_and_says_where_the_pin_pull_request_is(
+    rendered: Path, tmp_path: Path, recorded: str
+) -> None:
+    """A person whose plugin is old followed the reminder and found nothing
+    to do: the body names the plugin first, then the template update, then
+    the plinth pin (#206). The job cannot read pull requests with its
+    permissions (measured on a private repository: `gh pr list` and the REST
+    list answer 403, and the issues list leaves pull requests out), so it
+    asks nothing and the body says where to look."""
+    run, calls, body, _ = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE, recorded=recorded)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert not [c for c in calls if not c.startswith("issue ")], calls
+    flat = " ".join(body.split())
+    in_order = (
+        "1. **Update plinth on your computer.**",
+        "`claude plugin marketplace update plinth`",
+        "`claude plugin update plinth@plinth`",
+        "`/reload-plugins`",
+        "2. **Apply the template update.**",
+        "`/plinth:template-update`",
+        "3. **Merge the plinth pin pull request, if one is open.**",
+    )
+    positions = [flat.find(phrase) for phrase in in_order]
+    assert -1 not in positions, f"missing: {in_order[positions.index(-1)]}"
+    assert positions == sorted(positions), positions
+    assert (
+        "https://github.com/someone/probe/blob/HEAD/docs/how-to/keep-this-project-current.md"
+        in flat
+    )
+    assert (
+        "https://github.com/someone/probe/pulls?q=is%3Apr+is%3Aopen+author%3Aapp%2Fdependabot"
+        "+coolbress%2Fplinth" in flat
+    )
+    assert "merged on green like any other" in flat
+
+
 def test_an_open_reminder_is_updated_and_no_second_one_opened(
     rendered: Path, tmp_path: Path
 ) -> None:
@@ -1733,6 +1770,108 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     broken = [ln for ln in agents if ln.startswith("- Something is broken:")]
     assert len(broken) == 1, "AGENTS.md has no one line for when something is broken"
     assert _UNDO_POINTER in broken[0], "AGENTS.md does not point at the page"
+
+
+# ── keeping a project current (#206) ──────────────────────────────────────
+
+KEEP_HOWTO = Path("docs") / "how-to" / "keep-this-project-current.md"
+
+_KEEP_STEP_ONE = (
+    "claude plugin marketplace update plinth",
+    "claude plugin update plinth@plinth",
+    "/reload-plugins",
+    "claude plugin list",
+    "https://github.com/coolbress/plinth/releases",
+)
+
+_KEEP_STEPS = {
+    "github": (
+        ("## 1. Update plinth on your computer", _KEEP_STEP_ONE),
+        (
+            "## 2. Update the template",
+            ("/plinth:template-update", "draft pull request", "`_commit`", "nothing to update"),
+        ),
+        (
+            "## 3. Merge the plinth pin pull request",
+            (
+                "`.github/workflows/ci.yml` and `label.yml`",
+                "gh pr list --author app/dependabot --search coolbress/plinth",
+                "merged on green like any other",
+                "`CONTRIBUTING.md` step 7",
+                "once a week",
+            ),
+        ),
+    ),
+    "gitlab": (
+        ("## 1. Update plinth on your computer", _KEEP_STEP_ONE),
+        (
+            "## 2. Update the template",
+            ("/plinth:floor-check", "`copier update`", "merge request", "`_commit`"),
+        ),
+        (
+            "## 3. Raise the plinth pin",
+            (
+                "Dependabot does not run on GitLab",
+                "`.gitlab-ci.yml`",
+                "git ls-remote https://github.com/coolbress/plinth",
+                "openssl dgst -sha256 -binary",
+                "`CONTRIBUTING.md` step 7",
+            ),
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("archetype", "hosting", "host"),
+    [
+        *[
+            (a, None, h)
+            for a in ("cli", "library", "backend", "data-ml")
+            for h in ("github", "gitlab")
+        ],
+        ("web", "render", "github"),  # `web` is GitHub only
+        ("web", "elsewhere", "github"),
+    ],
+)
+def test_every_render_says_how_to_keep_itself_current_in_order(
+    tmp_path: Path, archetype: str, hosting: str | None, host: str
+) -> None:
+    """Three updates reach a project and nothing in it said so in one place
+    or in order (#206). Each render's page has the three steps, in order, and
+    each says what it brings, what to run and how to tell it is done, with
+    this host's commands and not the other's. `AGENTS.md` points at the page
+    from an existing line, since the file is at its cap."""
+    data: dict[str, str] = {"archetype": archetype, "host": host}
+    if hosting:
+        data["hosting"] = hosting
+    if hosting == "elsewhere":
+        data["hosting_elsewhere"] = "vps"
+    out = render(tmp_path, **data)
+    page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
+    assert page.startswith("# Keep this project current")
+    assert page.count("\n## ") == 3, "the page has exactly the three steps"
+    sections = re.split(r"\n(?=## )", page)[1:]
+    for section, (heading, phrases) in zip(sections, _KEEP_STEPS[host], strict=True):
+        flat = " ".join(section.split())
+        assert section.startswith(heading + "\n"), f"{heading!r} is not next: {section[:40]!r}"
+        for label in ("**What it brings:**", "**What to run:**", "**Done when:**"):
+            assert label in flat, f"{heading} lacks {label}"
+        for phrase in phrases:
+            assert phrase in flat, f"{heading} lacks: {phrase}"
+    # The plugin's steps run in this order: measured, an update alone can
+    # keep the old version when the marketplace copy is stale.
+    first = sections[0]
+    assert first.index("marketplace update") < first.index("plugin update") < first.index("/reload")
+    assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
+    assert ("/plinth:template-update" in page) is (host == "github"), f"needs gh, on {host}"
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    pointer = (
+        "Asked how to update this project: the three steps in order in "
+        "[docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
+    )
+    assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
 
 
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
