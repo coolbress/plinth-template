@@ -214,8 +214,10 @@ plinth_sha:
   type: str
   help: |
     Commit of coolbress/plinth whose reusable workflows this project calls.
-    Press Enter for the one this template release was tested with; on an
-    update, pass the pin the repository has now.
+    /plinth:new-project passes its own current pin. Pressing Enter takes an
+    older known-good commit (plinth v2.6.0), not the latest; prefer the
+    latest plinth release's commit. On an update, pass the pin the
+    repository has now.
   default: "d50950bb50538680c508b0fe35498da4e8723dfa"
   # A branch, a tag or a short SHA can move or be ambiguous, and on GitLab a
   # moved ref fails every pipeline against the recorded checksum.
