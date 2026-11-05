@@ -1238,24 +1238,31 @@ def _remind(
     rc: int,
     out: str,
     err: str = "",
-    recorded: str = "v1.37.0",
+    recorded: str | None = "v1.37.0",
     issues: list[dict[str, Any]] | None = None,
     fetched: bool = True,
+    checker: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], list[str], str, str]:
     """The step that decides, against a stand-in for plinth's checker (its
     exit code, stdout and stderr given: nothing here recomputes the
-    comparison) and for `gh` (the open issues given). Returns the run, the
+    comparison) and for `gh` (the open issues given). `fetched` False
+    leaves out floor-check.py alone; `checker` False leaves no checker
+    directory, as the fetch step does when it fetches nothing or removes a
+    partial fetch. `recorded` None writes no `_commit`. Returns the run, the
     `gh` calls, the issue body written, and the checker's arguments."""
     plinth = tmp_path / "runner" / "plinth"
-    plinth.mkdir(parents=True)
-    if fetched:
-        (plinth / "floor-check.py").write_text(FLOOR_CHECK_STUB, encoding="utf-8")
-    (plinth / "new-project.sh").write_text(
-        'template_repo="coolbress/plinth-template"\ntemplate_ref="v1.38.0"\n', encoding="utf-8"
-    )
+    (tmp_path / "runner").mkdir()
+    if checker:
+        plinth.mkdir()
+        if fetched:
+            (plinth / "floor-check.py").write_text(FLOOR_CHECK_STUB, encoding="utf-8")
+        (plinth / "new-project.sh").write_text(
+            'template_repo="coolbress/plinth-template"\ntemplate_ref="v1.38.0"\n', encoding="utf-8"
+        )
     (tmp_path / "project").mkdir()
+    commit = "" if recorded is None else f"_commit: {recorded}\n"
     (tmp_path / "project" / ".copier-answers.yml").write_text(
-        f"_commit: {recorded}\n_src_path: gh:coolbress/plinth-template\n", encoding="utf-8"
+        commit + "_src_path: gh:coolbress/plinth-template\n", encoding="utf-8"
     )
     (tmp_path / "issues.json").write_text(json.dumps(issues or []), encoding="utf-8")
     env = {
@@ -1326,9 +1333,160 @@ def test_up_to_date_does_nothing_and_logs_why(rendered: Path, tmp_path: Path) ->
     why = "no update command: the recorded tag is the target tag (v1.38.0): nothing to update\n"
     run, calls, body, _ = _remind(rendered, tmp_path, rc=1, out="", err=why, recorded="v1.38.0")
     assert run.returncode == 0, run.stdout + run.stderr
-    assert not [c for c in calls if c.startswith("issue")], calls
+    # Only the read that finds no open reminder.
+    assert [c for c in calls if c.startswith("issue")] == [
+        "issue list --repo someone/probe --state open --limit 1000 --json number,body,author"
+    ], calls
     assert body == ""
     assert why.strip() in run.stdout + run.stderr
+
+
+UP_TO_DATE = "no update command: the recorded tag is the target tag (v1.38.0): nothing to update\n"
+OURS = {"number": 9, "author": {"login": "app/github-actions"}, "body": MARKER + "\nold"}
+
+
+def test_up_to_date_closes_the_open_reminder_with_the_tag_and_the_run(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """The checker said, in its own words, that the recorded tag is the
+    target tag and there is nothing to update, and `_commit` is
+    `template_ref`: the open reminder gets one comment and is closed."""
+    issues = [{"number": 3, "author": {"login": "someone"}, "body": MARKER + "\nnot ours"}, OURS]
+    run, calls, body, _ = _remind(
+        rendered, tmp_path, rc=1, out="", err=UP_TO_DATE, recorded="v1.38.0", issues=issues
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    writes = [c for c in calls if c.startswith("issue") and not c.startswith("issue list")]
+    assert len(writes) == 1, calls
+    (close,) = writes
+    assert close.startswith("issue close 9 --repo someone/probe")
+    assert "--reason completed" in close
+    assert "--comment " in close
+    assert "**v1.38.0**" in close
+    assert "https://github.com/someone/probe/actions/runs/1" in close
+    assert body == ""
+    assert "closed the reminder: issue #9" in run.stdout
+
+
+NOT_VERIFIED = "not verified that v1.38.0 still names " + "c" * 40
+
+
+@pytest.mark.parametrize(
+    ("rc", "out", "err", "recorded", "fetched", "checker"),
+    [
+        # floor-check could not verify, at the target tag: each is exit 1, no line.
+        (
+            1,
+            "",
+            "no update command: template drift not verified (no .copier-answers.yml)\n",
+            "v1.38.0",
+            True,
+            True,
+        ),
+        (
+            1,
+            "",
+            f"no update command: {NOT_VERIFIED}, the commit plinth was tested with (offline)\n",
+            "v1.38.0",
+            True,
+            True,
+        ),
+        (
+            1,
+            "",
+            "no update command: the recorded tag is the target tag (v1.38.0); a recorded owner "
+            "answer is true, and no line re-renders for it: workflow pins disagree\n",
+            "v1.38.0",
+            True,
+            True,
+        ),
+        (1, "", "Traceback (most recent call last):\nKeyError: 'state'\n", "v1.38.0", True, True),
+        (0, "", "", "v1.38.0", True, True),
+        # the checker files could not be fetched
+        (0, "", "", "v1.38.0", False, True),
+        (0, "", "", "v1.38.0", True, False),
+        # ci.yml does not call one plinth pin: nothing fetched, whatever is recorded
+        (0, "", "", None, True, False),
+        # behind, or ahead, with no update command
+        (
+            1,
+            "",
+            "no update command: v1.37.0 is behind v1.38.0, but there is no update command: "
+            "workflow pins disagree\n",
+            "v1.37.0",
+            True,
+            True,
+        ),
+        (
+            1,
+            "",
+            "no update command: the recorded tag v1.40.0 is ahead of v1.38.0, the tag plinth "
+            "is tested with\n",
+            "v1.40.0",
+            True,
+            True,
+        ),
+    ],
+    ids=[
+        "skip",
+        "unverified-tag",
+        "owner-answer-no-line",
+        "crash",
+        "exit-0-no-line",
+        "no-floor-check",
+        "no-checker-files",
+        "no-pin-no-commit",
+        "behind-no-line",
+        "ahead",
+    ],
+)
+def test_anything_but_a_positive_up_to_date_leaves_the_reminder_open(
+    rendered: Path,
+    tmp_path: Path,
+    rc: int,
+    out: str,
+    err: str,
+    recorded: str | None,
+    fetched: bool,
+    checker: bool,
+) -> None:
+    """Closing needs floor-check's own "nothing to update" and `_commit`
+    equal to `template_ref`. A reminder open when the checker could not
+    tell, was not fetched, or found the project behind or ahead without a
+    line is left open and untouched."""
+    run, calls, body, _ = _remind(
+        rendered,
+        tmp_path,
+        rc=rc,
+        out=out,
+        err=err,
+        recorded=recorded,
+        issues=[OURS],
+        fetched=fetched,
+        checker=checker,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    writes = [c for c in calls if c.startswith("issue") and not c.startswith("issue list")]
+    assert writes == [], calls
+    assert body == ""
+    assert "no reminder:" in run.stdout
+
+
+def test_a_reminder_someone_else_opened_is_never_closed(rendered: Path, tmp_path: Path) -> None:
+    """The marker alone is not ours: an issue opened by a person, or by
+    another bot, carrying it stays open when the project is up to date."""
+    issues = [
+        {"number": 3, "author": {"login": "someone"}, "body": MARKER + "\nnot ours"},
+        {"number": 4, "author": {"login": "app/renovate"}, "body": MARKER + "\nnot ours"},
+    ]
+    run, calls, _, _ = _remind(
+        rendered, tmp_path, rc=1, out="", err=UP_TO_DATE, recorded="v1.38.0", issues=issues
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert [c for c in calls if c.startswith("issue")] == [
+        "issue list --repo someone/probe --state open --limit 1000 --json number,body,author"
+    ]
+    assert "closed" not in run.stdout
 
 
 @pytest.mark.parametrize(

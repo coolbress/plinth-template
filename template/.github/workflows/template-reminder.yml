@@ -3,8 +3,10 @@
 # commit ci.yml calls is tested with. That commit's
 # `scripts/floor-check.py --print-update-command` decides, as for
 # `ci / floor-check` and `/plinth:template-update`: exit 0 with a command line
-# opens one issue, or updates the open one; anything else logs why. It never
-# runs `copier update` or opens a pull request, and it is not a check.
+# opens one issue, or updates the open one. Its own "nothing to update" for the
+# tag `_commit` records closes the open one with a comment; anything else,
+# "ahead" included, logs why and leaves it as it is. It never runs
+# `copier update` or opens a pull request, and it is not a check.
 # GitHub turns a scheduled workflow off in a public repository after 60 days
 # without activity; turn it back on in the Actions tab.
 name: Template reminder
@@ -30,7 +32,7 @@ jobs:
     # a private repository answers "Repository not found" (measured).
     permissions:
       contents: read  # to check out this repository
-      issues: write   # to open or update the reminder issue
+      issues: write   # to open, update or close the reminder issue
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,14 +71,37 @@ jobs:
           rc=0
           out="$(python3 "$PLINTH/floor-check.py" --root "$PROJECT" --repo "$GITHUB_REPOSITORY" --print-update-command 2> "$RUNNER_TEMP/why")" || rc=$?
           cat "$RUNNER_TEMP/why"
-          if [ "$rc" != 0 ] || ! grep -q '^uvx .* copier update ' <<<"$out"; then
-            echo "no reminder: floor-check.py printed no update command (exit $rc); its reason is above"
-            exit 0
-          fi
-          field() { sed -nE "s/^$1[:=] *\"?([^\"]*)\"?\$/\1/p" "$2" | head -1; }
+          # Empty when the file is missing: the fetch step fetched nothing.
+          field() { { sed -nE "s/^$1[:=] *\"?([^\"]*)\"?\$/\1/p" "$2" 2>/dev/null || true; } | head -1; }
           current="$(field _commit "$PROJECT/.copier-answers.yml")"
           target="$(field template_ref "$PLINTH/new-project.sh")"
           template="$(field template_repo "$PLINTH/new-project.sh")"
+          marker='<!-- plinth:template-reminder -->'
+          # The open reminder this workflow wrote: its body starts with the
+          # marker and the Actions bot opened it. Someone else's is never touched.
+          ours() {
+            gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json number,body,author \
+              | jq -r --arg m "$marker" '[.[] | select((.author.login == "app/github-actions" or .author.login == "github-actions[bot]") and (.body | startswith($m)))] | first | .number // empty'
+          }
+          if [ "$rc" != 0 ] || ! grep -q '^uvx .* copier update ' <<<"$out"; then
+            # Up to date is read, never inferred from "no line": floor-check
+            # exits 1 too when it cannot verify. Its own "nothing to update" for
+            # this tag, and `_commit` equal to `template_ref`, both or nothing.
+            if [ "$rc" = 1 ] && [ -n "$target" ] && [ "$current" = "$target" ] \
+              && grep -qxF "no update command: the recorded tag is the target tag ($target): nothing to update" "$RUNNER_TEMP/why"; then
+              open="$(ours)"
+              if [ -n "$open" ]; then
+                gh issue close "$open" --repo "$GITHUB_REPOSITORY" --reason completed \
+                  --comment "This repository is now on template tag **$target**, the tag plinth is tested with: nothing to update. Closed by $RUN_URL."
+                echo "closed the reminder: issue #$open"
+              else
+                echo "no reminder: up to date at $target, and no open reminder to close"
+              fi
+              exit 0
+            fi
+            echo "no reminder: floor-check.py printed no update command (exit $rc); its reason is above"
+            exit 0
+          fi
           if [ "$current" = "$target" ]; then
             title="Template update available: re-render $target"
             what="This repository is on template tag **$target**, the tag plinth is tested with, and the update line re-renders it at that tag: an answer about the owner's shared files changed since it was made."
@@ -84,7 +109,6 @@ jobs:
             title="Template update available: $current to $target"
             what="This repository was made from template tag **$current**. Tag **$target** is available: the tag the plinth commit this repository's CI calls is tested with."
           fi
-          marker='<!-- plinth:template-reminder -->'
           body="$RUNNER_TEMP/body.md"
           cat > "$body" <<EOF
           $marker
@@ -94,12 +118,11 @@ jobs:
 
           To apply it, run \`/plinth:template-update\` in Claude Code in this repository. It shows its plan first and asks before it writes anything. Nothing here applies the update: it can conflict with this repository's own changes, and it needs a person's yes.
 
-          This issue is updated, not duplicated, while it is open; close it once the update is merged. Last checked by $RUN_URL.
+          This issue is updated, not duplicated, while it is open, and closed by the first run after the update is merged. Last checked by $RUN_URL.
 
           GitHub turns off scheduled workflows in a public repository after 60 days without activity. If this reminder stops, turn \`Template reminder\` back on in the Actions tab.
           EOF
-          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json number,body,author \
-            | jq -r --arg m "$marker" '[.[] | select((.author.login == "app/github-actions" or .author.login == "github-actions[bot]") and (.body | startswith($m)))] | first | .number // empty')"
+          open="$(ours)"
           if [ -n "$open" ]; then
             gh issue edit "$open" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
             echo "updated the reminder: issue #$open"
