@@ -18,7 +18,8 @@ Then these two, in this order, at the end and with nothing after them:
   Closes #N                     Only when this pull request completes the issue.
                                 `Part of #N` for partial work, `Related to #N`
                                 otherwise; omit the line when there is none.
-                                From another repository: `owner/repo#N`.
+                                Any reference to another repository's issue
+                                or pull request, here or above: `owner/repo#N`.
                                 `Closes` auto-closes, so the wrong verb closes
                                 unfinished work. A close, fix or resolve word
                                 before #N anywhere above closes it too.

@@ -27,6 +27,17 @@ means `copier update` on an instance needs hands.
   the project's settings, which a template cannot do. An existing project
   gets it through `/plinth:template-update`.
 
+### Changed
+
+- **A reference to another repository's issue or pull request is
+  `owner/repo#N`** (coolbress/plinth#825): `AGENTS.md`,
+  `docs/agents/issue-tracker.md` and the pull-request form say so for every
+  reference, not only the closing line, because a bare `#N` links to the
+  repository the text is in. On GitLab the forms are `group/project#N` for an
+  issue and `group/project!N` for a merge request. The rule joins the existing
+  issues line, so `AGENTS.md` keeps its line count. An existing project gets
+  it through `/plinth:template-update`.
+
 ## [1.38.0] - 2026-11-04
 
 **A project's agent now asks for a fresh-context review by default, explains

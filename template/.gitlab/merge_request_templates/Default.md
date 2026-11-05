@@ -18,7 +18,10 @@ Then these two, in this order, at the end and with nothing after them:
   Closes #N                     Only when this merge request completes the issue.
                                 `Part of #N` for partial work, `Related to #N`
                                 otherwise; omit the line when there is none.
-                                From another project: `group/project#N`.
+                                Any reference to another repository's issue
+                                or merge request, here or above:
+                                `group/project#N` for an issue,
+                                `group/project!N` for a merge request.
                                 `Closes` auto-closes on merge into the default
                                 branch, so the wrong verb closes unfinished
                                 work. A close, fix or resolve word before #N
