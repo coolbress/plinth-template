@@ -6,6 +6,27 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **A monthly reminder when the project's template is behind** (#192):
+  `.github/workflows/template-reminder.yml` runs on the 3rd of each month
+  and by `workflow_dispatch`. It fetches plinth's `scripts/floor-check.py`
+  at the commit the project's `ci.yml` calls and runs its
+  `--print-update-command`, the comparison `ci / floor-check` and
+  `/plinth:template-update` already make. When that prints an update line,
+  the workflow opens one issue naming the project's template tag, the tag
+  available, the template's release notes and `/plinth:template-update`,
+  and on later runs updates that issue instead of opening another. When it
+  prints none, the job logs the reason and opens nothing. It never runs
+  `copier update` or opens a pull request. It is not a check: no job is
+  added to `ci.yml`, no required check name, and no pull request starts it.
+  It uses only `actions/checkout`, already allowed, so the Actions
+  allowlist is unchanged. Its job asks for `issues: write` and the
+  `contents: read` its checkout needs; without that, a private repository's
+  checkout fails. GitHub only: a GitLab scheduled pipeline is created in
+  the project's settings, which a template cannot do. An existing project
+  gets it through `/plinth:template-update`.
+
 ### Changed
 
 - **A reference to another repository's issue or pull request is
