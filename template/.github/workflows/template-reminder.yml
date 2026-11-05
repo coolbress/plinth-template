@@ -6,7 +6,10 @@
 # opens one issue, or updates the open one. Its own "nothing to update" for the
 # tag `_commit` records closes the open one with a comment; anything else,
 # "ahead" included, logs why and leaves it as it is. It never runs
-# `copier update` or opens a pull request, and it is not a check.
+# `copier update` or opens a pull request, and it is not a check. It reads no
+# pull request either: with these permissions `gh pr list` and the REST list
+# answer 403 and the issues list leaves them out (measured on a private
+# repository), so the issue links to Dependabot's instead of naming one.
 # GitHub turns a scheduled workflow off in a public repository after 60 days
 # without activity; turn it back on in the Actions tab.
 name: Template reminder
@@ -116,9 +119,13 @@ jobs:
 
           What changed: https://github.com/$template/releases/tag/$target (every release: https://github.com/$template/releases).
 
-          To apply it, run \`/plinth:template-update\` in Claude Code in this repository. It shows its plan first and asks before it writes anything. Nothing here applies the update: it can conflict with this repository's own changes, and it needs a person's yes.
+          Do these in order. [The how-to](https://github.com/$GITHUB_REPOSITORY/blob/HEAD/docs/how-to/keep-this-project-current.md) says what each brings and how to tell it is done.
 
-          This issue is updated, not duplicated, while it is open, and closed by the first run after the update is merged. Last checked by $RUN_URL.
+          1. **Update plinth on your computer.** It decides which template tag step 2 moves to. In a terminal, run \`claude plugin marketplace update plinth\`, then \`claude plugin update plinth@plinth\`. Then type \`/reload-plugins\` in Claude Code, or start a new session.
+          2. **Apply the template update.** Run \`/plinth:template-update\` in Claude Code in this repository. It shows its plan first and asks before it writes anything. Nothing here applies the update: it can conflict with this repository's own changes, and it needs a person's yes.
+          3. **Merge the plinth pin pull request, if one is open.** This reminder cannot read pull requests. [Dependabot's open ones naming plinth](https://github.com/$GITHUB_REPOSITORY/pulls?q=is%3Apr+is%3Aopen+author%3Aapp%2Fdependabot+coolbress%2Fplinth) raise the commit of plinth this repository's checks run from, and are merged on green like any other.
+
+          This issue is updated, not duplicated, while it is open, and closed by the first run after the update is merged, when this repository is on the tag named here. A newer plinth from step 1 can move this repository past the tag named here: this issue then stays open until the pull request in step 3 catches up, or you close it by hand. Last checked by $RUN_URL.
 
           GitHub turns off scheduled workflows in a public repository after 60 days without activity. If this reminder stops, turn \`Template reminder\` back on in the Actions tab.
           EOF
