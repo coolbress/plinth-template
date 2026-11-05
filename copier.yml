@@ -202,6 +202,9 @@ archetype:
 # The commit of coolbress/plinth whose reusable workflows the instance calls,
 # the one this template release was tested with. It is the only pin the
 # template carries, and the instance's Dependabot raises it afterwards.
+# coolbress/plinth reads this default at a tag as what that tag was tested with,
+# so each release raises it to the commit this repository's own workflows call
+# (CONTRIBUTING.md, Cut a release); between releases it stays there.
 #
 # Recorded, not computed, and that is the whole point of the question. While
 # it was `when: false` copier neither wrote it to the answers file nor let
@@ -216,7 +219,7 @@ plinth_sha:
     Commit of coolbress/plinth whose reusable workflows this project calls.
     Press Enter for the one this template release was tested with; on an
     update, pass the pin the repository has now.
-  default: "d50950bb50538680c508b0fe35498da4e8723dfa"
+  default: "27facda177bc3d1c34f6936937465717160a4b72"
   # A branch, a tag or a short SHA can move or be ambiguous, and on GitLab a
   # moved ref fails every pipeline against the recorded checksum.
   validator: >-
@@ -314,7 +317,7 @@ plinth_gitlab_integrity:
     include's integrity). Press Enter for the default pin's; with another pin,
     pass that commit's (curl the file, then openssl dgst -sha256 -binary |
     openssl base64 -A).
-  default: "m+mG7HTJyN1UEWKqP7nXkEC7zkxYtGGc80kBD+JVDIM="
+  default: "JcyzvW7js/N6wlNqK3u5Ns/M7VI7Z4sT2JxbYgCEYG4="
   validator: >-
     {%- if host == 'gitlab' and not (plinth_gitlab_integrity | regex_search('^[A-Za-z0-9+/]{43}=$')) -%}
     plinth_gitlab_integrity is not a base64 SHA-256 (44 characters ending in =).

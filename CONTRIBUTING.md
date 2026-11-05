@@ -89,10 +89,28 @@ docs) is filed in coolbress/plinth, and the pull request here ends with
 ## Cut a release
 
 A change that reaches an instance needs a tag; copier picks the latest tag
-and plinth pins one. Tag from the merged `main`, `vX.Y.Z`, MAJOR when
-`copier update` on an instance needs hands. Write the release note as the
-"why" for a consumer, then tell plinth: its `scripts/new-project.sh` pins the
-tested tag and its next release names it.
+and plinth pins one.
+
+1. In the pull request that adds the version's `CHANGELOG.md` section, raise
+   `plinth_sha` in `copier.yml` to the commit `.github/workflows` calls, and
+   `plinth_gitlab_integrity` to that commit's checksum:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/coolbress/plinth/<sha>/gitlab/python-ci.yml |
+     openssl dgst -sha256 -binary | openssl base64 -A
+   ```
+
+   coolbress/plinth reads the default at a tag as what that tag was tested
+   with. `test_a_release_carries_the_plinth_pin_its_own_ci_calls` fails while
+   the newest section has no tag and the two differ. Between releases they may
+   differ: Dependabot raises the workflows' pins and the default waits for the
+   release, so the test compares nothing then.
+2. Tag from the merged `main` once its CI is green, `vX.Y.Z`, MAJOR when
+   `copier update` on an instance needs hands. A Dependabot pull request is
+   not failed by that test even in this window; merging one here turns `main`
+   red, and step 1 is repeated before the tag.
+3. Write the release note as the "why" for a consumer, then tell plinth: its
+   `scripts/new-project.sh` pins the tested tag and its next release names it.
 
 ## What a change must keep true
 
