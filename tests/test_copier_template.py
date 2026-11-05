@@ -1663,7 +1663,7 @@ _UNDO_LINES = {
         'The title GitHub writes, `Revert "…"`, fails `ci / pr-title`',
         "Merge it like any other pull request, with `CONTRIBUTING.md` step 7's command",
         "git revert <merged commit>",
-        "gh pr create --title 'revert: <what the change did>'",
+        "gh pr create --title 'revert: <what the change did>' --body 'Reverts #<n>.'",
     ),
     "gitlab": (
         "On the merged merge request's page, press **Revert**",
@@ -1671,7 +1671,7 @@ _UNDO_LINES = {
         'The title GitLab writes, `Revert "…"`, fails `pr-title`',
         "Merge it like any other merge request, with `CONTRIBUTING.md` step 7's command",
         "git revert <merged commit>",
-        "glab mr create --title 'revert: <what the change did>'",
+        "glab mr create --title 'revert: <what the change did>' --description 'Reverts !<n>.'",
     ),
 }
 
@@ -1681,8 +1681,8 @@ _UNDO_SHARED = (
 )
 
 _UNDO_WEB = {
-    "render": "the README's **Getting data back**",
-    "elsewhere": "the README's **Where it runs** section",
+    "render": ("the README's **Getting data back**", "- **Getting data back.**"),
+    "elsewhere": ("the README's **Where it runs** section", "## Where it runs:"),
 }
 
 _UNDO_POINTER = (
@@ -1724,8 +1724,11 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
         assert line in page, f"{UNDO_HOWTO} lacks: {line}"
     assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
     assert ("glab " in page) is (host == "gitlab"), f"GitLab's command on {host}"
-    for where, pointer in _UNDO_WEB.items():
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    for where, (pointer, section) in _UNDO_WEB.items():
         assert (pointer in page) is (hosting == where), f"web pointer {where!r} on {hosting}"
+        if hosting == where:
+            assert section in readme, f"the page points at a README section that is gone: {section}"
     agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
     broken = [ln for ln in agents if ln.startswith("- Something is broken:")]
     assert len(broken) == 1, "AGENTS.md has no one line for when something is broken"
