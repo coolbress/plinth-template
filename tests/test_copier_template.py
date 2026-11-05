@@ -1348,10 +1348,11 @@ def test_a_same_tag_line_is_named_a_re_render_not_v_to_itself(
 
 
 def _fetch(
-    rendered: Path, tmp_path: Path, ci: str
+    rendered: Path, tmp_path: Path, ci: str, missing: str = ""
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """The fetch step, as rendered, against the given ci.yml, with `curl`
-    standing in: it logs each URL and reads nothing over the network."""
+    standing in: it logs each URL and reads nothing over the network. A URL
+    ending in `missing` fails as `curl -f` fails on a 404 (exit 22)."""
     steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
     script = steps["Fetch the checker from the plinth commit ci.yml calls"]["run"]
     workflows = tmp_path / "project" / ".github" / "workflows"
@@ -1360,7 +1361,10 @@ def _fetch(
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     (bin_dir / "curl").write_text(
-        '#!/bin/bash\nprintf \'%s\\n\' "${@: -1}" >> "$CURL_LOG"\n', encoding="utf-8"
+        "#!/bin/bash\n"
+        'printf \'%s\\n\' "${@: -1}" >> "$CURL_LOG"\n'
+        'if [ -n "$CURL_MISSING" ] && [[ "${@: -1}" == *"$CURL_MISSING" ]]; then exit 22; fi\n',
+        encoding="utf-8",
     )
     (bin_dir / "curl").chmod(0o755)
     (tmp_path / "temp").mkdir()
@@ -1372,6 +1376,7 @@ def _fetch(
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
             "RUNNER_TEMP": str(tmp_path / "temp"),
             "CURL_LOG": str(tmp_path / "curl.log"),
+            "CURL_MISSING": missing,
         },
         capture_output=True,
         text=True,
@@ -1399,6 +1404,20 @@ def test_the_checker_is_fetched_at_the_pin_ci_yml_calls(rendered: Path, tmp_path
         assert run.returncode == 0, run.stdout + run.stderr
         assert urls == [], name
         assert "no reminder: ci.yml does not call" in run.stdout, name
+
+
+def test_a_file_the_pin_does_not_have_logs_why_and_leaves_no_checker(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """A pin older than one of the three files (`lib/shared-github.sh` came
+    later than the other two) answers 404. The job stays green with the
+    reason in its log, and no partial checker is left for the next step,
+    which then opens nothing."""
+    run, urls = _fetch(rendered, tmp_path, _ci(rendered), missing="lib/shared-github.sh")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert urls[-1].endswith("lib/shared-github.sh")
+    assert "no reminder: a file the checker needs could not be fetched" in run.stdout
+    assert not (tmp_path / "temp" / "plinth").exists()
 
 
 def test_the_reminder_is_not_rendered_on_gitlab(tmp_path: Path) -> None:

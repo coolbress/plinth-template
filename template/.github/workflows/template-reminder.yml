@@ -58,10 +58,15 @@ jobs:
           fi
           sha="${pins##*@}"
           d="$RUNNER_TEMP/plinth"; mkdir -p "$d/lib"
-          for f in scripts/floor-check.py scripts/new-project.sh; do
-            curl -fsSL --retry 3 -o "$d/$(basename "$f")" "https://raw.githubusercontent.com/coolbress/plinth/$sha/$f"
-          done
-          curl -fsSL --retry 3 -o "$d/lib/shared-github.sh" "https://raw.githubusercontent.com/coolbress/plinth/$sha/scripts/lib/shared-github.sh"
+          fetch() { curl -fsSL --retry 3 -o "$d/$1" "https://raw.githubusercontent.com/coolbress/plinth/$sha/scripts/$1"; }
+          # A pin older than one of these files answers 404: nothing to remind
+          # about from it, so the job stays green, and no partial checker is
+          # left for the next step to run.
+          if ! { fetch floor-check.py && fetch new-project.sh && fetch lib/shared-github.sh; }; then
+            rm -rf "$d"
+            echo "no reminder: a file the checker needs could not be fetched from plinth $sha (curl's error is above; a pin from before the file existed answers 404)"
+            exit 0
+          fi
           echo "plinth $sha"
 
       - name: Open or update the reminder issue
