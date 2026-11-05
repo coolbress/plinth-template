@@ -1003,6 +1003,45 @@ def test_a_record_ends_in_its_decision_in_both_documents(
     )
 
 
+_REFERENCE_RULE = {
+    "rendered": (
+        "A reference to another repository's issue or pull request is `owner/repo#N`; "
+        "a bare `#N`, or `plinth #N`, links to this repository's own `#N`.",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "Any reference to another repository's issue or pull request, here or above: "
+        "`owner/repo#N`.",
+    ),
+    "gitlab": (
+        "A reference to another repository's issue or merge request is `group/project#N` "
+        "for an issue and `group/project!N` for a merge request; a bare `#N`, or "
+        "`plinth #N`, links to this repository's own `#N`.",
+        ".gitlab/merge_request_templates/Default.md",
+        "Any reference to another repository's issue or merge request, here or above: "
+        "`group/project#N` for an issue, `group/project!N` for a merge request.",
+    ),
+}
+
+
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_a_reference_to_another_repository_names_it(
+    request: pytest.FixtureRequest, instance: str
+) -> None:
+    """A bare `#N` links to the repository the text is in: `plinth #457` in a
+    plinth-template record opened plinth-template's #457, and 121 bodies and
+    comments had to be rewritten (coolbress/plinth#825). The rule sits on the
+    existing line, since `AGENTS.md` is at its line cap."""
+    out: Path = request.getfixturevalue(instance)
+    rule, form_path, form_rule = _REFERENCE_RULE[instance]
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    line = [ln for ln in agents.splitlines() if "follow [CONTRIBUTING.md]" in ln]
+    assert len(line) == 1, "AGENTS.md has no one line on issues and their requests"
+    assert rule in line[0], "AGENTS.md does not say how to reference another repository"
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    assert rule in tracker, "issue-tracker.md does not say how to reference another repository"
+    form = " ".join((out / form_path).read_text(encoding="utf-8").split())
+    assert form_rule in form, f"{form_path} names the form only for the closing line"
+
+
 def test_ci_keeps_the_caller_job_named_ci(rendered: Path) -> None:
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert re.search(r"^jobs:\n  ci:\n", ci, re.M), (
