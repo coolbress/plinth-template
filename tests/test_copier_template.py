@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -4914,6 +4915,159 @@ def test_the_default_checksum_is_the_file_at_the_default_pin() -> None:
         body = response.read()
     expected = base64.b64encode(hashlib.sha256(body).digest()).decode()
     assert _default("plinth_gitlab_integrity") == expected
+
+
+# ── what a release says it was tested with ────────────────────────────────
+
+
+def _release_pin_problem(
+    changelog: str,
+    read_tags: Callable[[], set[str]],
+    default: str,
+    pins: set[str],
+    head_branch: str,
+) -> str | None:
+    """Why this state may not be released, or None.
+
+    Compared only while a release is being cut, when CHANGELOG.md's newest
+    section has no tag yet. Between releases Dependabot raises the workflows'
+    pins and the default rightly stays where the last release left it, so an
+    unconditional comparison would turn every raise red. Dependabot's own
+    pull request is left out in that window too: `main` runs this after its
+    merge, which still stops the tag.
+    """
+    if pins == {default} or head_branch.startswith("dependabot/"):
+        return None
+    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
+    assert newest, "CHANGELOG.md has no version section"
+    version = f"v{newest.group(1)}"
+    if version in read_tags():
+        return None
+    return (
+        f"CHANGELOG.md's newest section {version} has no tag yet, so a release is "
+        f"being cut, and copier.yml's plinth_sha default {default} is not what "
+        f".github/workflows calls: {sorted(pins)}. Raise plinth_sha to that pin and "
+        "plinth_gitlab_integrity to that commit's checksum (CONTRIBUTING.md, Cut a release)."
+    )
+
+
+def _template_tags() -> set[str]:
+    """The tags on GitHub: the test job's checkout carries none."""
+    listed = subprocess.run(
+        [  # noqa: S607
+            "git",
+            "ls-remote",
+            "--tags",
+            "--refs",
+            "https://github.com/coolbress/plinth-template.git",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+    assert listed.returncode == 0, f"could not read the tags: {listed.stderr}"
+    return {line.rsplit("refs/tags/", 1)[1] for line in listed.stdout.splitlines()}
+
+
+def _own_workflow_pins() -> set[str]:
+    """Every commit this repository's own workflows call plinth at."""
+    return {
+        pin
+        for path in (TEMPLATE_ROOT / ".github" / "workflows").glob("*.yml")
+        for pin in re.findall(
+            r"^\s*uses: coolbress/plinth/\.github/workflows/[^@\s]+@(\S+)",
+            path.read_text(encoding="utf-8"),
+            re.M,
+        )
+    }
+
+
+def _pull_request_head() -> str:
+    """The head branch of the pull request this run is for, "" when there is none.
+
+    Read from the event, not `GITHUB_HEAD_REF`: CI also runs on a review, and
+    that variable is set only for `pull_request` events.
+    """
+    path = os.environ.get("GITHUB_EVENT_PATH")
+    if not path:
+        return ""
+    pull_request = json.loads(Path(path).read_text(encoding="utf-8")).get("pull_request")
+    return str(pull_request["head"]["ref"]) if pull_request else ""
+
+
+def test_a_release_carries_the_plinth_pin_its_own_ci_calls() -> None:
+    """coolbress/plinth reads the `plinth_sha` default at a tag as the commit
+    that tag was tested with, and offers it to a project. The default's own
+    checksum is held at every commit by the test above."""
+    problem = _release_pin_problem(
+        (TEMPLATE_ROOT / "CHANGELOG.md").read_text(encoding="utf-8"),
+        _template_tags,
+        _default("plinth_sha"),
+        _own_workflow_pins(),
+        _pull_request_head(),
+    )
+    assert problem is None, problem
+
+
+_RELEASED = "## [Unreleased]\n\n## [1.2.0] - 2026-01-02\n\n## [1.1.0] - 2026-01-01\n"
+_DEFAULT_PIN, _RAISED_PIN = "a" * 40, "b" * 40
+
+
+@pytest.mark.parametrize(
+    ("tags", "pins", "head", "stopped"),
+    [
+        ({"v1.1.0"}, {_RAISED_PIN}, "docs/changelog", True),
+        ({"v1.1.0"}, {_RAISED_PIN}, "", True),
+        ({"v1.1.0"}, {_DEFAULT_PIN, _RAISED_PIN}, "docs/changelog", True),
+        ({"v1.1.0"}, set(), "docs/changelog", True),
+        ({"v1.1.0"}, {_DEFAULT_PIN}, "docs/changelog", False),
+        ({"v1.1.0", "v1.2.0"}, {_RAISED_PIN}, "ci/raise", False),
+        ({"v1.1.0", "v1.2.0"}, {_RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+        ({"v1.1.0"}, {_RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+    ],
+)
+def test_the_release_check_stops_only_a_release_whose_pins_differ(
+    tags: set[str], pins: set[str], head: str, stopped: bool
+) -> None:
+    problem = _release_pin_problem(_RELEASED, lambda: tags, _DEFAULT_PIN, pins, head)
+    assert (problem is not None) is stopped, problem
+    if stopped:
+        assert "v1.2.0" in problem  # type: ignore[operator]
+
+
+def test_a_dependabot_raise_is_not_failed_by_reading_the_tags() -> None:
+    """Nor by the network: its pull request and agreeing pins never read them."""
+
+    def unreadable() -> set[str]:
+        raise AssertionError("the tags were read")
+
+    head = "dependabot/github_actions/actions-1"
+    assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_RAISED_PIN}, head) is None
+    assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_DEFAULT_PIN}, "") is None
+
+
+@pytest.mark.parametrize(
+    ("event", "head"),
+    [
+        ({"pull_request": {"head": {"ref": "dependabot/x"}}, "action": "opened"}, "dependabot/x"),
+        ({"pull_request": {"head": {"ref": "dependabot/x"}}, "review": {}}, "dependabot/x"),
+        ({"ref": "refs/heads/main"}, ""),
+    ],
+)
+def test_the_head_branch_comes_from_the_event(
+    event: dict[str, Any], head: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "event.json"
+    path.write_text(json.dumps(event), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+    assert _pull_request_head() == head
+
+
+def test_no_event_is_no_head_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
+    assert _pull_request_head() == ""
 
 
 def test_a_pin_and_its_checksum_are_rendered_and_recorded(tmp_path: Path) -> None:
