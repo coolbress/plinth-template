@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.40.0] - 2026-11-05
+
+**Every project now carries a way back from a merged change, keeps the person's computer out of its public records, and its monthly template reminder closes itself once the project is current.** All three are guidance, a form line or the existing reminder workflow: no check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `AGENTS.md` keeps its line count. `docs/how-to/` is now in every render.
+
 ### Added
 
 - **Every project carries a how-to for undoing a merged change** (#199):
