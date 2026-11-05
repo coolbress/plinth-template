@@ -532,9 +532,9 @@ them. Code that a release needs moves from a notebook into `src/`.
 
 {% if host != 'gitlab' %}## Releasing
 
-A version tag (`v0.1.0`) runs the training again and publishes the three
-files and a `SHA256SUMS` to a GitHub Release, with the card and the metrics
-as its notes, through
+A version tag (`v0.1.0`) runs the training again and publishes the release's
+files to a GitHub Release, with the card and the metrics as its notes,
+through
 [`.github/workflows/release.yml`](.github/workflows/release.yml). No
 password or token is stored: the run uses its own token. How to cut one,
 where the files are, and how to put a real model in its place are in
