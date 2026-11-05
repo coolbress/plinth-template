@@ -34,7 +34,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 
 #: What one run writes, in the order the release lists them. The release
-#: workflow uploads exactly these and a SHA256SUMS file.
+#: workflow uploads these, an sbom.spdx.json and a SHA256SUMS file.
 OUTPUTS = ("model.skops", "metrics.json", "MODEL_CARD.md")
 
 #: The line in MODEL_CARD.md the run replaces with the measured numbers.
