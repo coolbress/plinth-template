@@ -1,0 +1,91 @@
+{%- if host == 'gitlab' -%}
+{%- set req = 'merge request' -%}
+{%- set host_name = 'GitLab' -%}
+{%- set title_check = '`pr-title`' -%}
+{%- else -%}
+{%- set req = 'pull request' -%}
+{%- set host_name = 'GitHub' -%}
+{%- set title_check = '`ci / pr-title`' -%}
+{%- endif -%}
+# Undo a merged change
+
+A change that is already on `main` is undone by a new {{ req }} that takes
+it back out. It goes through the same checks as any other, so the way back is
+as safe as the way in. `main`'s history is never rewritten: it is protected,
+and a force push is denied.
+
+## 1. Open the revert
+
+{% if host == 'gitlab' -%}
+On the merged merge request's page, press **Revert**. In the window that
+opens, choose `main` as the branch and keep **Start a new merge request with
+these changes** ticked: GitLab makes a new branch holding the revert and
+opens a merge request from it, instead of committing to `main`.
+{%- else -%}
+On the merged pull request's page, press **Revert**, or run this in a
+terminal in this repository, with the pull request's number for `<n>`:
+
+```bash
+gh pr revert <n> --title 'revert: <what the change did>'
+```
+
+(gh 2.83.0 or newer; `gh --version` says which you have.) Either opens a new
+pull request, on a new branch, that undoes the change.
+{%- endif %}
+
+Give it a title such as `revert: <what the change did>`. The title {{ host_name }}
+writes, `Revert "…"`, fails {{ title_check }}, which takes one of the eleven
+standard types; {% if host == 'gitlab' %}edit the title on the merge request's page.{% else %}after the button, edit the title on the pull request's page.{% endif %}
+
+## 2. Merge it
+
+Merge it like any other {{ req }}, with `CONTRIBUTING.md` step 7's command,
+once its {% if host == 'gitlab' %}pipeline passes{% else %}checks pass{% endif %}. Whatever a merge sets off, such as a deploy, runs again
+for the revert.
+
+## When the revert conflicts
+
+When a later change touched the same lines, {{ host_name }} cannot make
+the revert and says so{% if host != 'gitlab' %}, and `gh pr revert` fails{% endif %}.
+Make it on a branch instead, or ask the agent to:
+
+```bash
+git fetch origin
+git switch -c revert/<n> --no-track origin/main
+git revert <merged commit>
+```
+
+The merged commit is the one the {{ req }} landed as; its page names it.
+{%- if host == 'gitlab' %} When it is a merge commit, tell git its first
+parent is `main`: `git revert -m 1 <merged commit>`.{% endif %} git
+stops at each file it cannot settle: keep what the later change needs, then
+`git add` the file and run `git revert --continue`. Push the branch and open
+the {{ req }}:
+
+```bash
+git push origin revert/<n>
+{% if host == 'gitlab' -%}
+glab mr create --title 'revert: <what the change did>'
+{%- else -%}
+gh pr create --title 'revert: <what the change did>'
+{%- endif %}
+```
+
+## What a revert does not undo
+
+A revert undoes the code, not what the code already did: rows it wrote or
+deleted, a release already published, a message already sent stay as they
+are. A change that carried a database migration is not undone by reverting
+its code alone. The database keeps the new shape while the code goes back to
+expecting the old one, and the old code can fail against it.
+
+{% if archetype == 'web' and hosting == 'render' -%}
+How the database comes back is in the README's **Getting data back**: read
+it before reverting such a change.
+{%- elif archetype == 'web' -%}
+How the database comes back is in the README's **Where it runs** section:
+read it before reverting such a change.
+{%- else -%}
+This project started without a database; if it has one now, read how its
+backups come back before reverting such a change.
+{%- endif %}

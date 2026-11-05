@@ -90,9 +90,7 @@ _exclude:
   # On GitLab the workflow is already out with `.github`, and its how-to goes
   # with it.
   - "{% if archetype == 'web' or host == 'gitlab' %}docs/how-to/publish-a-release.md{% endif %}"
-  # The directory too, while that page is all it holds: excluding only the
-  # file leaves an empty directory.
-  - "{% if archetype == 'web' or host == 'gitlab' %}docs/how-to{% endif %}"
+  # The directory stays: `undo-a-merged-change.md` is in every render (#199).
   # Render's Blueprint, only where the app runs on Render (`hosting` below).
   - "{% if archetype != 'web' or hosting != 'render' %}render.yaml{% endif %}"
   # The owner's shared community-health files, when they publish them. GitHub
