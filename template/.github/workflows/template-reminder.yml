@@ -1,20 +1,12 @@
-# A monthly reminder when this repository's template is behind the tag the
-# plinth commit its CI calls is tested with, the way Dependabot reminds about
-# dependency versions. Dependabot raises the commit of coolbress/plinth that
-# ci.yml calls (the plinth pin); nothing raises `.copier-answers.yml`'s `_commit`, the
-# template tag. This reads plinth at that pin and runs its
-# `scripts/floor-check.py --print-update-command`, the comparison
-# `ci / floor-check` and `/plinth:template-update` make: exit 0 with a
-# command line means behind, and it opens one issue (or updates the open
-# one). Anything else means nothing to remind, and the reason goes to this
-# job's log.
-#
-# It never runs `copier update` and never opens a pull request: an update can
-# conflict and needs a person's yes, which `/plinth:template-update` asks for.
-#
-# Not a check: the job is not named `ci`, no ruleset requires it, and no pull
-# request starts it. GitHub turns off a scheduled workflow in a public
-# repository after 60 days without activity; turn it back on in the Actions tab.
+# A monthly reminder when this repository's template tag (`_commit` in
+# `.copier-answers.yml`, which nothing raises) is behind the tag the plinth
+# commit ci.yml calls is tested with. That commit's
+# `scripts/floor-check.py --print-update-command` decides, as for
+# `ci / floor-check` and `/plinth:template-update`: exit 0 with a command line
+# opens one issue, or updates the open one; anything else logs why. It never
+# runs `copier update` or opens a pull request, and it is not a check.
+# GitHub turns a scheduled workflow off in a public repository after 60 days
+# without activity; turn it back on in the Actions tab.
 name: Template reminder
 
 on:
@@ -25,8 +17,7 @@ on:
 # Nothing for the file; the one job asks for what it uses.
 permissions: {}
 
-# A run by hand during the scheduled one waits for it, so two runs never
-# open two issues.
+# A run by hand waits for the scheduled one: two runs never open two issues.
 concurrency:
   group: template-reminder
   cancel-in-progress: false
@@ -59,9 +50,7 @@ jobs:
           sha="${pins##*@}"
           d="$RUNNER_TEMP/plinth"; mkdir -p "$d/lib"
           fetch() { curl -fsSL --retry 3 -o "$d/$1" "https://raw.githubusercontent.com/coolbress/plinth/$sha/scripts/$1"; }
-          # A pin older than one of these files answers 404: nothing to remind
-          # about from it, so the job stays green, and no partial checker is
-          # left for the next step to run.
+          # A pin older than a file answers 404: green, and no partial checker.
           if ! { fetch floor-check.py && fetch new-project.sh && fetch lib/shared-github.sh; }; then
             rm -rf "$d"
             echo "no reminder: a file the checker needs could not be fetched from plinth $sha (curl's error is above; a pin from before the file existed answers 404)"

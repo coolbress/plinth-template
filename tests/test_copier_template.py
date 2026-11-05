@@ -1116,14 +1116,11 @@ def _reminder(out: Path) -> dict[Any, Any]:
 
 
 def test_the_reminder_runs_monthly_and_by_hand_never_on_a_pull_request(rendered: Path) -> None:
-    """A schedule once a month and `workflow_dispatch`, nothing else (PyYAML
-    reads `on:` as True). One job, not `ci`, so no `ci / *` check name; not
-    skipped with `if:`. Its token asks, at job level, for `issues: write`
-    and the `contents: read` its checkout needs (a private repository's
-    checkout fails without it: "Repository not found", measured on a test
-    repository), and the file grants nothing, so the repository's read-only
-    default is what any other job would get. Only GitHub's own actions, at a
-    full commit SHA: the allowlist `/plinth:new-project` sets is unchanged."""
+    """Monthly and `workflow_dispatch`, nothing else (PyYAML reads `on:` as
+    True). One job, not `ci`, never skipped. At job level, `issues: write`
+    and the `contents: read` a private repository's checkout needs
+    (measured: "Repository not found" without it); the file grants nothing.
+    Only GitHub's own actions at a full SHA: the allowlist is unchanged."""
     data = _reminder(rendered)
     on = data[True]
     assert set(on) == {"schedule", "workflow_dispatch"}
@@ -1169,6 +1166,32 @@ sys.exit(int(os.environ["CHECKER_RC"]))
 """
 
 
+def _text(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def _bash_step(
+    rendered: Path, name: str, cwd: Path, stubs: dict[str, str], env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Step `name` of the rendered reminder, run with bash in `cwd`, with
+    each of `stubs` (a command name and its script) first on PATH."""
+    steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
+    bin_dir = cwd / "bin"
+    bin_dir.mkdir()
+    for command, script in stubs.items():
+        (bin_dir / command).write_text(script, encoding="utf-8")
+        (bin_dir / command).chmod(0o755)
+    path = os.pathsep.join([str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"]])
+    return subprocess.run(  # noqa: S603
+        ["bash", "-c", steps[name]["run"]],  # noqa: S607
+        cwd=cwd,
+        env={**os.environ, "PATH": path, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 def _remind(
     rendered: Path,
     tmp_path: Path,
@@ -1180,43 +1203,28 @@ def _remind(
     issues: list[dict[str, Any]] | None = None,
     fetched: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], list[str], str, str]:
-    """The step that decides, as rendered, run with bash against a stand-in
-    for plinth's checker (its exit code, stdout and stderr given) and for
-    `gh` (the open issues given; each call logged, the body kept). The
-    checker's answer is the whole comparison: nothing here recomputes it.
-    Returns the run, the `gh` calls, the body written, and the checker's
-    arguments."""
-    steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
-    step = steps["Open or update the reminder issue"]
-    temp = tmp_path / "runner"
-    plinth = temp / "plinth"
+    """The step that decides, against a stand-in for plinth's checker (its
+    exit code, stdout and stderr given: nothing here recomputes the
+    comparison) and for `gh` (the open issues given). Returns the run, the
+    `gh` calls, the issue body written, and the checker's arguments."""
+    plinth = tmp_path / "runner" / "plinth"
     plinth.mkdir(parents=True)
     if fetched:
         (plinth / "floor-check.py").write_text(FLOOR_CHECK_STUB, encoding="utf-8")
     (plinth / "new-project.sh").write_text(
         'template_repo="coolbress/plinth-template"\ntemplate_ref="v1.38.0"\n', encoding="utf-8"
     )
-    project = tmp_path / "project"
-    project.mkdir()
-    (project / ".copier-answers.yml").write_text(
+    (tmp_path / "project").mkdir()
+    (tmp_path / "project" / ".copier-answers.yml").write_text(
         f"_commit: {recorded}\n_src_path: gh:coolbress/plinth-template\n", encoding="utf-8"
     )
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "gh").write_text(GH_STUB, encoding="utf-8")
-    (bin_dir / "gh").chmod(0o755)
     (tmp_path / "issues.json").write_text(json.dumps(issues or []), encoding="utf-8")
     env = {
-        **os.environ,
-        "PATH": os.pathsep.join(
-            [str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"]]
-        ),
-        "RUNNER_TEMP": str(temp),
+        "RUNNER_TEMP": str(tmp_path / "runner"),
         "PLINTH": str(plinth),
-        "PROJECT": str(project),
+        "PROJECT": str(tmp_path / "project"),
         "GITHUB_REPOSITORY": "someone/probe",
         "RUN_URL": "https://github.com/someone/probe/actions/runs/1",
-        "GH_TOKEN": "unused",
         "GH_LOG": str(tmp_path / "gh.log"),
         "GH_ISSUES": str(tmp_path / "issues.json"),
         "GH_BODY": str(tmp_path / "body.md"),
@@ -1225,24 +1233,9 @@ def _remind(
         "CHECKER_ERR": err,
         "CHECKER_RC": str(rc),
     }
-    run = subprocess.run(  # noqa: S603
-        ["bash", "-c", step["run"]],  # noqa: S607
-        cwd=tmp_path,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    log = tmp_path / "gh.log"
-    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
-    body = tmp_path / "body.md"
-    args = tmp_path / "args"
-    return (
-        run,
-        calls,
-        body.read_text(encoding="utf-8") if body.exists() else "",
-        args.read_text(encoding="utf-8") if args.exists() else "",
-    )
+    run = _bash_step(rendered, "Open or update the reminder issue", tmp_path, {"gh": GH_STUB}, env)
+    calls = _text(tmp_path / "gh.log").splitlines()
+    return run, calls, _text(tmp_path / "body.md"), _text(tmp_path / "args")
 
 
 def test_behind_opens_one_issue_with_both_tags_the_notes_and_the_command(
@@ -1250,13 +1243,7 @@ def test_behind_opens_one_issue_with_both_tags_the_notes_and_the_command(
 ) -> None:
     run, calls, body, args = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE + "\n")
     assert run.returncode == 0, run.stdout + run.stderr
-    assert args.split() == [
-        "--root",
-        str(tmp_path / "project"),
-        "--repo",
-        "someone/probe",
-        "--print-update-command",
-    ]
+    assert args == f"--root {tmp_path / 'project'} --repo someone/probe --print-update-command"
     created = [c for c in calls if c.startswith("issue create")]
     assert len(created) == 1, calls
     assert not [c for c in calls if c.startswith("issue edit")]
@@ -1293,9 +1280,7 @@ def test_an_open_reminder_is_updated_and_no_second_one_opened(
     assert "--title Template update available: v1.37.0 to v1.38.0" in edited[0]
     assert body.startswith(MARKER + "\n")
     assert "**v1.38.0**" in body
-    listed = [c for c in calls if c.startswith("issue list")]
-    assert listed
-    assert "--state open" in listed[0]
+    assert "--state open" in next(c for c in calls if c.startswith("issue list"))
 
 
 def test_up_to_date_does_nothing_and_logs_why(rendered: Path, tmp_path: Path) -> None:
@@ -1336,9 +1321,8 @@ def test_when_floor_check_cannot_tell_nothing_is_opened(
 def test_a_same_tag_line_is_named_a_re_render_not_v_to_itself(
     rendered: Path, tmp_path: Path
 ) -> None:
-    """At the target tag the checker still prints a line when a recorded
-    owner answer no longer holds (coolbress/plinth#770): exit 0 with a line
-    is behind by the rule, and the issue says the tag stays."""
+    """At the target tag the checker prints a line when a recorded owner
+    answer no longer holds (coolbress/plinth#770); the issue says so."""
     run, calls, body, _ = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE, recorded="v1.38.0")
     assert run.returncode == 0, run.stdout + run.stderr
     (created,) = [c for c in calls if c.startswith("issue create")]
@@ -1347,43 +1331,30 @@ def test_a_same_tag_line_is_named_a_re_render_not_v_to_itself(
     assert "`/plinth:template-update`" in body
 
 
+CURL_STUB = """#!/bin/bash
+printf '%s\\n' "${@: -1}" >> "$CURL_LOG"
+if [ -n "$CURL_MISSING" ] && [[ "${@: -1}" == *"$CURL_MISSING" ]]; then exit 22; fi
+"""
+
+
 def _fetch(
     rendered: Path, tmp_path: Path, ci: str, missing: str = ""
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
-    """The fetch step, as rendered, against the given ci.yml, with `curl`
-    standing in: it logs each URL and reads nothing over the network. A URL
-    ending in `missing` fails as `curl -f` fails on a 404 (exit 22)."""
-    steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
-    script = steps["Fetch the checker from the plinth commit ci.yml calls"]["run"]
+    """The fetch step against the given ci.yml, with `curl` standing in: it
+    logs each URL, and one ending in `missing` fails as `curl -f` fails on a
+    404 (exit 22). Returns the run and the URLs asked for."""
     workflows = tmp_path / "project" / ".github" / "workflows"
     workflows.mkdir(parents=True)
     (workflows / "ci.yml").write_text(ci, encoding="utf-8")
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "curl").write_text(
-        "#!/bin/bash\n"
-        'printf \'%s\\n\' "${@: -1}" >> "$CURL_LOG"\n'
-        'if [ -n "$CURL_MISSING" ] && [[ "${@: -1}" == *"$CURL_MISSING" ]]; then exit 22; fi\n',
-        encoding="utf-8",
-    )
-    (bin_dir / "curl").chmod(0o755)
     (tmp_path / "temp").mkdir()
-    run = subprocess.run(  # noqa: S603
-        ["bash", "-c", script],  # noqa: S607
-        cwd=tmp_path,
-        env={
-            **os.environ,
-            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-            "RUNNER_TEMP": str(tmp_path / "temp"),
-            "CURL_LOG": str(tmp_path / "curl.log"),
-            "CURL_MISSING": missing,
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    log = tmp_path / "curl.log"
-    return run, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    env = {
+        "RUNNER_TEMP": str(tmp_path / "temp"),
+        "CURL_LOG": str(tmp_path / "curl.log"),
+        "CURL_MISSING": missing,
+    }
+    name = "Fetch the checker from the plinth commit ci.yml calls"
+    run = _bash_step(rendered, name, tmp_path, {"curl": CURL_STUB}, env)
+    return run, _text(tmp_path / "curl.log").splitlines()
 
 
 def test_the_checker_is_fetched_at_the_pin_ci_yml_calls(rendered: Path, tmp_path: Path) -> None:
@@ -1396,9 +1367,8 @@ def test_the_checker_is_fetched_at_the_pin_ci_yml_calls(rendered: Path, tmp_path
     assert run.returncode == 0, run.stdout + run.stderr
     base = f"https://raw.githubusercontent.com/coolbress/plinth/{sha}/scripts/"
     assert urls == [base + "floor-check.py", base + "new-project.sh", base + "lib/shared-github.sh"]
-    other = "b" * 40
     unpinned = ci.replace(f"python-ci.yml@{sha}", "python-ci.yml@main")
-    two = ci + f"# coolbress/plinth/.github/workflows/python-ci.yml@{other}\n"
+    two = ci + f"# coolbress/plinth/.github/workflows/python-ci.yml@{'b' * 40}\n"
     for name, text in (("unpinned", unpinned), ("two", two)):
         run, urls = _fetch(rendered, tmp_path / name, text)
         assert run.returncode == 0, run.stdout + run.stderr
@@ -1409,10 +1379,8 @@ def test_the_checker_is_fetched_at_the_pin_ci_yml_calls(rendered: Path, tmp_path
 def test_a_file_the_pin_does_not_have_logs_why_and_leaves_no_checker(
     rendered: Path, tmp_path: Path
 ) -> None:
-    """A pin older than one of the three files (`lib/shared-github.sh` came
-    later than the other two) answers 404. The job stays green with the
-    reason in its log, and no partial checker is left for the next step,
-    which then opens nothing."""
+    """A pin older than `lib/shared-github.sh` answers 404: green, the reason
+    logged, and no partial checker left for the next step to run."""
     run, urls = _fetch(rendered, tmp_path, _ci(rendered), missing="lib/shared-github.sh")
     assert run.returncode == 0, run.stdout + run.stderr
     assert urls[-1].endswith("lib/shared-github.sh")
