@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.39.0] - 2026-11-05
+
+**A project now gets a monthly issue when its template is behind, and its
+agent writes a reference to another repository's issue or pull request as
+`owner/repo#N`.** The reminder is a new workflow, not a check: no job is added
+to `ci.yml`, no required check name, and it uses only `actions/checkout`, so
+the Actions allowlist is unchanged and `copier update` needs no hands.
+`AGENTS.md` keeps its line count.
+
 ### Added
 
 - **A monthly reminder when the project's template is behind** (#192):
