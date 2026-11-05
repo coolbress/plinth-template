@@ -1651,6 +1651,90 @@ def test_the_reminder_is_not_rendered_on_gitlab(tmp_path: Path) -> None:
     assert not (out / REMINDER).exists()
 
 
+# ── undoing a merged change (#199) ────────────────────────────────────────
+
+UNDO_HOWTO = Path("docs") / "how-to" / "undo-a-merged-change.md"
+
+_UNDO_LINES = {
+    "github": (
+        "On the merged pull request's page, press **Revert**, or run",
+        "gh pr revert <n> --title 'revert: <what the change did>'",
+        "(gh 2.83.0 or newer; `gh --version` says which you have.)",
+        'The title GitHub writes, `Revert "…"`, fails `ci / pr-title`',
+        "Merge it like any other pull request, with `CONTRIBUTING.md` step 7's command",
+        "git revert <merged commit>",
+        "gh pr create --title 'revert: <what the change did>' --body 'Reverts #<n>.'",
+    ),
+    "gitlab": (
+        "On the merged merge request's page, press **Revert**",
+        "keep **Start a new merge request with these changes** ticked",
+        'The title GitLab writes, `Revert "…"`, fails `pr-title`',
+        "Merge it like any other merge request, with `CONTRIBUTING.md` step 7's command",
+        "git revert <merged commit>",
+        "glab mr create --title 'revert: <what the change did>' --description 'Reverts !<n>.'",
+    ),
+}
+
+_UNDO_SHARED = (
+    "A revert undoes the code, not what the code already did:",
+    "A change that carried a database migration is not undone by reverting its code alone.",
+)
+
+_UNDO_WEB = {
+    "render": ("the README's **Getting data back**", "- **Getting data back.**"),
+    "elsewhere": ("the README's **Where it runs** section", "## Where it runs:"),
+}
+
+_UNDO_POINTER = (
+    "Asked to undo a merged change: offer the revert in "
+    "[docs/how-to/undo-a-merged-change.md](docs/how-to/undo-a-merged-change.md), "
+    "which goes through the checks, before a fix written forward."
+)
+
+
+@pytest.mark.parametrize(
+    ("archetype", "hosting", "host"),
+    [
+        *[
+            (a, None, h)
+            for a in ("cli", "library", "backend", "data-ml")
+            for h in ("github", "gitlab")
+        ],
+        ("web", "render", "github"),  # `web` is GitHub only
+        ("web", "elsewhere", "github"),
+    ],
+)
+def test_every_render_carries_the_way_back_from_a_merged_change(
+    tmp_path: Path, archetype: str, hosting: str | None, host: str
+) -> None:
+    """Getting back from a bad merged change was one line in plinth's own
+    how-to and absent from every project (#199). Each render carries a page
+    that undoes it through the same checks, says what a revert leaves behind,
+    and, for `web`, where the data comes back; `AGENTS.md` points at it from an
+    existing line, since the file is at its cap."""
+    data: dict[str, str] = {"archetype": archetype, "host": host}
+    if hosting:
+        data["hosting"] = hosting
+    if hosting == "elsewhere":
+        data["hosting_elsewhere"] = "vps"
+    out = render(tmp_path, **data)
+    page = " ".join((out / UNDO_HOWTO).read_text(encoding="utf-8").split())
+    assert page.startswith("# Undo a merged change")
+    for line in (*_UNDO_LINES[host], *_UNDO_SHARED):
+        assert line in page, f"{UNDO_HOWTO} lacks: {line}"
+    assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
+    assert ("glab " in page) is (host == "gitlab"), f"GitLab's command on {host}"
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    for where, (pointer, section) in _UNDO_WEB.items():
+        assert (pointer in page) is (hosting == where), f"web pointer {where!r} on {hosting}"
+        if hosting == where:
+            assert section in readme, f"the page points at a README section that is gone: {section}"
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    broken = [ln for ln in agents if ln.startswith("- Something is broken:")]
+    assert len(broken) == 1, "AGENTS.md has no one line for when something is broken"
+    assert _UNDO_POINTER in broken[0], "AGENTS.md does not point at the page"
+
+
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
 
 RELEASE = Path(".github") / "workflows" / "release.yml"
@@ -1677,12 +1761,11 @@ def test_release_workflow_and_its_how_to_render_for_all_but_web_on_github_only(
     """What a `cli` or `library` ships is a package, and a `backend` its image
     (coolbress/plinth#706), a `data-ml` its model (coolbress/plinth#716);
     `web` deploys on green. GitLab gets no `.github/`, and so no how-to for a
-    workflow it does not have. Never written, rather than written and empty:
-    no `docs/how-to/` directory is left behind either."""
+    workflow it does not have. Never written, rather than written and empty;
+    `docs/how-to/` itself is in every render, for the undo page (#199)."""
     out = render(tmp_path, archetype=archetype, host=host)
     assert (out / RELEASE).is_file() is ships
     assert (out / RELEASE_HOWTO).is_file() is ships
-    assert (out / "docs" / "how-to").exists() is ships
     readme = (out / "README.md").read_text(encoding="utf-8")
     assert ("## Releasing" in readme) is ships
     if ships:

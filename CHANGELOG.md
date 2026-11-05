@@ -6,6 +6,24 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **Every project carries a how-to for undoing a merged change** (#199):
+  `docs/how-to/undo-a-merged-change.md`, in every archetype. A merged pull
+  request is undone by a new one through the same checks, with the Revert
+  button or `gh pr revert <n>` (gh 2.83.0 or newer), titled
+  `revert: <what the change did>`, since the `Revert "…"` title GitHub writes
+  fails `ci / pr-title`; a conflicting revert is made on a branch with
+  `git revert`. It says a revert undoes the code and not what the code did,
+  and that a change carrying a database migration is not undone by its code
+  alone: `web` points at the README's restore steps. The GitLab render says
+  the same for merge requests, with the merge request's Revert and
+  `glab mr create`. `AGENTS.md` points at it from the existing "Something is
+  broken" line, so it keeps its line count: asked to undo a merged change,
+  the agent offers the revert before a fix written forward. `docs/how-to/` is
+  now in every render, so the `web` and GitLab renders get it too. An
+  existing project gets it through `/plinth:template-update`.
+
 ### Changed
 
 - **The monthly template reminder closes its issue once the project is up
