@@ -10,9 +10,9 @@ means `copier update` on an instance needs hands.
 
 - **A new project calls the plinth commit this template was tested with**
   (#205). `plinth_sha`'s default had stayed at plinth v2.6.0 while this
-  repository's own CI moved on, so every tag claimed to be tested with v2.6.0
-  and `/plinth:template-update` never had a newer tested pin to offer. It and
-  `plinth_gitlab_integrity` are now plinth v2.27.0 and that commit's checksum,
+  repository's own CI moved on, so tags v1.21.0 to v1.40.0 all claimed to be
+  tested with v2.6.0 and `/plinth:template-update` had no newer tested pin to
+  offer from them. It and `plinth_gitlab_integrity` are now plinth v2.27.0 and that commit's checksum,
   and a test fails a release whose default differs from the pin this
   repository's own workflows call. A project's recorded pin is untouched by an
   update that passes it, as before.
