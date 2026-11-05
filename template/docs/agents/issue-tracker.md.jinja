@@ -72,6 +72,23 @@ Fields, labels and syntax that automation depends on are followed exactly:
 `Closes` auto-closes, a label drives triage queries, and a template heading is
 read by tooling. Precision there is not style.
 
+### Public records
+
+Write issues and merge requests as public records, which they are on a public
+project: they record the product, not the computer it was made on. An
+environment detail goes in when a result depends on it or it limits what was
+observed, written as the condition without the person: "a checkout path
+containing a space", "git 2.36", "on one machine". Home paths, account and
+folder names and credential values stay out, or are replaced by what matters
+about them: `~/...` for a path in the home folder, or the condition the path
+shows ("a path containing a space"). A pasted error message is the usual way in,
+since tools print full home paths: read it before it goes in. Local housekeeping
+the result does not depend on stays out too: what was installed, registered or
+removed on the person's computer. Keep decisions, dates, numbers, links,
+acceptance criteria and checkbox states. A description's earlier versions can
+stay readable in its history: text taken out later is not gone because the
+description no longer shows it.
+
 ## Conventions
 
 - **Another repository's issue or merge request**: A reference to another repository's issue or merge request is `group/project#N` for an issue and `group/project!N` for a merge request; a bare `#N`, or `plinth #N`, links to this repository's own `#N`. That holds in descriptions, comments and the closing line alike.
@@ -188,6 +205,23 @@ what the record says happened, not by whether the headings are all present.
 Fields, labels and syntax that automation depends on are followed exactly:
 `Closes` auto-closes, a label drives triage queries, and a form's field id is
 read by tooling. Precision there is not style.
+
+### Public records
+
+Write issues and pull requests as public records, which they are on a public
+repository: they record the product, not the computer it was made on. An
+environment detail goes in when a result depends on it or it limits what was
+observed, written as the condition without the person: "a checkout path
+containing a space", "git 2.36", "on one machine". Home paths, account and
+folder names and credential values stay out, or are replaced by what matters
+about them: `~/...` for a path in the home folder, or the condition the path
+shows ("a path containing a space"). A pasted error message is the usual way in,
+since tools print full home paths: read it before it goes in. Local housekeeping
+the result does not depend on stays out too: what was installed, registered or
+removed on the person's computer. Keep decisions, dates, numbers, links,
+acceptance criteria and checkbox states. An issue's or pull request's edit
+history is public too: text taken out later is still in the earlier revisions
+until someone with write access deletes them.
 
 ## Conventions
 

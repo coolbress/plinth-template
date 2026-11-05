@@ -1042,6 +1042,67 @@ def test_a_reference_to_another_repository_names_it(
     assert form_rule in form, f"{form_path} names the form only for the closing line"
 
 
+_COMPUTER_RULE = {
+    "rendered": (
+        "Write issues and pull requests as public records, which they are on a public "
+        "repository: they record the product, not the computer it was made on.",
+        "An issue's or pull request's edit history is public too: text taken out later "
+        "is still in the earlier revisions until someone with write access deletes them.",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    "gitlab": (
+        "Write issues and merge requests as public records, which they are on a public "
+        "project: they record the product, not the computer it was made on.",
+        "A description's earlier versions can stay readable in its history: text taken "
+        "out later is not gone because the description no longer shows it.",
+        ".gitlab/merge_request_templates/Default.md",
+    ),
+}
+
+_COMPUTER_POINTER = (
+    "Write them as public: no home path, account or folder name from the person's "
+    "computer; [issue-tracker.md](docs/agents/issue-tracker.md#public-records) "
+    "says what goes in instead."
+)
+
+_COMPUTER_SHARED = (
+    "An environment detail goes in when a result depends on it or it limits what was "
+    'observed, written as the condition without the person: "a checkout path '
+    'containing a space", "git 2.36", "on one machine".',
+    "Home paths, account and folder names and credential values stay out, or are "
+    "replaced by what matters about them: `~/...` for a path in the home folder, or "
+    'the condition the path shows ("a path containing a space").',
+    "A pasted error message is the usual way in, since tools print full home paths: "
+    "read it before it goes in.",
+)
+
+
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_a_record_keeps_the_persons_computer_out(
+    request: pytest.FixtureRequest, instance: str
+) -> None:
+    """Secrets are caught by the scan, but a home path such as `/Users/<name>/...`
+    or an account name went into public records unchecked; plinth's own rule
+    (its `docs/agents/issue-tracker.md`) is brought to a project (#198). The
+    pointer sits on an existing `AGENTS.md` line, since the file is at its cap."""
+    out: Path = request.getfixturevalue(instance)
+    opening, history, form_path = _COMPUTER_RULE[instance]
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    line = [ln for ln in agents.splitlines() if "follow [CONTRIBUTING.md]" in ln]
+    assert len(line) == 1, "AGENTS.md has no one line on issues and their requests"
+    assert _COMPUTER_POINTER in line[0], "AGENTS.md does not point at the public-records rule"
+    tracker = " ".join(
+        (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8").split()
+    )
+    assert "### Public records" in tracker, "the AGENTS.md link has no #public-records heading"
+    for sentence in (opening, *_COMPUTER_SHARED, history):
+        assert sentence in tracker, f"issue-tracker.md lacks: {sentence}"
+    form = " ".join((out / form_path).read_text(encoding="utf-8").split())
+    assert "A pasted output keeps home paths out: `~/...`, or the condition it shows." in form, (
+        f"{form_path} does not warn where outputs are pasted"
+    )
+
+
 def test_ci_keeps_the_caller_job_named_ci(rendered: Path) -> None:
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert re.search(r"^jobs:\n  ci:\n", ci, re.M), (
