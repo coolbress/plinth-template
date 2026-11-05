@@ -4,7 +4,7 @@
 
 ## What I checked myself
 
-<!-- What you ran, opened or read yourself before saying "merge", and what you saw: a command's output, a page, a number. Or `Skipped: <reason>` when you did not check. Left empty, or "done" alone, `ci / pr-title` warns; it does not fail. -->
+<!-- What you ran, opened or read yourself before saying "merge", and what you saw: a command's output, a page, a number. A pasted output keeps home paths out: `~/...`, or the condition it shows. Or `Skipped: <reason>` when you did not check. Left empty, or "done" alone, `ci / pr-title` warns; it does not fail. -->
 
 ## How it was verified
 

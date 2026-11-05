@@ -22,6 +22,19 @@ means `copier update` on an instance needs hands.
   permission, action, `ci.yml` job or trigger is added: `issues: write`
   already covers the comment and the close. An existing project gets it
   through `/plinth:template-update`.
+- **A project's agent keeps the person's computer out of issues and pull
+  requests** (#198): `docs/agents/issue-tracker.md` gains a "Public records"
+  section. A record carries the product, not the computer: an environment
+  detail goes in only as the condition a result depends on ("a checkout path
+  containing a space", "git 2.36"); home paths, account and folder names and
+  credential values stay out or become `~/...` or the condition the path
+  shows; a pasted error message is named as the usual way in; and an issue's
+  edit history keeps text taken out later. `AGENTS.md` points at it from the
+  existing issues line, so it keeps its line count, and the pull-request
+  form's "What I checked myself" comment says to keep home paths out of a
+  pasted output. The GitLab render says the same for merge requests and
+  description history. An existing project gets it through
+  `/plinth:template-update`.
 
 ## [1.39.0] - 2026-11-05
 
