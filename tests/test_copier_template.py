@@ -1104,6 +1104,308 @@ def test_third_party_review_is_not_rendered_on_gitlab(tmp_path: Path) -> None:
     assert "third_party_review" not in answers
 
 
+# ── the monthly template reminder (#192) ──────────────────────────────────
+
+REMINDER = Path(".github") / "workflows" / "template-reminder.yml"
+
+
+def _reminder(out: Path) -> dict[Any, Any]:
+    data = yaml.safe_load((out / REMINDER).read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    return data
+
+
+def test_the_reminder_runs_monthly_and_by_hand_never_on_a_pull_request(rendered: Path) -> None:
+    """A schedule once a month and `workflow_dispatch`, nothing else (PyYAML
+    reads `on:` as True). One job, not `ci`, so no `ci / *` check name; not
+    skipped with `if:`. Its token asks, at job level, for `issues: write`
+    and the `contents: read` its checkout needs (a private repository's
+    checkout fails without it: "Repository not found", measured on a test
+    repository), and the file grants nothing, so the repository's read-only
+    default is what any other job would get. Only GitHub's own actions, at a
+    full commit SHA: the allowlist `/plinth:new-project` sets is unchanged."""
+    data = _reminder(rendered)
+    on = data[True]
+    assert set(on) == {"schedule", "workflow_dispatch"}
+    (cron,) = [entry["cron"] for entry in on["schedule"]]
+    _minute, _hour, day, month, weekday = cron.split()
+    assert day.isdigit(), cron
+    assert 1 <= int(day) <= 28, cron
+    assert (month, weekday) == ("*", "*"), cron
+    assert data["permissions"] == {}
+    (name,) = data["jobs"]
+    assert name != "ci"
+    job = data["jobs"][name]
+    assert "if" not in job
+    assert job["permissions"] == {"contents": "read", "issues": "write"}
+    text = (rendered / REMINDER).read_text(encoding="utf-8")
+    refs = re.findall(r"^\s*(?:- )?uses:\s*(\S+)", text, re.M)
+    assert refs, "the reminder checks out the repository with actions/checkout"
+    for ref in refs:
+        assert ref.startswith("actions/"), f"{ref} is not one of GitHub's own actions"
+        assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
+    # ci.yml is not touched: its jobs are the ones it had.
+    assert set(yaml.safe_load(_ci(rendered))["jobs"]) == {"ci"}
+
+
+UPDATE_LINE = (
+    "uvx --from copier==9.18.2 --exclude-newer 2026-09-09 copier update --defaults "
+    "--vcs-ref 0123456789abcdef0123456789abcdef01234567 --data plinth_sha=" + "a" * 40
+)
+MARKER = "<!-- plinth:template-reminder -->"
+GH_STUB = """#!/bin/bash
+printf '%s\\n' "$*" >> "$GH_LOG"
+case "$1 $2" in
+  "issue list") cat "$GH_ISSUES" ;;
+  "issue create"|"issue edit")
+    while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cat "$2" > "$GH_BODY"; shift; done ;;
+esac
+"""
+FLOOR_CHECK_STUB = """import os, sys
+open(os.environ["CHECKER_ARGS"], "w").write(" ".join(sys.argv[1:]))
+sys.stdout.write(os.environ["CHECKER_OUT"])
+sys.stderr.write(os.environ["CHECKER_ERR"])
+sys.exit(int(os.environ["CHECKER_RC"]))
+"""
+
+
+def _remind(
+    rendered: Path,
+    tmp_path: Path,
+    *,
+    rc: int,
+    out: str,
+    err: str = "",
+    recorded: str = "v1.37.0",
+    issues: list[dict[str, Any]] | None = None,
+    fetched: bool = True,
+) -> tuple[subprocess.CompletedProcess[str], list[str], str, str]:
+    """The step that decides, as rendered, run with bash against a stand-in
+    for plinth's checker (its exit code, stdout and stderr given) and for
+    `gh` (the open issues given; each call logged, the body kept). The
+    checker's answer is the whole comparison: nothing here recomputes it.
+    Returns the run, the `gh` calls, the body written, and the checker's
+    arguments."""
+    steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
+    step = steps["Open or update the reminder issue"]
+    temp = tmp_path / "runner"
+    plinth = temp / "plinth"
+    plinth.mkdir(parents=True)
+    if fetched:
+        (plinth / "floor-check.py").write_text(FLOOR_CHECK_STUB, encoding="utf-8")
+    (plinth / "new-project.sh").write_text(
+        'template_repo="coolbress/plinth-template"\ntemplate_ref="v1.38.0"\n', encoding="utf-8"
+    )
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".copier-answers.yml").write_text(
+        f"_commit: {recorded}\n_src_path: gh:coolbress/plinth-template\n", encoding="utf-8"
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "gh").write_text(GH_STUB, encoding="utf-8")
+    (bin_dir / "gh").chmod(0o755)
+    (tmp_path / "issues.json").write_text(json.dumps(issues or []), encoding="utf-8")
+    env = {
+        **os.environ,
+        "PATH": os.pathsep.join(
+            [str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"]]
+        ),
+        "RUNNER_TEMP": str(temp),
+        "PLINTH": str(plinth),
+        "PROJECT": str(project),
+        "GITHUB_REPOSITORY": "someone/probe",
+        "RUN_URL": "https://github.com/someone/probe/actions/runs/1",
+        "GH_TOKEN": "unused",
+        "GH_LOG": str(tmp_path / "gh.log"),
+        "GH_ISSUES": str(tmp_path / "issues.json"),
+        "GH_BODY": str(tmp_path / "body.md"),
+        "CHECKER_ARGS": str(tmp_path / "args"),
+        "CHECKER_OUT": out,
+        "CHECKER_ERR": err,
+        "CHECKER_RC": str(rc),
+    }
+    run = subprocess.run(  # noqa: S603
+        ["bash", "-c", step["run"]],  # noqa: S607
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    log = tmp_path / "gh.log"
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    body = tmp_path / "body.md"
+    args = tmp_path / "args"
+    return (
+        run,
+        calls,
+        body.read_text(encoding="utf-8") if body.exists() else "",
+        args.read_text(encoding="utf-8") if args.exists() else "",
+    )
+
+
+def test_behind_opens_one_issue_with_both_tags_the_notes_and_the_command(
+    rendered: Path, tmp_path: Path
+) -> None:
+    run, calls, body, args = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE + "\n")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert args.split() == [
+        "--root",
+        str(tmp_path / "project"),
+        "--repo",
+        "someone/probe",
+        "--print-update-command",
+    ]
+    created = [c for c in calls if c.startswith("issue create")]
+    assert len(created) == 1, calls
+    assert not [c for c in calls if c.startswith("issue edit")]
+    assert "--repo someone/probe" in created[0]
+    assert "--title Template update available: v1.37.0 to v1.38.0" in created[0]
+    assert body.startswith(MARKER + "\n")
+    assert "**v1.37.0**" in body
+    assert "**v1.38.0**" in body
+    assert "https://github.com/coolbress/plinth-template/releases/tag/v1.38.0" in body
+    assert "`/plinth:template-update`" in body
+    assert "asks before it writes anything" in body
+    assert "after 60 days without activity" in body
+    # The line itself is not handed out: the command applies it.
+    assert "copier update" not in body
+
+
+def test_an_open_reminder_is_updated_and_no_second_one_opened(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """The open reminder is the one this workflow wrote: its body starts
+    with the marker and its author is the Actions bot. Someone else's issue
+    carrying the marker is not taken over."""
+    issues = [
+        {"number": 3, "author": {"login": "someone"}, "body": MARKER + "\nnot ours"},
+        {"number": 7, "author": {"login": "app/github-actions"}, "body": "unrelated"},
+        {"number": 9, "author": {"login": "app/github-actions"}, "body": MARKER + "\nold"},
+    ]
+    run, calls, body, _ = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE, issues=issues)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert not [c for c in calls if c.startswith("issue create")], calls
+    edited = [c for c in calls if c.startswith("issue edit")]
+    assert len(edited) == 1, calls
+    assert edited[0].startswith("issue edit 9 --repo someone/probe")
+    assert "--title Template update available: v1.37.0 to v1.38.0" in edited[0]
+    assert body.startswith(MARKER + "\n")
+    assert "**v1.38.0**" in body
+    listed = [c for c in calls if c.startswith("issue list")]
+    assert listed
+    assert "--state open" in listed[0]
+
+
+def test_up_to_date_does_nothing_and_logs_why(rendered: Path, tmp_path: Path) -> None:
+    why = "no update command: the recorded tag is the target tag (v1.38.0): nothing to update\n"
+    run, calls, body, _ = _remind(rendered, tmp_path, rc=1, out="", err=why, recorded="v1.38.0")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert not [c for c in calls if c.startswith("issue")], calls
+    assert body == ""
+    assert why.strip() in run.stdout + run.stderr
+
+
+@pytest.mark.parametrize(
+    ("rc", "out", "err", "fetched"),
+    [
+        (1, "", "no update command: template drift not verified (no .copier-answers.yml)\n", True),
+        (1, "", "no update command: not verified that v1.38.0 still names abc (offline)\n", True),
+        (0, "", "", True),
+        (0, "usage: floor-check.py [-h]\n", "", True),
+        (0, UPDATE_LINE, "", False),
+    ],
+    ids=["skip", "unverified-tag", "exit-0-no-line", "exit-0-other-text", "not-fetched"],
+)
+def test_when_floor_check_cannot_tell_nothing_is_opened(
+    rendered: Path, tmp_path: Path, rc: int, out: str, err: str, fetched: bool
+) -> None:
+    """Only exit 0 with a `copier update` line is behind. Anything else,
+    a checker that was not fetched included, opens nothing, and the job
+    stays green with the reason in its log."""
+    run, calls, body, _ = _remind(rendered, tmp_path, rc=rc, out=out, err=err, fetched=fetched)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert not [c for c in calls if c.startswith("issue")], calls
+    assert body == ""
+    assert "no reminder:" in run.stdout
+    if err:
+        assert err.strip() in run.stdout + run.stderr
+
+
+def test_a_same_tag_line_is_named_a_re_render_not_v_to_itself(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """At the target tag the checker still prints a line when a recorded
+    owner answer no longer holds (coolbress/plinth#770): exit 0 with a line
+    is behind by the rule, and the issue says the tag stays."""
+    run, calls, body, _ = _remind(rendered, tmp_path, rc=0, out=UPDATE_LINE, recorded="v1.38.0")
+    assert run.returncode == 0, run.stdout + run.stderr
+    (created,) = [c for c in calls if c.startswith("issue create")]
+    assert "--title Template update available: re-render v1.38.0" in created
+    assert "v1.38.0 to v1.38.0" not in body
+    assert "`/plinth:template-update`" in body
+
+
+def _fetch(
+    rendered: Path, tmp_path: Path, ci: str
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """The fetch step, as rendered, against the given ci.yml, with `curl`
+    standing in: it logs each URL and reads nothing over the network."""
+    steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
+    script = steps["Fetch the checker from the plinth commit ci.yml calls"]["run"]
+    workflows = tmp_path / "project" / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(ci, encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "curl").write_text(
+        '#!/bin/bash\nprintf \'%s\\n\' "${@: -1}" >> "$CURL_LOG"\n', encoding="utf-8"
+    )
+    (bin_dir / "curl").chmod(0o755)
+    (tmp_path / "temp").mkdir()
+    run = subprocess.run(  # noqa: S603
+        ["bash", "-c", script],  # noqa: S607
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "RUNNER_TEMP": str(tmp_path / "temp"),
+            "CURL_LOG": str(tmp_path / "curl.log"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    log = tmp_path / "curl.log"
+    return run, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+
+def test_the_checker_is_fetched_at_the_pin_ci_yml_calls(rendered: Path, tmp_path: Path) -> None:
+    """The rendered ci.yml's own pin, not one written into this workflow, so
+    it follows Dependabot's raises. A ci.yml that does not call plinth's
+    python-ci.yml at exactly one full SHA fetches nothing and says why."""
+    sha = _plinth_sha()
+    ci = _ci(rendered)
+    run, urls = _fetch(rendered, tmp_path / "pinned", ci)
+    assert run.returncode == 0, run.stdout + run.stderr
+    base = f"https://raw.githubusercontent.com/coolbress/plinth/{sha}/scripts/"
+    assert urls == [base + "floor-check.py", base + "new-project.sh", base + "lib/shared-github.sh"]
+    other = "b" * 40
+    unpinned = ci.replace(f"python-ci.yml@{sha}", "python-ci.yml@main")
+    two = ci + f"# coolbress/plinth/.github/workflows/python-ci.yml@{other}\n"
+    for name, text in (("unpinned", unpinned), ("two", two)):
+        run, urls = _fetch(rendered, tmp_path / name, text)
+        assert run.returncode == 0, run.stdout + run.stderr
+        assert urls == [], name
+        assert "no reminder: ci.yml does not call" in run.stdout, name
+
+
+def test_the_reminder_is_not_rendered_on_gitlab(tmp_path: Path) -> None:
+    out = render(tmp_path / "gl", host="gitlab")
+    assert not (out / REMINDER).exists()
+
+
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
 
 RELEASE = Path(".github") / "workflows" / "release.yml"
