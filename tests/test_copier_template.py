@@ -1727,8 +1727,9 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     for where, pointer in _UNDO_WEB.items():
         assert (pointer in page) is (hosting == where), f"web pointer {where!r} on {hosting}"
     agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
-    line = [ln for ln in agents if ln.startswith("- Something is broken:")]
-    assert len(line) == 1 and _UNDO_POINTER in line[0], "AGENTS.md does not point at the page"
+    broken = [ln for ln in agents if ln.startswith("- Something is broken:")]
+    assert len(broken) == 1, "AGENTS.md has no one line for when something is broken"
+    assert _UNDO_POINTER in broken[0], "AGENTS.md does not point at the page"
 
 
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────
