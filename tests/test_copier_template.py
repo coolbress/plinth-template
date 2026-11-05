@@ -4952,23 +4952,35 @@ def _release_pin_problem(
 
 
 def _template_tags() -> set[str]:
-    """The tags on GitHub: the test job's checkout carries none."""
-    listed = subprocess.run(
-        [  # noqa: S607
-            "git",
-            "ls-remote",
-            "--tags",
-            "--refs",
-            "https://github.com/coolbress/plinth-template.git",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=60,
-        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-    )
-    assert listed.returncode == 0, f"could not read the tags: {listed.stderr}"
-    return {line.rsplit("refs/tags/", 1)[1] for line in listed.stdout.splitlines()}
+    """The tags on GitHub: the test job's checkout carries none.
+
+    Tried three times, briefly: a read has hung past a minute, and an unread
+    tag list must stop the test rather than pass it.
+    """
+    why = ""
+    for _ in range(3):
+        try:
+            listed = subprocess.run(
+                [  # noqa: S607
+                    "git",
+                    "ls-remote",
+                    "--tags",
+                    "--refs",
+                    "https://github.com/coolbress/plinth-template.git",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired as error:
+            why = str(error)
+            continue
+        if listed.returncode == 0:
+            return {line.rsplit("refs/tags/", 1)[1] for line in listed.stdout.splitlines()}
+        why = listed.stderr
+    raise AssertionError(f"could not read the tags: {why}")
 
 
 def _own_workflow_pins() -> set[str]:
