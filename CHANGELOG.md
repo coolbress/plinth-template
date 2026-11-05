@@ -8,6 +8,20 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **The monthly template reminder closes its issue once the project is up
+  to date** (#196). When plinth's `floor-check.py --print-update-command`
+  says the recorded tag is the target tag with nothing to update, and
+  `_commit` in `.copier-answers.yml` equals `template_ref` in the pinned
+  plinth's `new-project.sh`, the open reminder the Actions bot opened gets
+  one comment naming the tag and the run, and is closed. Anything else
+  leaves it open and untouched: a checker that could not verify, failed or
+  was not fetched, a `ci.yml` that does not call one plinth pin, and a tag
+  behind or ahead with no update line. An issue carrying the marker that
+  someone else opened is never closed. A closed reminder is not reopened; a
+  later release that leaves the project behind opens a new one. No
+  permission, action, `ci.yml` job or trigger is added: `issues: write`
+  already covers the comment and the close. An existing project gets it
+  through `/plinth:template-update`.
 - **A project's agent keeps the person's computer out of issues and pull
   requests** (#198): `docs/agents/issue-tracker.md` gains a "Public records"
   section. A record carries the product, not the computer: an environment
