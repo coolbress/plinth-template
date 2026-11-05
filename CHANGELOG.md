@@ -29,6 +29,15 @@ means `copier update` on an instance needs hands.
   issue links to Dependabot's open ones that name plinth instead of naming
   one. An existing project gets this through `/plinth:template-update`.
 
+- **A new project calls the plinth commit this template was tested with**
+  (#205). `plinth_sha`'s default had stayed at plinth v2.6.0 while this
+  repository's own CI moved on, so tags v1.21.0 to v1.40.0 all claimed to be
+  tested with v2.6.0 and `/plinth:template-update` had no newer tested pin to
+  offer from them. It and `plinth_gitlab_integrity` are now plinth v2.27.0 and that commit's checksum,
+  and a test fails a release whose default differs from the pin this
+  repository's own workflows call. A project's recorded pin is untouched by an
+  update that passes it, as before.
+
 ## [1.40.0] - 2026-11-05
 
 **Every project now carries a way back from a merged change, keeps the person's computer out of its public records, and its monthly template reminder closes itself once the project is current.** All three are guidance, a form line or the existing reminder workflow: no check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `AGENTS.md` keeps its line count. `docs/how-to/` is now in every render.
