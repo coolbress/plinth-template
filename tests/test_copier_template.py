@@ -1402,6 +1402,10 @@ def test_the_reminder_gives_the_updates_in_order_and_says_where_the_pin_pull_req
         "+coolbress%2Fplinth" in flat
     )
     assert "merged on green like any other" in flat
+    # The local plugin picks step 2's tag and the pin picks this issue's, and
+    # "ahead" leaves the issue open: the body cannot promise it always closes.
+    assert "A newer plinth from step 1 can move this repository past the tag named here" in flat
+    assert "close it by hand" in flat
 
 
 def test_an_open_reminder_is_updated_and_no_second_one_opened(
@@ -1780,6 +1784,7 @@ _KEEP_STEP_ONE = (
     "claude plugin marketplace update plinth",
     "claude plugin update plinth@plinth",
     "/reload-plugins",
+    "claude plugin update <name>@plinth",
     "claude plugin list",
     "https://github.com/coolbress/plinth/releases",
 )
