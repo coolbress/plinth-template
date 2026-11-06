@@ -22,6 +22,12 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **The release workflows install uv 0.13.7** (coolbress/plinth#841): the
+  `cli`/`library` and `data-ml` release workflows were at 0.12.9, with no
+  bump from Dependabot, which never raises a version written in an environment
+  variable. Each carries the release's own checksum. plinth's
+  `tests/uv-pin.sh` now fails when these copies disagree with plinth's own. An
+  existing project gets this through `/plinth:template-update`.
 - **The monthly template reminder gives the same order** (#206): its issue
   lists the plugin update, then `/plinth:template-update`, then the plinth pin
   pull request, and links the how-to. The job's permissions cannot read pull
