@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.41.0] - 2026-11-06
+
+**Every project now says how to keep itself current, and a new project calls the plinth commit this template was tested with.** The how-to and the monthly reminder give the same three updates in order: plinth on the person's computer, the template, then the plinth pin. `plinth_sha`'s default moves from plinth v2.6.0 to v2.27.0, the commit this repository's own CI calls, so `/plinth:template-update` can offer a tested pin again. The release workflows install uv 0.13.7. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `AGENTS.md` keeps its line count.
+
 ### Added
 
 - **A project says how to keep itself current** (#206):
@@ -34,7 +38,6 @@ means `copier update` on an instance needs hands.
   requests (measured on a private repository) and are not widened, so the
   issue links to Dependabot's open ones that name plinth instead of naming
   one. An existing project gets this through `/plinth:template-update`.
-
 - **A new project calls the plinth commit this template was tested with**
   (#205). `plinth_sha`'s default had stayed at plinth v2.6.0 while this
   repository's own CI moved on, so tags v1.21.0 to v1.40.0 all claimed to be
