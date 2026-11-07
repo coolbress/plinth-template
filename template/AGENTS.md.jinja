@@ -15,7 +15,7 @@ uv run pytest
 - Starting something new, or choosing a tool: `/plinth:arsenal`. Asked how to update this project: the three steps in order in [docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md).
 - Adding to what exists: read the issue, then `/implement #N`.
 - Something is broken: read the failing check's log first, then `/mattpocock-skills:diagnosing-bugs`. Asked to undo a merged change: offer the revert in [docs/how-to/undo-a-merged-change.md](docs/how-to/undo-a-merged-change.md), which goes through the checks, before a fix written forward.
-- Coming back: issues and their unticked acceptance criteria, {% if host == 'gitlab' %}open merge requests, the current branch{% else %}open pull requests, the current branch{% endif %} and uncommitted changes, before anything else. Claude Code's automatic memory stays on this machine, so a decision, an unverified item or a next step the next person needs {% if host == 'gitlab' %}goes into the issue or merge request, not only into memory.{% else %}goes into the issue or pull request, not only into memory.{% endif %}
+- Coming back: issues and their unticked acceptance criteria, {% if host == 'gitlab' %}open merge requests, the current branch{% else %}open pull requests, the current branch{% endif %}, uncommitted changes and the recent commits (`git log --oneline -10` and the last squash commit's body), before anything else. Claude Code's automatic memory stays on this machine, so an item still owed when its issue closes goes into an open follow-up issue that the Outcome links, not only into memory.
 
 ## Always
 
