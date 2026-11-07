@@ -71,6 +71,20 @@ gh pr create --title 'revert: <what the change did>'
 {%- endif %}
 ```
 
+{% if host == 'gitlab' -%}
+(glab 1.93.0 or newer; `glab --version` says which you have.)
+`--template Default` starts the description from the project's merge request
+form and opens the merge request without asking anything. On its page, edit
+the description: write `Reverts !<n>.` under `What and why`, fill
+`What I checked myself` and the `Review:` line, and delete the comment lines.
+{%- else -%}
+`gh pr create` asks which form to start from: choose the pull request form
+(`CONTRIBUTING.md` step 5 says which one applies). Write `Reverts #<n>.` under
+`What and why`, fill `What I checked myself` and the `Review:` line, and delete
+the comment lines. An agent has no terminal for that question, and gh refuses
+without one: it writes the form's fields into the description itself.
+{%- endif %}
+
 ## What a revert does not undo
 
 A revert undoes the code, not what the code already did: rows it wrote or
