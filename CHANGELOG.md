@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **A project's `AGENTS.md` is shorter** (#201): a cut pass removed what no
+  test, recorded failure or check backs, and 60 lines become 51. Removed: the
+  sentence that the file is canonical and `CLAUDE.md` a symbolic link to it,
+  the one after the checks block, the third-party reviewer sentence, "these
+  are this repository's conventions", the boundaries line (`CONTRIBUTING.md`
+  keeps it) and the closing "Keep this file short" paragraph. The line on a
+  change coming with its test joins the criteria line with its words
+  unchanged. No rule is added and no check changes. An existing project gets
+  this through `/plinth:template-update`.
+
 ### Fixed
 
 - **A revert that conflicts now goes through the project's form** (#212):

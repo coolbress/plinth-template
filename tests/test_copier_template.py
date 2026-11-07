@@ -1030,7 +1030,7 @@ def test_a_reference_to_another_repository_names_it(
     """A bare `#N` links to the repository the text is in: `plinth #457` in a
     plinth-template record opened plinth-template's #457, and 121 bodies and
     comments had to be rewritten (coolbress/plinth#825). The rule sits on the
-    existing line, since `AGENTS.md` is at its line cap."""
+    existing line, since `AGENTS.md` was at its line cap."""
     out: Path = request.getfixturevalue(instance)
     rule, form_path, form_rule = _REFERENCE_RULE[instance]
     agents = (out / "AGENTS.md").read_text(encoding="utf-8")
@@ -1085,7 +1085,7 @@ def test_a_record_keeps_the_persons_computer_out(
     """Secrets are caught by the scan, but a home path such as `/Users/<name>/...`
     or an account name went into public records unchecked; plinth's own rule
     (its `docs/agents/issue-tracker.md`) is brought to a project (#198). The
-    pointer sits on an existing `AGENTS.md` line, since the file is at its cap."""
+    pointer sits on an existing `AGENTS.md` line, since the file was at its cap."""
     out: Path = request.getfixturevalue(instance)
     opening, history, form_path = _COMPUTER_RULE[instance]
     agents = (out / "AGENTS.md").read_text(encoding="utf-8")
@@ -1757,7 +1757,7 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     how-to and absent from every project (#199). Each render carries a page
     that undoes it through the same checks, says what a revert leaves behind,
     and, for `web`, where the data comes back; `AGENTS.md` points at it from an
-    existing line, since the file is at its cap."""
+    existing line, since the file was at its cap."""
     data: dict[str, str] = {"archetype": archetype, "host": host}
     if hosting:
         data["hosting"] = hosting
@@ -1856,7 +1856,7 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     or in order (#206). Each render's page has the three steps, in order, and
     each says what it brings, what to run and how to tell it is done, with
     this host's commands and not the other's. `AGENTS.md` points at the page
-    from an existing line, since the file is at its cap."""
+    from an existing line, since the file was at its cap."""
     data: dict[str, str] = {"archetype": archetype, "host": host}
     if hosting:
         data["hosting"] = hosting
