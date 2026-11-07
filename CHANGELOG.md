@@ -22,9 +22,9 @@ means `copier update` on an instance needs hands.
   and the last squash commit's body, where the description's "Not verified"
   lands. An item still owed when its issue closes now goes into an open
   follow-up issue that the Outcome links, and `docs/agents/issue-tracker.md`
-  says the same. That replaces the clause sending a decision, an unverified
-  item or a next step to the issue or pull request, and the file keeps its line
-  count. An existing project gets this through `/plinth:template-update`.
+  says the same. A decision or a next step still goes into the issue or pull
+  request, not only into memory, and the file keeps its line count. An existing
+  project gets this through `/plinth:template-update`.
 
 ### Fixed
 

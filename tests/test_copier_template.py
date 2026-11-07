@@ -4149,6 +4149,9 @@ def test_a_returning_session_finds_what_is_still_owed(tmp_path: Path, host: str)
         "uncommitted changes",
         "`git log --oneline -10` and the last squash commit's body",
         "automatic memory stays on this machine",
+        "a decision or a next step the next person needs goes into the issue or "
+        + ("merge request" if host == "gitlab" else "pull request")
+        + ", not only into memory",
         "an item still owed when its issue closes goes into an open follow-up issue "
         "that the Outcome links",
     ):
