@@ -1705,7 +1705,9 @@ _UNDO_LINES = {
         'The title GitHub writes, `Revert "…"`, fails `ci / pr-title`',
         "Merge it like any other pull request, with `CONTRIBUTING.md` step 7's command",
         "git revert <merged commit>",
-        "gh pr create --title 'revert: <what the change did>' --body 'Reverts #<n>.'",
+        "gh pr create --title 'revert: <what the change did>' ```",
+        "Write `Reverts #<n>.` under `What and why`, fill `What I checked myself` "
+        "and the `Review:` line",
     ),
     "gitlab": (
         "On the merged merge request's page, press **Revert**",
@@ -1713,7 +1715,9 @@ _UNDO_LINES = {
         'The title GitLab writes, `Revert "…"`, fails `pr-title`',
         "Merge it like any other merge request, with `CONTRIBUTING.md` step 7's command",
         "git revert <merged commit>",
-        "glab mr create --title 'revert: <what the change did>' --description 'Reverts !<n>.'",
+        "glab mr create --title 'revert: <what the change did>' --template Default ```",
+        "write `Reverts !<n>.` under `What and why`, fill `What I checked myself` "
+        "and the `Review:` line",
     ),
 }
 
@@ -1766,6 +1770,11 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
         assert line in page, f"{UNDO_HOWTO} lacks: {line}"
     assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
     assert ("glab " in page) is (host == "gitlab"), f"GitLab's command on {host}"
+    # `--body` skips the form, whose two fields `ci / pr-title` warns on (#212).
+    assert "--body" not in page, "a revert's command skips the pull-request form"
+    assert "--description" not in page, "a revert's command skips the merge-request form"
+    if host == "gitlab":
+        assert (out / ".gitlab" / "merge_request_templates" / "Default.md").is_file()
     readme = (out / "README.md").read_text(encoding="utf-8")
     for where, (pointer, section) in _UNDO_WEB.items():
         assert (pointer in page) is (hosting == where), f"web pointer {where!r} on {hosting}"
