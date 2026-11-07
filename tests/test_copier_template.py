@@ -4132,12 +4132,34 @@ def test_agents_md_ties_criteria_to_tests(rendered: Path) -> None:
     assert "unticked" in text
 
 
-def test_agents_md_says_where_decisions_live(rendered: Path) -> None:
-    """Claude Code's automatic memory stays on one machine; a decision the next
-    person needs goes into the issue or pull request (the record is the handover)."""
-    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
-    assert "automatic memory stays on this machine" in agents
-    assert "goes into the issue or pull request" in agents
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_returning_session_finds_what_is_still_owed(tmp_path: Path, host: str) -> None:
+    """Six sessions read "Coming back" as open issues only and missed an item
+    kept in a closed issue; the one arm without the rule found it in `git log`
+    (coolbress/plinth#832, #215). So the list adds the recent commits, and an
+    item still owed goes where a read of open issues finds it."""
+    out = render(tmp_path, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8")
+    line = [ln for ln in agents.splitlines() if ln.startswith("- Coming back:")]
+    assert len(line) == 1, "AGENTS.md has no one Coming back line"
+    for must in (
+        "unticked acceptance criteria",
+        "open merge requests" if host == "gitlab" else "open pull requests",
+        "the current branch",
+        "uncommitted changes",
+        "`git log --oneline -10` and the last squash commit's body",
+        "automatic memory stays on this machine",
+        "a decision or a next step the next person needs goes into the issue or "
+        + ("merge request" if host == "gitlab" else "pull request")
+        + ", not only into memory",
+        "an item still owed when its issue closes goes into an open follow-up issue "
+        "that the Outcome links",
+    ):
+        assert must in line[0], f"the Coming back line lacks: {must}"
+    tracker = " ".join(
+        (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8").split()
+    )
+    assert "goes into an open follow-up issue that the Outcome links" in tracker
 
 
 def test_contributing_says_the_description_is_the_squash_commit(rendered: Path) -> None:

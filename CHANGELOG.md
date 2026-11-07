@@ -17,6 +17,14 @@ means `copier update` on an instance needs hands.
   change coming with its test joins the criteria line with its words
   unchanged. No rule is added and no check changes. An existing project gets
   this through `/plinth:template-update`.
+- **A returning session reads the recent commits, and an item still owed stays
+  open** (#215): `AGENTS.md`'s "Coming back" list adds `git log --oneline -10`
+  and the last squash commit's body, where the description's "Not verified"
+  lands. An item still owed when its issue closes now goes into an open
+  follow-up issue that the Outcome links, and `docs/agents/issue-tracker.md`
+  says the same. A decision or a next step still goes into the issue or pull
+  request, not only into memory, and the file keeps its line count. An existing
+  project gets this through `/plinth:template-update`.
 
 ### Fixed
 
