@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **A project's `AGENTS.md` is shorter** (#201): a cut pass removed what no
+  test, recorded failure or check backs, and 60 lines become 51. Removed: the
+  sentence that the file is canonical and `CLAUDE.md` a symbolic link to it,
+  the one after the checks block, the third-party reviewer sentence, "these
+  are this repository's conventions", the boundaries line (`CONTRIBUTING.md`
+  keeps it) and the closing "Keep this file short" paragraph. The line on a
+  change coming with its test joins the criteria line with its words
+  unchanged. No rule is added and no check changes. An existing project gets
+  this through `/plinth:template-update`.
+
 ## [1.41.0] - 2026-11-06
 
 **Every project now says how to keep itself current, and a new project calls the plinth commit this template was tested with.** The how-to and the monthly reminder give the same three updates in order: plinth on the person's computer, the template, then the plinth pin. `plinth_sha`'s default moves from plinth v2.6.0 to v2.27.0, the commit this repository's own CI calls, so `/plinth:template-update` can offer a tested pin again. The release workflows install uv 0.13.7. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `AGENTS.md` keeps its line count.
