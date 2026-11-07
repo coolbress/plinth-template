@@ -18,6 +18,17 @@ means `copier update` on an instance needs hands.
   unchanged. No rule is added and no check changes. An existing project gets
   this through `/plinth:template-update`.
 
+### Fixed
+
+- **A revert that conflicts now goes through the project's form** (#212):
+  the command in `docs/how-to/undo-a-merged-change.md` passed its own one-line
+  description, which skipped the form and its `What I checked myself` and
+  `Review:` fields. `gh pr create` now asks for the form in a terminal, and
+  `glab mr create --template Default` (glab 1.93.0 or newer) starts from it;
+  the reverted change is named inside it. An existing project gets this through
+  `/plinth:template-update`, or on GitLab through `/plinth:floor-check`'s
+  `copier update` line.
+
 ## [1.41.0] - 2026-11-06
 
 **Every project now says how to keep itself current, and a new project calls the plinth commit this template was tested with.** The how-to and the monthly reminder give the same three updates in order: plinth on the person's computer, the template, then the plinth pin. `plinth_sha`'s default moves from plinth v2.6.0 to v2.27.0, the commit this repository's own CI calls, so `/plinth:template-update` can offer a tested pin again. The release workflows install uv 0.13.7. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `AGENTS.md` keeps its line count.
