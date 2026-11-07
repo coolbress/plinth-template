@@ -65,9 +65,9 @@ the {{ req }}:
 ```bash
 git push origin revert/<n>
 {% if host == 'gitlab' -%}
-glab mr create --title 'revert: <what the change did>' --description 'Reverts !<n>.'
+glab mr create --title 'revert: <what the change did>' --template Default
 {%- else -%}
-gh pr create --title 'revert: <what the change did>' --body 'Reverts #<n>.'
+gh pr create --title 'revert: <what the change did>'
 {%- endif %}
 ```
 
