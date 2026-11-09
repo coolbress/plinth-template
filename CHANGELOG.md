@@ -6,8 +6,16 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.42.0] - 2026-11-09
+
+**A project's `AGENTS.md` is shorter, a returning session reads the recent commits, and a conflicting revert goes through the project's form.** `AGENTS.md` drops from 60 to 51 lines, keeping what a test, a recorded failure or a check backs. Its "Coming back" list adds the last ten commits and the last squash commit's body, and an item still owed when an issue closes goes into an open follow-up. The undo how-to's conflict path uses the pull-request form. `plinth_sha`'s default moves from plinth v2.27.0 to v2.28.0, the commit this repository's own CI calls. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.
+
 ### Changed
 
+- **A new project calls plinth v2.28.0**: `plinth_sha`'s default moves from
+  27facda (v2.27.0) to cecffe1 (v2.28.0), the commit `.github/workflows` calls
+  since #220, and `plinth_gitlab_integrity` to that commit's checksum. On
+  GitHub an existing project gets it through its Dependabot pull request.
 - **A project's `AGENTS.md` is shorter** (#201): a cut pass removed what no
   test, recorded failure or check backs, and 60 lines become 51. Removed: the
   sentence that the file is canonical and `CLAUDE.md` a symbolic link to it,
