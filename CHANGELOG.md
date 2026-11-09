@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **Undoing a merged change keeps the title the host writes** (#212): the
+  undo how-to's "Open the revert" no longer asks to retitle the revert, and
+  `gh pr revert` loses its `--title`. `ci / pr-title` accepts
+  `Revert "<title>"` when the quoted title passes, from plinth v2.28.0, the
+  `plinth_sha` default since 1.42.0. "When the revert conflicts" keeps its
+  title: on GitHub, git's own quotes a title ending in `(#N)`, which is still
+  refused. An existing project gets this through `/plinth:template-update`.
+  The page does not read the pin: a project still calling a plinth older than
+  v2.28.0 raises it first (on GitHub, its Dependabot pull request), or the
+  host's revert title fails `ci / pr-title` there.
+
 ## [1.42.0] - 2026-11-09
 
 **A project's `AGENTS.md` is shorter, a returning session reads the recent commits, and a conflicting revert goes through the project's form.** `AGENTS.md` drops from 60 to 51 lines, keeping what a test, a recorded failure or a check backs. Its "Coming back" list adds the last ten commits and the last squash commit's body, and an item still owed when an issue closes goes into an open follow-up. The undo how-to's conflict path uses the pull-request form. `plinth_sha`'s default moves from plinth v2.27.0 to v2.28.0, the commit this repository's own CI calls. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.

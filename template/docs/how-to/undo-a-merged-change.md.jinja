@@ -1,11 +1,9 @@
 {%- if host == 'gitlab' -%}
 {%- set req = 'merge request' -%}
 {%- set host_name = 'GitLab' -%}
-{%- set title_check = '`pr-title`' -%}
 {%- else -%}
 {%- set req = 'pull request' -%}
 {%- set host_name = 'GitHub' -%}
-{%- set title_check = '`ci / pr-title`' -%}
 {%- endif -%}
 # Undo a merged change
 
@@ -26,16 +24,12 @@ On the merged pull request's page, press **Revert**, or run this in a
 terminal in this repository, with the pull request's number for `<n>`:
 
 ```bash
-gh pr revert <n> --title 'revert: <what the change did>'
+gh pr revert <n>
 ```
 
 (gh 2.83.0 or newer; `gh --version` says which you have.) Either opens a new
 pull request, on a new branch, that undoes the change.
 {%- endif %}
-
-Give it a title such as `revert: <what the change did>`. The title {{ host_name }}
-writes, `Revert "…"`, fails {{ title_check }}, which takes one of the eleven
-standard types; {% if host == 'gitlab' %}edit the title on the merge request's page.{% else %}after the button, edit the title on the pull request's page.{% endif %}
 
 ## 2. Merge it
 
@@ -78,6 +72,8 @@ form and opens the merge request without asking anything. On its page, edit
 the description: write `Reverts !<n>.` under `What and why`, fill
 `What I checked myself` and the `Review:` line, and delete the comment lines.
 {%- else -%}
+The title is passed because the one git writes, `Revert "<title> (#<n>)"`,
+fails `ci / pr-title`: the squash merge would add a second number.
 `gh pr create` asks which form to start from: choose the pull request form
 (`CONTRIBUTING.md` step 5 says which one applies). Write `Reverts #<n>.` under
 `What and why`, fill `What I checked myself` and the `Review:` line, and delete

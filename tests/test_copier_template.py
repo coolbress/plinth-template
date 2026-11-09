@@ -1700,19 +1700,18 @@ UNDO_HOWTO = Path("docs") / "how-to" / "undo-a-merged-change.md"
 _UNDO_LINES = {
     "github": (
         "On the merged pull request's page, press **Revert**, or run",
-        "gh pr revert <n> --title 'revert: <what the change did>'",
+        "gh pr revert <n> ```",
         "(gh 2.83.0 or newer; `gh --version` says which you have.)",
-        'The title GitHub writes, `Revert "…"`, fails `ci / pr-title`',
         "Merge it like any other pull request, with `CONTRIBUTING.md` step 7's command",
         "git revert <merged commit>",
         "gh pr create --title 'revert: <what the change did>' ```",
+        'the one git writes, `Revert "<title> (#<n>)"`, fails `ci / pr-title`',
         "Write `Reverts #<n>.` under `What and why`, fill `What I checked myself` "
         "and the `Review:` line",
     ),
     "gitlab": (
         "On the merged merge request's page, press **Revert**",
         "keep **Start a new merge request with these changes** ticked",
-        'The title GitLab writes, `Revert "…"`, fails `pr-title`',
         "Merge it like any other merge request, with `CONTRIBUTING.md` step 7's command",
         "git revert <merged commit>",
         "glab mr create --title 'revert: <what the change did>' --template Default ```",
@@ -1770,6 +1769,10 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
         assert line in page, f"{UNDO_HOWTO} lacks: {line}"
     assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
     assert ("glab " in page) is (host == "gitlab"), f"GitLab's command on {host}"
+    # The host's `Revert "<title>"` passes at the default `plinth_sha` (#212).
+    opening = page.split("## 2. Merge it")[0]
+    assert "--title" not in opening, "section 1 still asks for a title"
+    assert "Give it a title" not in opening, "section 1 still asks for a title"
     # `--body` skips the form, whose two fields `ci / pr-title` warns on (#212).
     assert "--body" not in page, "a revert's command skips the pull-request form"
     assert "--description" not in page, "a revert's command skips the merge-request form"
