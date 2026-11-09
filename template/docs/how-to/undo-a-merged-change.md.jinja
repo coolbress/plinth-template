@@ -73,7 +73,7 @@ the description: write `Reverts !<n>.` under `What and why`, fill
 `What I checked myself` and the `Review:` line, and delete the comment lines.
 {%- else -%}
 The title is passed because the one git writes, `Revert "<title> (#<n>)"`,
-fails `ci / pr-title`: the squash merge would add a second number.
+fails `ci / pr-title`, which refuses a quoted title that ends in `(#N)`.
 `gh pr create` asks which form to start from: choose the pull request form
 (`CONTRIBUTING.md` step 5 says which one applies). Write `Reverts #<n>.` under
 `What and why`, fill `What I checked myself` and the `Review:` line, and delete
