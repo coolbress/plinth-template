@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   third-party:
-    uses: coolbress/plinth/.github/workflows/pr-review.yml@27facda177bc3d1c34f6936937465717160a4b72 # v2.27.0
+    uses: coolbress/plinth/.github/workflows/pr-review.yml@cecffe1f52c2911558ece2b978c759c9203e1f63 # v2.28.0
     secrets:
       # A fine-grained token of the repository owner's, this repository only,
       # with an expiry and Pull requests: Read and write, for the summons the
