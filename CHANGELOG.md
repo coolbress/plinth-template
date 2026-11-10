@@ -18,6 +18,14 @@ means `copier update` on an instance needs hands.
   The page does not read the pin: a project still calling a plinth older than
   v2.28.0 raises it first (on GitHub, its Dependabot pull request), or the
   host's revert title fails `ci / pr-title` there.
+- **The keep-current how-to warns against turning on auto-update inside the
+  project, and names `third-party.yml` in the pin step**:
+  `docs/how-to/keep-this-project-current.md`'s first step says that choosing
+  plinth's auto-update in a session in the project rewrites its committed
+  `.claude/settings.json`, and to choose it outside any project. On GitHub,
+  the pin step names `third-party.yml` beside `ci.yml` and `label.yml` when
+  the project has it. An existing project gets this through
+  `/plinth:template-update`.
 
 ## [1.42.0] - 2026-11-09
 

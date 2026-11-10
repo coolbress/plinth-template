@@ -1800,6 +1800,9 @@ _KEEP_STEP_ONE = (
     "claude plugin update <name>@plinth",
     "claude plugin list",
     "https://github.com/coolbress/plinth/releases",
+    "Do not turn on automatic updates from inside this project.",
+    "rewrites this project's committed `.claude/settings.json`",
+    "a session started outside any project",
 )
 
 _KEEP_STEPS = {
@@ -1890,6 +1893,16 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
         "[docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
     )
     assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
+
+
+@pytest.mark.parametrize("review", [True, False])
+def test_the_pin_step_names_third_party_yml_only_where_it_is(tmp_path: Path, review: bool) -> None:
+    """`third-party.yml` calls plinth at the pin too, so the pin step names it,
+    and only in a project that has the file."""
+    out = render(tmp_path, third_party_review=review)
+    assert (out / ".github" / "workflows" / "third-party.yml").exists() is review
+    pin_step = (out / KEEP_HOWTO).read_text(encoding="utf-8").split("\n## 3. ")[1]
+    assert ("`third-party.yml`" in " ".join(pin_step.split())) is review
 
 
 # ── releasing a package (coolbress/plinth#703) ────────────────────────────

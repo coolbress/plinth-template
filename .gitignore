@@ -22,3 +22,7 @@ dist/
 # Claude Code adds this file to the global git excludes of one machine, which
 # protects that machine and not the repository.
 .claude/settings.local.json
+
+# Worktrees made by CONTRIBUTING.md step 1. While one is there untracked,
+# CONTRIBUTING.md's `copier copy --vcs-ref HEAD .` fails.
+.claude/worktrees/
