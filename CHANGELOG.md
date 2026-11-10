@@ -8,6 +8,18 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **The rendered workflows send the job's token on their GitHub release
+  downloads** (#226): each `curl` of a tool from a `github.com` release
+  (grype in `ci.yml`'s image check; uv and syft in `release.yml`) has
+  `GITHUB_TOKEN: ${{ github.token }}` in its step's env and
+  `${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"}` on the line.
+  On 2026-11-09 GitHub answered anonymous requests with 504 for about two
+  hours and let authenticated ones through (coolbress/plinth#878). curl
+  sends the header to `github.com` only, not to the storage host it
+  redirects to, and an empty token leaves the request anonymous as before.
+  The versions and checksums are unchanged. The GitLab files download
+  nothing from a GitHub release. An existing project gets this through
+  `/plinth:template-update`.
 - **Undoing a merged change keeps the title the host writes** (#212): the
   undo how-to's "Open the revert" no longer asks to retitle the revert, and
   `gh pr revert` loses its `--title`. `ci / pr-title` accepts
