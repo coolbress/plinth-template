@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.43.0] - 2026-11-10
+
+**A `cli` or `library` release publishes every package of a uv workspace.** With `[tool.uv.workspace]` in the root `pyproject.toml`, `release.yml` builds the root and every member that is a package and uploads them all; the tag matches the root's version, each member keeps its own, and a member whose version did not change is skipped. Each published member needs its own pending publisher on PyPI, set once by a person; the upload of several packages from one run has not yet run on a tag, so the how-to sends the first one to TestPyPI. Without a workspace a release runs the commands it ran before. `plinth_sha`'s default stays cecffe1 (v2.28.0); `ci / build` builds such a workspace from plinth v2.30.0, which a project reaches by raising its pin. No job, check, question or action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.
+
 ### Changed
 
 - **A `cli` or `library` release publishes every package of a uv workspace**
