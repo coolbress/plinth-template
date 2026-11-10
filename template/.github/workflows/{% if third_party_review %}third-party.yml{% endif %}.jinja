@@ -9,6 +9,11 @@
 # request. Requiring it is a separate step, once it has reported on a pull
 # request: section 3 of the how-to, plinth's scripts/upgrade-ruleset.sh.
 #
+# Red on a pull request your reviewer passed? Codex's reviewer is the only one
+# verified with this check. With another reviewer the check may stay red: it
+# may report in a form the check does not read. That is expected, and as the
+# check is not required it does not block a merge.
+#
 # Its own file and not ci.yml: it also runs on `pull_request_review`, so it
 # turns green the moment a review arrives, and that trigger in ci.yml would
 # re-run the whole CI on every review.
