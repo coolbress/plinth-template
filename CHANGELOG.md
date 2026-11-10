@@ -6,6 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **The keep-current how-to warns against turning on auto-update inside the
+  project, and names `third-party.yml` in the pin step**:
+  `docs/how-to/keep-this-project-current.md`'s first step says that choosing
+  plinth's auto-update in a session in the project rewrites its committed
+  `.claude/settings.json`, and to choose it outside any project. On GitHub,
+  the pin step names `third-party.yml` beside `ci.yml` and `label.yml` when
+  the project has it. An existing project gets this through
+  `/plinth:template-update`.
+
 ## [1.42.0] - 2026-11-09
 
 **A project's `AGENTS.md` is shorter, a returning session reads the recent commits, and a conflicting revert goes through the project's form.** `AGENTS.md` drops from 60 to 51 lines, keeping what a test, a recorded failure or a check backs. Its "Coming back" list adds the last ten commits and the last squash commit's body, and an item still owed when an issue closes goes into an open follow-up. The undo how-to's conflict path uses the pull-request form. `plinth_sha`'s default moves from plinth v2.27.0 to v2.28.0, the commit this repository's own CI calls. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.
