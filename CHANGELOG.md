@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.42.1] - 2026-11-10
+
+**A project's workflows download their tools with the job's token, the undo how-to keeps the title the host writes, and the keep-current how-to warns against auto-update inside the project.** After GitHub answered anonymous requests with 504 for about two hours on 2026-11-09, each `curl` of a tool from a `github.com` release sends the job's token, to `github.com` only. The undo how-to drops its retitle step, as plinth v2.28.0, the `plinth_sha` default since 1.42.0, accepts `Revert "<title>"`. `plinth_sha`'s default stays cecffe1 (v2.28.0), the commit `.github/workflows` calls. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.
+
 ### Changed
 
 - **The rendered workflows send the job's token on their GitHub release
