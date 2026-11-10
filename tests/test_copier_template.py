@@ -2709,6 +2709,98 @@ def test_service_archetype_dependabot_watches_the_image(backend: Path, rendered:
     )
 
 
+# ── a release download sends the job's token (#226) ───────────────────────
+#
+# On 2026-11-09 GitHub answered anonymous requests with 504 for about two
+# hours; authenticated ones went through (coolbress/plinth#878). Each
+# download from a github.com release sends the job's token. curl gives a
+# `-H` header to the first host only, so the redirect to the storage host
+# goes without it; an empty token adds no header at all.
+
+TOKEN_ENV = "${{ github.token }}"  # noqa: S105 (an expression, not a secret)
+TOKEN_HEADER = '${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"}'  # noqa: S105
+RELEASE_URL = re.compile(r"https://github\.com/[^/\s\"']+/[^/\s\"']+/releases/(latest/)?download/")
+# The github.com release downloads each archetype's workflows hold, counted
+# so that a reader that finds none cannot pass.
+RELEASE_DOWNLOADS = {"cli": 2, "library": 2, "backend": 2, "data-ml": 3, "web": 1}
+
+
+def _release_downloads(workflows: dict[str, str]) -> tuple[int, list[str]]:
+    """How many github.com release downloads the workflows hold, and each
+    one that does not send the token, or sends it past github.com."""
+    seen, problems = 0, []
+    for name, text in workflows.items():
+        for job_name, job in (yaml.safe_load(text).get("jobs") or {}).items():
+            for i, step in enumerate(job.get("steps") or []):
+                run = step.get("run") or ""
+                env = step.get("env") or {}
+                for line in run.replace("\\\n", " ").splitlines():
+                    if not RELEASE_URL.search(line) or not re.search(r"\b(curl|wget)\b", line):
+                        continue
+                    seen += 1
+                    where = f"{name} {job_name} step {i} ({step.get('name', '')})"
+                    if re.search(r"\bwget\b", line):
+                        problems.append(f"{where}: wget, not curl with the token")
+                    if "--location-trusted" in line:
+                        problems.append(f"{where}: --location-trusted sends it past github.com")
+                    if TOKEN_HEADER not in line:
+                        problems.append(f"{where}: no {TOKEN_HEADER}")
+                    if env.get("GITHUB_TOKEN") != TOKEN_ENV:
+                        problems.append(f"{where}: env GITHUB_TOKEN is not {TOKEN_ENV}")
+    return seen, problems
+
+
+def _workflows(out: Path) -> dict[str, str]:
+    return {
+        p.name: p.read_text(encoding="utf-8")
+        for p in sorted((out / ".github" / "workflows").glob("*.yml"))
+    }
+
+
+_GOOD_STEP = """\
+jobs:
+  j:
+    steps:
+      - name: Install a tool
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} -o "$f" \\
+            "https://github.com/someone/tool/releases/download/v1/$f"
+"""
+
+
+@pytest.mark.parametrize(
+    ("label", "text"),
+    [
+        ("no header", _GOOD_STEP.replace(f"{TOKEN_HEADER} ", "")),
+        ("no env", _GOOD_STEP.replace(f"GITHUB_TOKEN: {TOKEN_ENV}", "OTHER: x")),
+        ("a secret, not the job's token", _GOOD_STEP.replace(TOKEN_ENV, "${{ secrets.PAT }}")),
+        ("--location-trusted", _GOOD_STEP.replace("-fsSL", "-fsSL --location-trusted")),
+        ("wget", _GOOD_STEP.replace("curl -fsSL", "wget")),
+        (
+            "latest",
+            _GOOD_STEP.replace(f"{TOKEN_HEADER} ", "").replace("download/v1", "latest/download"),
+        ),
+    ],
+)
+def test_the_token_reader_fails_a_download_without_it(label: str, text: str) -> None:
+    """The reader below is not fail-open: each of these is one download it
+    refuses, and the form the workflows use is one it passes."""
+    assert _release_downloads({"good.yml": _GOOD_STEP}) == (1, [])
+    seen, problems = _release_downloads({"bad.yml": text})
+    assert seen == 1, label
+    assert problems, label
+
+
+@pytest.mark.parametrize("archetype", sorted(RELEASE_DOWNLOADS))
+def test_every_release_download_sends_the_token(tmp_path: Path, archetype: str) -> None:
+    out = render(tmp_path, archetype=archetype)
+    seen, problems = _release_downloads(_workflows(out))
+    assert seen == RELEASE_DOWNLOADS[archetype], (seen, problems)
+    assert problems == []
+
+
 # ── Claude Code settings ──────────────────────────────────────────────────
 
 

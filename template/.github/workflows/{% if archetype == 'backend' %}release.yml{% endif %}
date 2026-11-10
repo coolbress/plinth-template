@@ -121,13 +121,14 @@ jobs:
       # the copy fetched by its digest above, for the GitHub Release.
       - name: Install syft (official release, SHA256 verified)
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           SYFT_VERSION: "1.55.0"
           SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
         run: |
           set -euo pipefail
           d="$RUNNER_TEMP/syft"; mkdir -p "$d"
           f="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
-          curl -fsSL --retry 3 -o "$d/$f" \
+          curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} -o "$d/$f" \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/$f"
           echo "${SYFT_SHA256}  $d/$f" | sha256sum -c -
           tar -xzf "$d/$f" -C "$d" syft
