@@ -6,6 +6,31 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **A `cli` or `library` release publishes every package of a uv workspace**
+  (#225): with `[tool.uv.workspace]` in the root `pyproject.toml`,
+  `release.yml` builds the root and every member that is a package
+  (`uv build --all-packages`) and the publish job uploads them all. Before,
+  a tag built the root only, and a root that depends on a member could not
+  be installed from PyPI; the SBOM step also failed there, as
+  `uv export --no-emit-project` writes a member as a path. The install
+  check takes the root's wheel alone, with `--find-links dist` and each
+  member pinned to the version just built. One tag releases the workspace
+  at one version: a new step, "Check every package of the workspace has the
+  root's version", fails the build job, before any upload, when a member is
+  at another version or the root is not a package. PyPI never takes a
+  version twice, so a member left behind would be refused after other files
+  went out. `docs/how-to/publish-a-release.md` has a section for a
+  workspace: one pending publisher on PyPI for each published member, set
+  by a person, and `uv version --package <member>` for each. Not yet run on
+  a tag: the upload of several packages from one run; the how-to says so
+  and sends the first one to TestPyPI. Without a workspace the release
+  runs the commands it ran before; the `uv build` step has a name now. No
+  job, check or action is added. `ci / build` builds such a workspace from
+  the plinth release that carries coolbress/plinth#889. An existing project
+  gets this through `/plinth:template-update`.
+
 ## [1.42.1] - 2026-11-10
 
 **A project's workflows download their tools with the job's token, the undo how-to keeps the title the host writes, and the keep-current how-to warns against auto-update inside the project.** After GitHub answered anonymous requests with 504 for about two hours on 2026-11-09, each `curl` of a tool from a `github.com` release sends the job's token, to `github.com` only. The undo how-to drops its retitle step, as plinth v2.28.0, the `plinth_sha` default since 1.42.0, accepts `Revert "<title>"`. `plinth_sha`'s default stays cecffe1 (v2.28.0), the commit `.github/workflows` calls. No check, job or question changes and no action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.

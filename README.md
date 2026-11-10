@@ -59,7 +59,8 @@ checksum of plinth's GitLab pipeline is.
   listing the update steps in order; it closes the issue once the project is
   current. It never updates anything itself.
 - `release.yml` for every kind but `web`: a version tag publishes the
-  package to PyPI (`cli`, `library`), the image to GitHub's container registry
+  package to PyPI (`cli`, `library`; every package of a uv workspace, at one
+  version), the image to GitHub's container registry
   (`backend`), or the training run's files to a GitHub Release (`data-ml`).
 - README, LICENSE, CONTRIBUTING, CHANGELOG, SECURITY, `AGENTS.md` with the
   `CLAUDE.md` symlink, and the three `docs/agents` files the mattpocock skills
