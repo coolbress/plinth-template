@@ -13,6 +13,14 @@
 # uploads (attestations), and PyPI shows that on the project page. The
 # GitHub Release also carries an SBOM, `sbom.spdx.json`: what installing the
 # wheel puts in an environment.
+#
+# A uv workspace (`[tool.uv.workspace]` in pyproject.toml): one tag releases
+# the root and every member that is a package. A root that depends on a
+# member cannot be installed from PyPI unless the member is there too. The
+# tag is the root's version; each member keeps its own, and a member file
+# PyPI already has is skipped, not uploaded again. Each published package
+# needs its own publisher on PyPI. Without a workspace, one package is built
+# and published, and a file PyPI already has fails the run.
 name: Release
 
 on:
@@ -35,6 +43,9 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      # "true" in a uv workspace: the publish job then skips a file PyPI has.
+      workspace: ${{ steps.build.outputs.workspace }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,7 +84,56 @@ jobs:
           echo "${UV_SHA256}  $d/$f" | sha256sum -c -
           tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
           echo "$d" >> "$GITHUB_PATH"
-      - run: uv build
+      # `workspace-root` holds the root's name as a wheel's file name spells
+      # it, or nothing without a workspace; the steps below read it.
+      - name: Build the package, and every package of a uv workspace
+        id: build
+        run: |
+          set -euo pipefail
+          root="$(python3 - <<'PY'
+          import re, tomllib
+          with open("pyproject.toml", "rb") as f:
+              project = tomllib.load(f)
+          if "workspace" in project.get("tool", {}).get("uv", {}):
+              print(re.sub(r"[-_.]+", "_", project["project"]["name"]).lower())
+          PY
+          )"
+          printf '%s' "$root" > "$RUNNER_TEMP/workspace-root"
+          if [ -n "$root" ]; then
+            echo "workspace=true" >> "$GITHUB_OUTPUT"; uv build --all-packages
+          else
+            echo "workspace=false" >> "$GITHUB_OUTPUT"; uv build
+          fi
+      # The tag is the root's version, checked above; each member has its own.
+      # The install check below needs the root's wheel and, for each member,
+      # the version just built, both read from the wheels' file names.
+      - name: Find the workspace's root wheel and its members' versions
+        run: |
+          set -euo pipefail
+          root="$(cat "$RUNNER_TEMP/workspace-root")"
+          if [ -z "$root" ]; then
+            echo "No uv workspace: one package."
+            exit 0
+          fi
+          # A wheel is <name>-<version>-<tags>.whl; neither part holds a hyphen.
+          name() { n="${1#dist/}"; printf '%s' "${n%%-*}" | tr '[:upper:]' '[:lower:]' | tr -s '._' '__'; }
+          version() { v="${1#dist/*-}"; printf '%s' "${v%%-*}"; }
+          wheel=""
+          : > "$RUNNER_TEMP/workspace-pins"
+          for f in dist/*.whl; do
+            n="$(name "$f")"
+            if [ "$n" = "$root" ]; then
+              wheel="$f"
+            else
+              echo "$n==$(version "$f")" | tee -a "$RUNNER_TEMP/workspace-pins"
+            fi
+          done
+          if [ -z "$wheel" ]; then
+            echo "::error title=The workspace's root was not built::dist/ holds no wheel of $root. uv builds a workspace's root only when it is a package: one with a [build-system], or with package = true under [tool.uv]. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Make the root a package in a pull request, raise its version to one that has no tag yet, merge it, and tag the merged commit with it."
+            exit 1
+          fi
+          printf '%s' "$wheel" > "$RUNNER_TEMP/workspace-root-wheel"
+          echo "The root's wheel is $wheel."
       # A software bill of materials (SBOM), attached to the GitHub Release.
       # The wheel names what it needs, not what it installs, so the SBOM is
       # of a fresh environment with the built wheel installed at the runtime
@@ -97,9 +157,20 @@ jobs:
         run: |
           set -euo pipefail
           env="$RUNNER_TEMP/sbom-env"
-          uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
           uv venv --quiet "$env"
-          uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl
+          if [ -s "$RUNNER_TEMP/workspace-root" ]; then
+            # A workspace: the root's wheel alone. Its members are looked up
+            # in dist/ too, each pinned to the version just built, so another
+            # version on the index is not taken instead. This does not show
+            # that PyPI has that member's code: a member changed without a
+            # new version is skipped at the upload.
+            uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
+            cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
+          else
+            uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl
+          fi
           name="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["name"])')"
           mkdir -p sbom
           syft scan "dir:$env" --source-name "$name" --source-version "${GITHUB_REF_NAME#v}" -o spdx-json=sbom/sbom.spdx.json
@@ -136,13 +207,17 @@ jobs:
           # otherwise; https://test.pypi.org/legacy/ rehearses on TestPyPI.
           repository-url: ${{ vars.PYPI_REPOSITORY_URL || 'https://upload.pypi.org/legacy/' }}
           attestations: true
+          # In a uv workspace a member whose version did not change is on
+          # PyPI already: its files are skipped, and the rest are uploaded.
+          # Without a workspace a file PyPI already has fails the run.
+          skip-existing: ${{ needs.build.outputs.workspace == 'true' }}
       - name: Say why PyPI refused, in plain words
         if: failure()
         run: |
           {
             echo "### PyPI did not accept this release"
             echo
-            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): the tag stays as it is."
+            echo "If the log of the step above says \`invalid-publisher\`, PyPI has no publisher registered for this project that matches this repository. On PyPI (or TestPyPI), add a pending publisher with this repository's owner and name, the workflow file \`release.yml\` and the environment \`pypi\`, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): the tag stays as it is. In a uv workspace, every package it publishes needs its own publisher with those same values."
             echo
             echo "If it says the file already exists, this version was published before: PyPI never takes a version twice. Raise the version in pyproject.toml and tag again."
             echo

@@ -464,6 +464,38 @@ Do not add a secret here: Trusted Publishing needs none.
    scanner reads it to tell whether a newly published vulnerability touches
    a release.
 
+## A uv workspace: more than one package
+
+Skip this section unless the root `pyproject.toml` has a
+`[tool.uv.workspace]` table. A uv workspace is one repository that holds
+several packages, the root and its members. When the root depends on a
+member, installing the root from PyPI needs that member on PyPI too. So one
+tag publishes the root and every member that is a package. A member that is
+not a package (no `[build-system]`, or `package = false` under `[tool.uv]`)
+is not built and not published. Members released on their own tags, apart
+from the root, are not supported.
+
+- **A publisher for each package, once, by you.** Repeat step 2 for every
+  member that is published: check its name is free, then add one pending
+  publisher for each of them, with the member's `name` as the PyPI Project
+  Name and the other four fields as in the table. For the practice run, the
+  same on TestPyPI.
+- **The tag is the root's version.** The tag is checked against the root's
+  `pyproject.toml` only. Each member keeps its own version, in its own
+  `pyproject.toml`: the root can be at `0.2.0` and a member at `1.0.0`.
+- **A member is uploaded only at a new version.** PyPI never takes a
+  version twice. A member whose version did not change since the last
+  release is on PyPI already, so its files are skipped and the run goes on.
+  When a member's code changed, raise its version in the same pull request
+  as the root's (`uv version --package <member> 1.0.1`): without that, PyPI
+  keeps the member's old files and the new root installs the old member.
+- **Not yet checked on a tag run.** Building every package and installing
+  the root with its members are tested; the upload of several packages from
+  one run is not. Rehearse on TestPyPI first (step 4.2). If the first run
+  uploads one package and PyPI refuses another, re-run its failed jobs,
+  and again while PyPI refuses a package it has not seen before: the files
+  it already has are skipped.
+
 ## When a release fails
 
 Nothing is uploaded until every check before the upload has passed. The run
@@ -486,7 +518,8 @@ says which step stopped, in its summary.
   is.
 - **"File already exists".** That version was published before, and PyPI
   never takes the same version twice, even after a deletion. Raise the
-  version (step 4.1) and tag again.
+  version (step 4.1) and tag again. In a uv workspace the run skips such a
+  file instead (see "A uv workspace: more than one package").
 
 To take a broken release out of reach without breaking anyone who already
 pinned it, *yank* it on PyPI (the project's **Manage** > **Releases** >
