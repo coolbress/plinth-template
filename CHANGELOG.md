@@ -6,6 +6,22 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **The third-party reviewer question says Codex's reviewer is the only one
+  verified** (#231): the help of `third_party_review` read "a code reviewer,
+  such as Codex's", which reads as any reviewer working. Only Codex's is
+  verified end to end (coolbress/plinth#387); with another reviewer
+  connected, `third-party / review` may stay red on a pull request that
+  reviewer passed. The help now says so. It said before that the check is not
+  required; it now ends on what that means there: a red check does not block
+  a merge. This repository's README lists the question the same way. The
+  header of
+  `.github/workflows/third-party.yml` says the same, for whoever opens the
+  file from a red check. Comments and help text only: no job, check, question
+  or action changes, and `copier update` needs no hands. An existing project
+  that answered yes gets the header through `/plinth:template-update`.
+
 ## [1.43.0] - 2026-11-10
 
 **A `cli` or `library` release publishes every package of a uv workspace.** With `[tool.uv.workspace]` in the root `pyproject.toml`, `release.yml` builds the root and every member that is a package and uploads them all; the tag matches the root's version, each member keeps its own, and a member whose version did not change is skipped. Each published member needs its own pending publisher on PyPI, set once by a person; the upload of several packages from one run has not yet run on a tag, so the how-to sends the first one to TestPyPI. Without a workspace a release runs the commands it ran before. `plinth_sha`'s default stays cecffe1 (v2.28.0); `ci / build` builds such a workspace from plinth v2.30.0, which a project reaches by raising its pin. No job, check, question or action is added, so the Actions allowlist is unchanged and `copier update` needs no hands.

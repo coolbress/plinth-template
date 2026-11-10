@@ -36,8 +36,10 @@ but the first:
   where reports go;
 - whether the repository is public or private, which decides where
   `SECURITY.md` sends a security report;
-- whether a third-party code reviewer, such as Codex's, is already connected
-  to the account; yes adds the `third-party / review` check.
+- whether Codex's code reviewer is already connected to the account; yes adds
+  the `third-party / review` check. Codex's reviewer is the only one verified
+  with it: with another reviewer the check may stay red, and as it is not
+  required it does not block a merge.
 
 `web` adds where the app runs: Render, which plinth builds and checks, or
 somewhere else, which then asks where. GitLab asks eight: the owner's

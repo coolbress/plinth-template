@@ -1159,6 +1159,34 @@ def test_the_third_party_question_is_github_only_and_off_by_default() -> None:
     assert q["when"] == "{{ host == 'github' }}"
 
 
+# What a person with another reviewer connected has to be told, at the question
+# and again where a red check sends them (#231). Only Codex's reviewer is
+# verified end to end (coolbress/plinth#387).
+ONLY_CODEX_IS_VERIFIED = (
+    "Codex's reviewer is the only one verified",
+    "With another reviewer the check may stay red",
+    "does not block a merge",
+)
+
+
+def test_the_question_and_the_caller_say_only_codex_is_verified(tmp_path: Path) -> None:
+    """The help is read before answering yes; the caller's header is read by
+    whoever opens the file from a red `third-party / review`."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    help_text = " ".join(cfg["third_party_review"]["help"].split())
+    assert "such as Codex's" not in help_text, "reads as any reviewer working"
+    readme = " ".join((TEMPLATE_ROOT / "README.md").read_text(encoding="utf-8").split())
+    assert "such as Codex's" not in readme, "the README's list of questions still says it"
+    out = render(tmp_path / "on", third_party_review=True)
+    caller = (out / THIRD_PARTY).read_text(encoding="utf-8")
+    header = caller.split("\nname: third-party\n")[0]
+    comment = " ".join(ln.lstrip("# ") for ln in header.splitlines() if ln.startswith("#"))
+    comment = " ".join(comment.split())
+    for phrase in ONLY_CODEX_IS_VERIFIED:
+        assert phrase in help_text, f"the question's help does not say: {phrase}"
+        assert phrase in comment, f"third-party.yml's header does not say: {phrase}"
+
+
 def test_third_party_review_on_renders_the_caller_at_the_ci_pin(tmp_path: Path) -> None:
     """On: the caller is a live workflow, at the commit the ci job calls, with the
     job name the check name comes from, and read access only."""

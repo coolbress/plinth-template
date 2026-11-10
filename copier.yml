@@ -439,7 +439,9 @@ third_party_review:
   type: bool
   when: "{{ host == 'github' }}"
   help: |
-    Is a code reviewer, such as Codex's, already connected to your GitHub
-    account? Yes adds the check `third-party / review` to every pull request.
-    It reports and is not required, so a pull request still merges without it.
+    Is Codex's code reviewer already connected to your GitHub account? Yes
+    adds the check `third-party / review` to every pull request. Codex's
+    reviewer is the only one verified with this check. With another reviewer
+    the check may stay red on a pull request that reviewer passed. It reports
+    and is not required, so a red check does not block a merge.
   default: false
