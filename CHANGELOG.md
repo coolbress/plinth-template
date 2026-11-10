@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.43.1] - 2026-11-10
+
+**The third-party reviewer question says Codex's reviewer is the only one verified.** With another reviewer connected, `third-party / review` may stay red on a pull request that reviewer passed; the question's help and the rendered `third-party.yml` header now say so, and that a red check there does not block a merge. Comments and help text only: no job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
+
 ### Changed
 
 - **The third-party reviewer question says Codex's reviewer is the only one
