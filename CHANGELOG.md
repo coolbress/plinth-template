@@ -8,6 +8,16 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **Undoing a merged change keeps the title the host writes** (#212): the
+  undo how-to's "Open the revert" no longer asks to retitle the revert, and
+  `gh pr revert` loses its `--title`. `ci / pr-title` accepts
+  `Revert "<title>"` when the quoted title passes, from plinth v2.28.0, the
+  `plinth_sha` default since 1.42.0. "When the revert conflicts" keeps its
+  title: on GitHub, git's own quotes a title ending in `(#N)`, which is still
+  refused. An existing project gets this through `/plinth:template-update`.
+  The page does not read the pin: a project still calling a plinth older than
+  v2.28.0 raises it first (on GitHub, its Dependabot pull request), or the
+  host's revert title fails `ci / pr-title` there.
 - **The keep-current how-to warns against turning on auto-update inside the
   project, and names `third-party.yml` in the pin step**:
   `docs/how-to/keep-this-project-current.md`'s first step says that choosing
