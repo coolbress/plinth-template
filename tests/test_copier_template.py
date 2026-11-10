@@ -2631,7 +2631,7 @@ def test_package_sbom_is_of_the_wheel_installed_and_never_goes_to_pypi(
 
 # ── a uv workspace's release (#225) ───────────────────────────────────────
 
-SAME_VERSION = "Check every package of the workspace has the root's version"
+FIND_ROOT = "Find the workspace's root wheel and its members' versions"
 SBOM_STEP = "Make the SBOM of the wheel and what it installs"
 #: A name no index has: installed at all, it came from `dist/`.
 MEMBER = "plinth-fixture-member"
@@ -2680,9 +2680,14 @@ def _release_build(
     )
     syft.chmod(0o755)
     path = os.pathsep.join([str(fake), str(Path(sys.executable).parent), os.environ["PATH"]])
-    env = {"PATH": path, "RUNNER_TEMP": str(runner), "GITHUB_REF_NAME": "v0.1.0"}
+    env = {
+        "PATH": path,
+        "RUNNER_TEMP": str(runner),
+        "GITHUB_OUTPUT": str(runner / "output"),
+        "GITHUB_REF_NAME": "v0.1.0",
+    }
     done: dict[str, subprocess.CompletedProcess[str]] = {}
-    for name in (BUILD, SAME_VERSION, SBOM_STEP):
+    for name in (BUILD, FIND_ROOT, SBOM_STEP):
         done[name] = _run_step(out, name, env)
         if done[name].returncode != 0 or name == upto:
             break
@@ -2714,7 +2719,7 @@ def test_a_workspace_release_builds_every_package_and_installs_the_root(tmp_path
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [BUILD, SAME_VERSION, SBOM_STEP]
+    assert list(done) == [BUILD, FIND_ROOT, SBOM_STEP]
     member = MEMBER.replace("-", "_")
     assert _built(out) == [
         f"{member}-0.1.0-py3-none-any.whl",
@@ -2723,31 +2728,47 @@ def test_a_workspace_release_builds_every_package_and_installs_the_root(tmp_path
         "probe-0.1.0.tar.gz",
     ]
     assert _installed(tmp_path) == {"probe", MEMBER}
+    said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
+    assert said == "workspace=true\n"
     assert (out / "sbom" / SBOM).is_file()
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
-def test_a_workspace_member_at_another_version_stops_before_any_upload(tmp_path: Path) -> None:
-    """One tag releases the whole workspace at one version. A member left at
-    a version PyPI may already have would be refused in the middle of the
-    upload, after other files went out; the build job, which the upload
-    needs, fails instead and names the member."""
+def test_a_workspace_member_keeps_its_own_version(tmp_path: Path) -> None:
+    """The tag is the root's version and nothing more: a member at 1.0.0
+    beside a root at 0.1.0 builds, and the install check takes the member at
+    the version just built."""
     out = render(tmp_path / "ws", archetype="library", owner="someone")
-    _make_workspace(out, member_version="0.0.9")
-    done = _release_build(out, tmp_path)
-    assert list(done) == [BUILD, SAME_VERSION]
-    assert done[BUILD].returncode == 0, done[BUILD].stdout + done[BUILD].stderr
-    refused = done[SAME_VERSION]
-    assert refused.returncode == 1
-    said = refused.stdout
-    assert "::error title=A package of the workspace is at another version::" in said
-    assert (
-        f"The tag is v0.1.0 and probe is at 0.1.0, but {MEMBER.replace('-', '_')} is at 0.0.9"
-        in said
+    _make_workspace(out, member_version="1.0.0")
+    tag = _run_step(
+        out, "Check the tag against pyproject.toml's version", {"GITHUB_REF_NAME": "v0.1.0"}
     )
-    assert "Nothing was uploaded." in said
-    assert "Leave this tag where it is" in said
-    assert f"uv version --package {MEMBER.replace('-', '_')} " in said
+    assert tag.returncode == 0, tag.stdout + tag.stderr
+    done = _release_build(out, tmp_path)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    assert list(done) == [BUILD, FIND_ROOT, SBOM_STEP]
+    member = MEMBER.replace("-", "_")
+    assert f"{member}-1.0.0-py3-none-any.whl" in _built(out)
+    assert "probe-0.1.0-py3-none-any.whl" in _built(out)
+    assert f"{member}==1.0.0" in done[FIND_ROOT].stdout
+    site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
+    assert (site / f"{member}-1.0.0.dist-info").is_dir()
+
+
+def test_only_a_workspace_release_skips_a_file_pypi_already_has(rendered: Path) -> None:
+    """A member whose version did not change is on PyPI already, and PyPI
+    never takes a version twice: in a workspace the upload skips that file.
+    Without a workspace the same refusal still fails the run, as before. The
+    build step is what says which it is."""
+    jobs = _release(rendered)["jobs"]
+    assert jobs["build"]["outputs"] == {"workspace": "${{ steps.build.outputs.workspace }}"}
+    (build,) = [s for s in jobs["build"]["steps"] if s.get("id") == "build"]
+    assert build["name"] == BUILD
+    (publish,) = [
+        s for s in jobs["publish"]["steps"] if "pypa/gh-action-pypi-publish" in s.get("uses", "")
+    ]
+    assert publish["with"]["skip-existing"] == "${{ needs.build.outputs.workspace == 'true' }}"
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
@@ -2763,10 +2784,10 @@ def test_a_workspace_whose_root_is_not_a_package_stops_before_any_upload(tmp_pat
     pyproject.write_text(text.replace(table, ""), encoding="utf-8")
     _make_workspace(out)
     done = _release_build(out, tmp_path)
-    assert list(done) == [BUILD, SAME_VERSION]
+    assert list(done) == [BUILD, FIND_ROOT]
     assert done[BUILD].returncode == 0, done[BUILD].stdout + done[BUILD].stderr
-    assert done[SAME_VERSION].returncode == 1
-    said = done[SAME_VERSION].stdout
+    assert done[FIND_ROOT].returncode == 1
+    said = done[FIND_ROOT].stdout
     assert "::error title=The workspace's root was not built::" in said
     assert "dist/ holds no wheel of probe." in said
     assert "Nothing was uploaded." in said
@@ -2781,15 +2802,18 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [BUILD, SAME_VERSION, SBOM_STEP]
+    assert list(done) == [BUILD, FIND_ROOT, SBOM_STEP]
     assert _built(out) == [
         "probe-0.1.0-py3-none-any.whl",
         "probe-0.1.0.tar.gz",
     ]
-    assert "No uv workspace" in done[SAME_VERSION].stdout
+    assert "No uv workspace" in done[FIND_ROOT].stdout
+    said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
+    assert said == "workspace=false\n"
     assert _installed(tmp_path) == {"probe"}
     build = _step_script(out, BUILD)
-    assert "uv build --all-packages; else uv build; fi" in build
+    assert "uv build --all-packages\nelse" in build
+    assert '"$GITHUB_OUTPUT"; uv build\nfi' in build
     sbom = _step_script(out, SBOM_STEP)
     plain = sbom.split("else\n", 1)[1]
     assert "--no-emit-project" in plain
@@ -2800,13 +2824,15 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
 @pytest.mark.parametrize("archetype", ["cli", "library"])
 def test_the_how_to_says_what_a_workspace_release_needs(tmp_path: Path, archetype: str) -> None:
     """Each published member needs its own publisher on PyPI, set by a
-    person; and a member whose version was not raised stops the run."""
+    person; the tag is the root's version; and a member whose version was
+    not raised is skipped, so it is raised when its code changed."""
     out = render(tmp_path, archetype=archetype)
     howto = " ".join((out / RELEASE_HOWTO).read_text(encoding="utf-8").split())
     assert "## A uv workspace: more than one package" in howto
     assert "one pending publisher for each of them" in howto
-    assert "uv version --package <member> 0.2.0" in howto
-    assert '"A package of the workspace is at another version."' in howto
+    assert "The tag is checked against the root's `pyproject.toml` only." in howto
+    assert "its files are skipped and the run goes on" in howto
+    assert "uv version --package <member> 1.0.1" in howto
     assert "**Not yet checked on a tag run.**" in howto
     publish = _release(out)["jobs"]["publish"]["steps"]
     (refusal,) = [s["run"] for s in publish if s.get("if") == "failure()"]
