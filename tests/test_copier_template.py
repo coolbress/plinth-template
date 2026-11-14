@@ -3033,6 +3033,40 @@ def test_a_built_file_without_metadata_stops_a_release_that_lists_a_member(
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_need_for_another_platform_is_still_checked_on_the_index(tmp_path: Path) -> None:
+    """The check runs on Linux; a need marked for Windows alone would
+    resolve to nothing there and let the root out without its member."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    need = f"{MEMBER}>=1.0,<2; sys_platform == 'win32'"
+    _make_workspace(out, "1.0.0", need=need, own_tags=PREFIX)
+    done = _release_build(out, tmp_path, index=_stub_index(tmp_path / "index"))
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP]
+    assert done[INDEX_STEP].returncode == 1
+    assert f"asks for {MEMBER}>=1.0,<2," in done[INDEX_STEP].stdout
+
+
+def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:
+    """uv reads `**` in `members` across directories; so does the tag check."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    member = out / "packages" / "team" / "sub" / "member"
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text(
+        f'[project]\nname = "{MEMBER}"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    pyproject = out / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8")
+        + '\n[tool.uv.workspace]\nmembers = ["packages/**/member"]\n',
+        encoding="utf-8",
+    )
+    _list_member(out, PREFIX)
+    env = {"GITHUB_REF_NAME": f"{PREFIX}v1.0.0", "RUNNER_TEMP": str(tmp_path)}
+    step = _run_step(out, TAG_STEP, env)
+    assert step.returncode == 0, step.stdout + step.stderr
+    assert (tmp_path / "release-member").read_text(encoding="utf-8") == MEMBER
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_a_member_tag_builds_and_installs_that_member_alone(tmp_path: Path) -> None:
     """`<prefix>v1.0.0-rc.1` releases the member at 1.0.0rc1, its version
     in PEP 440's normal form: only its files, built without the workspace's
