@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.44.0] - 2026-11-15
+
+**A uv workspace member can be released on its own tags, and `AGENTS.md` names `/plinth:guide` for what to do next.** A `cli` or `library` that lists a member under `[tool.plinth.release] own-tags` releases it only on `<prefix>-v<version>` tags, and a `v*` tag leaves it out after checking the index has the release the root needs; without the list a `v*` release runs as before. No job, check, question or action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
+
 ### Added
 
 - **A member of a uv workspace can be released on its own tags, apart from
