@@ -423,10 +423,7 @@ you decide who may let a release out.
      waits for you to press **Approve** before anything is uploaded.
    - **Deployment branches and tags**: choose **Selected branches and
      tags**, press **Add deployment branch or tag rule**, choose **Tag**,
-     and type `v*`. Only a version tag can then use this environment. A
-     member of a uv workspace released on its own tags needs a second rule
-     with its prefix, such as `checker-v*` (see "A member released on its
-     own tags").
+     and type `v*`. Only a version tag can then use this environment.
 4. Press **Save protection rules**.
 
 Do not add a secret here: Trusted Publishing needs none.
@@ -475,9 +472,8 @@ several packages, the root and its members. When the root depends on a
 member, installing the root from PyPI needs that member on PyPI too. So one
 tag publishes the root and every member that is a package. A member that is
 not a package (no `[build-system]`, or `package = false` under `[tool.uv]`)
-is not built and not published. A member can instead be released on its
-own tags, apart from the root: see "A member released on its own tags"
-below.
+is not built and not published. Members released on their own tags, apart
+from the root, are not supported.
 
 - **A publisher for each package, once, by you.** Repeat step 2 for every
   member that is published: check its name is free, then add one pending
@@ -499,66 +495,6 @@ below.
   uploads one package and PyPI refuses another, re-run its failed jobs,
   and again while PyPI refuses a package it has not seen before: the files
   it already has are skipped.
-
-## A member released on its own tags
-
-Skip this section unless a member of the workspace is released on a
-schedule of its own: for example a checker that is reviewed before its
-1.0, while the root goes on at 0.x. Such a member is released only on its
-own tags, never on the root's.
-
-1. **List it**, in a pull request, in the root `pyproject.toml`, with the
-   member's `name` and a prefix that ends in a hyphen:
-
-   ```toml
-   [tool.plinth.release]
-   own-tags = { "<member's name>" = "checker-" }
-   ```
-
-   Its tags are then the prefix, `v` and its version: `checker-v1.0.0`, or
-   `checker-v1.0.0-rc.1` for a release candidate. The tag is compared with
-   the member's own `pyproject.toml` after PEP 440 normalisation, so
-   `checker-v1.0.0-rc.1` matches `version = "1.0.0rc1"`.
-2. **A publisher for it, once, by you.** The member needs its own pending
-   publisher on PyPI, as in step 2, with its `name` as the PyPI Project
-   Name and the other four fields as in the table.
-3. **Let its tags use the `pypi` environment.** In step 3, add a second
-   tag rule with its prefix and `v*`: `checker-v*`.
-4. **Tag the member first, the root after.** A `v*` tag leaves a listed
-   member out: it builds and uploads the root and the other members only.
-   Before it uploads anything, the run checks that PyPI already has a
-   release of each listed member the root depends on, within the range the
-   root's `pyproject.toml` asks for (`"<member's name>>=1.0,<2"`); a
-   release candidate does not count unless that range names one. If none
-   is there, the run stops and uploads nothing. So, for a new version of
-   both:
-
-   ```bash
-   git fetch origin
-   git tag checker-v1.0.0 origin/main
-   git push origin checker-v1.0.0
-   # wait for that Release run to be green, then:
-   git tag v0.2.0 origin/main
-   git push origin v0.2.0
-   ```
-
-   If the root's run stopped because the member was not there yet, tag
-   the member, wait for its run, then re-run the root's failed jobs: its
-   tag stays as it is.
-
-A member's own tag builds that member alone, without the workspace's
-other packages, and a file PyPI already has fails its run. Its release
-page on GitHub is never marked the latest: that stays the root's.
-
-The tag ruleset plinth sets on a new repository covers tags of that shape
-(`*-v*`) as it does `v*` tags, so a member's released tag cannot be moved
-or deleted either. On a repository made before, `/plinth:floor-check` says
-that a listed prefix is not protected, and gives the command that protects
-it.
-
-**Not yet checked on a tag run.** Each step before the upload is tested
-against a stand-in for PyPI; a real tag has not run it. Rehearse on
-TestPyPI first (step 4.2): the check then reads TestPyPI too.
 
 ## When a release fails
 
@@ -583,17 +519,7 @@ says which step stopped, in its summary.
 - **"File already exists".** That version was published before, and PyPI
   never takes the same version twice, even after a deletion. Raise the
   version (step 4.1) and tag again. In a uv workspace the run skips such a
-  file instead (see "A uv workspace: more than one package"), except on a
-  member's own tag.
-- **"A member the root needs is not on the index".** A member listed under
-  `[tool.plinth.release] own-tags` is not on PyPI yet, at a release within
-  the root's range. Tag the member first (see "A member released on its
-  own tags"), wait for its run to be green, then re-run the root's failed
-  jobs.
-- **"The own-tags list cannot be read".** `[tool.plinth.release] own-tags`
-  names a package that is not a member of the workspace, or a prefix that
-  does not end in a hyphen. Fix it in a pull request, then tag a version
-  that has no tag yet.
+  file instead (see "A uv workspace: more than one package").
 
 To take a broken release out of reach without breaking anyone who already
 pinned it, *yank* it on PyPI (the project's **Manage** > **Releases** >
