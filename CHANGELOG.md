@@ -6,6 +6,35 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+<<<<<<< HEAD
+### Added
+
+- **A member of a uv workspace can be released on its own tags, apart from
+  the root** (coolbress/plinth#931): a `cli` or `library` whose root
+  `pyproject.toml` lists a member under `[tool.plinth.release]`
+  (`own-tags = { "<member's name>" = "<prefix>-" }`) releases that member
+  only on `<prefix>-v<version>` tags. Such a tag builds that member alone
+  (`uv build --package <name> --no-sources`), compares the tag with its
+  version after PEP 440 normalisation (`checker-v1.0.0-rc.1` matches
+  `1.0.0rc1`), uploads with `skip-existing` off, and its GitHub release is
+  not marked the latest. A `v*` tag leaves the listed members out of the
+  build and the upload (each file known by the name in its own metadata),
+  and first checks that the index (PyPI, or TestPyPI
+  when `PYPI_REPOSITORY_URL` names it) has a release of each listed member
+  the root depends on within the root's range; without one it stops before
+  anything is uploaded. Before, the next `v*` tag uploaded every member at
+  its current version, reviewed or not. `release.yml` now also starts on
+  `*-v*` tags; such a tag that names no listed member fails at its first
+  step and uploads nothing. A wrong list (a name that is not a member, a
+  prefix that does not end in a hyphen) fails every tag. Without the list a
+  `v*` release runs as before. `docs/how-to/publish-a-release.md` says how to
+  list a member, its publisher and `pypi` environment rule, and the order:
+  the member first, the root after. Each step before the upload is tested
+  against a stand-in index; no real tag has run it. No job, check, question
+  or action is added, so the Actions allowlist is unchanged and
+  `copier update` needs no hands. An existing project gets it through
+  `/plinth:template-update`.
+=======
 ### Changed
 
 - **`AGENTS.md` names `/plinth:guide` for what to do next** (#234): asked in
@@ -19,6 +48,7 @@ means `copier update` on an instance needs hands.
   changes, so `copier update` needs no hands. An existing project gets the
   line through `/plinth:template-update` (on GitLab, the `copier update` line
   `/plinth:floor-check` prints).
+>>>>>>> origin/main
 
 ## [1.43.1] - 2026-11-10
 
