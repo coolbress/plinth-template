@@ -6,6 +6,20 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **`AGENTS.md` names `/plinth:guide` for what to do next** (#234): asked in
+  plain words what to do next, a session on a rendered project reached the
+  guide in 0 of 6 runs (coolbress/plinth#920), since `AGENTS.md` named only
+  `/plinth:arsenal` and the guide is started only by the person. One line
+  under "Where you are" now tells the agent to have the person type
+  `/plinth:guide`; the arsenal line stays for choosing a tool, and no other
+  line changes. Whether a session now reaches the guide is not measured yet:
+  that is coolbress/plinth#920's re-run. `AGENTS.md` is 52 lines. No job, check, question or action
+  changes, so `copier update` needs no hands. An existing project gets the
+  line through `/plinth:template-update` (on GitLab, the `copier update` line
+  `/plinth:floor-check` prints).
+
 ## [1.43.1] - 2026-11-10
 
 **The third-party reviewer question says Codex's reviewer is the only one verified.** With another reviewer connected, `third-party / review` may stay red on a pull request that reviewer passed; the question's help and the rendered `third-party.yml` header now say so, and that a red check there does not block a merge. Comments and help text only: no job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
