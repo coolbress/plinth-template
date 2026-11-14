@@ -79,6 +79,8 @@ jobs:
       # [tool.plinth.release] own-tags lists, then `v`, is that member's.
       # Writes, under $RUNNER_TEMP, what the steps below read:
       # `release-member` (the member's name, or nothing), `release-version`,
+      # `release-sibling-pins` (on a member's tag, the workspace's other
+      # packages at their versions),
       # `release-listed` (each listed member as a wheel's file name spells
       # it) and `release-needs` (on a `v*` tag, each requirement of the root
       # on a listed member, a tab, and that member's prefix).
@@ -165,7 +167,7 @@ jobs:
 
           # A listed member's own tag: the longest prefix it starts with.
           mine = sorted((p, n) for n, p in prefixes.items() if tag.startswith(p + "v"))
-          needs = ""
+          needs = pins = ""
           if mine:
               prefix, name = max(mine, key=lambda pn: len(pn[0]))
               said = members[key(name)].get("version", "")
@@ -173,6 +175,11 @@ jobs:
               if normal(wanted) is None or normal(wanted) != normal(said):
                   stop("The tag and the version differ", f"The tag is {tag}, which releases {name} at {wanted}, but its pyproject.toml says version = \"{said}\" ({normal(said)} in PEP 440's normal form). {STAY} To release {said}, tag a commit on main {prefix}v{said}. To release another version, change its version in a pull request (uv version --package {name} <version>) to one that has no tag yet, merge it, and tag the merged commit with it.")
               member, version = name, said
+              # The workspace's other packages at the versions their files
+              # say, as uv.lock holds them, for the install check.
+              for k, p in [*members.items(), (key(root["project"]["name"]), root["project"])]:
+                  if k != key(name) and isinstance(p.get("version"), str):
+                      pins += f"{p['name']}=={p['version']}\n"
               print(f"The tag {tag} releases the member {name} alone, and matches its version {said}.")
           else:
               if tag != f"v{version}":
@@ -184,14 +191,13 @@ jobs:
                   m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", need)
                   for name, prefix in prefixes.items():
                       if m and key(m[1]) == key(name):
-                          # Without its environment marker: the check runs on
-                          # Linux, and a Windows-only need would be skipped.
-                          needs += f"{need.split(';', 1)[0].strip()}\t{prefix}\n"
+                          needs += f"{need.strip()}\t{prefix}\n"
               for name in prefixes:
                   print(f"{name} is released on its own tags ({prefixes[name]}v*), not on this one.")
           (temp / "release-member").write_text(member, encoding="utf-8")
           (temp / "release-version").write_text(version, encoding="utf-8")
           (temp / "release-needs").write_text(needs, encoding="utf-8")
+          (temp / "release-sibling-pins").write_text(pins, encoding="utf-8")
           if "GITHUB_OUTPUT" in os.environ:
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
                   out.write(f"member={member}\n")
@@ -315,8 +321,11 @@ jobs:
       # On a `v*` tag, a listed member the root depends on is not uploaded
       # with it, so it must be on the index already, at a release within the
       # root's range: the member goes first, the root after. A pre-release
-      # counts only where the root's range names one. `listed-pins` holds the
-      # version found, for the install check below.
+      # counts only where the root's range names one. Each need is resolved
+      # for every platform (`--universal`), its environment marker kept: a
+      # need for Windows alone is checked on this Linux runner too, against
+      # Windows wheels. `listed-pins` holds the version found, with that
+      # marker, for the install check below.
       - name: Check the index has each listed member the root needs
         run: |
           set -euo pipefail
@@ -326,7 +335,7 @@ jobs:
             exit 0
           fi
           while IFS=$'\t' read -r need prefix; do
-            if ! got="$(printf '%s\n' "$need" | uv pip compile - --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
+            if ! got="$(printf '%s\n' "$need" | uv pip compile - --universal --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
               printf '%s\n' "$got"
               echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release of it within that range. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it ${prefix}v<version> and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
               exit 1
@@ -376,9 +385,11 @@ jobs:
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist ${listed:+--index "$INDEX_URL"} "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
           elif [ -s "$RUNNER_TEMP/release-member" ]; then
             # A member's own tag: its wheel, under the lockfile's versions of
-            # what it needs.
+            # what it needs, the workspace's other packages included; those
+            # come from the index, as they will for whoever installs it.
             uv export --locked --no-dev --package "$(cat "$RUNNER_TEMP/release-member")" --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
-            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl
+            cat "$RUNNER_TEMP/release-sibling-pins" >> "$RUNNER_TEMP/constraints.txt"
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --index "$INDEX_URL" dist/*.whl
           else
             uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl
