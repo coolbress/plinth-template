@@ -28,7 +28,9 @@
 #   own-tags = { "<member's name>" = "<prefix>-" }
 #
 # is released on its own tags, apart from the root: a `v*` tag leaves it
-# out of the build and the upload.
+# out, and first checks that the index has a release of each listed member
+# the root depends on within the root's range: the member goes first, the
+# root after.
 name: Release
 
 on:
@@ -54,6 +56,10 @@ jobs:
     outputs:
       # "true" in a uv workspace: the publish job then skips a file PyPI has.
       workspace: ${{ steps.build.outputs.workspace }}
+    # The index a listed member is looked up on: PyPI's, or TestPyPI's when
+    # the release goes there.
+    env:
+      INDEX_URL: ${{ startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/') && 'https://test.pypi.org/simple/' || 'https://pypi.org/simple/' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,9 +67,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false   # nothing here pushes
       # The tag is `v` and the root's version exactly. A member listed under
-      # [tool.plinth.release] own-tags is read and checked here. Writes
-      # `release-listed` under $RUNNER_TEMP, for the build below: each listed
-      # member as a wheel's file name spells it.
+      # [tool.plinth.release] own-tags is read and checked here. Writes,
+      # under $RUNNER_TEMP, what the steps below read: `release-listed`
+      # (each listed member as a wheel's file name spells it) and
+      # `release-needs` (each requirement of the root on a listed member, a
+      # tab, and that member's prefix).
       - name: Check the tag against pyproject.toml's version
         run: |
           set -euo pipefail
@@ -117,11 +125,20 @@ jobs:
           (temp / "release-listed").write_text(
               "".join(re.sub(r"[-_.]+", "_", n).lower() + "\n" for n in prefixes), encoding="utf-8")
 
+          needs = ""
           if tag != f"v{version}":
               stop("The tag and the version differ", f"The tag is {tag}, but pyproject.toml says version = \"{version}\". {STAY} To release {version}, tag a commit on main v{version}. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it.")
           print(f"The tag {tag} matches pyproject.toml's version {version}.")
+          for need in root["project"].get("dependencies", []):
+              m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", need)
+              for name, prefix in prefixes.items():
+                  if m and key(m[1]) == key(name):
+                      # Without its environment marker: the check runs on
+                      # Linux, and a Windows-only need would be skipped.
+                      needs += f"{need.split(';', 1)[0].strip()}\t{prefix}\n"
           for name in prefixes:
               print(f"{name} is released on its own tags ({prefixes[name]}v*), not on this one.")
+          (temp / "release-needs").write_text(needs, encoding="utf-8")
           PY
       - name: Check the tagged commit is on main
         run: |
@@ -226,6 +243,33 @@ jobs:
           fi
           printf '%s' "$wheel" > "$RUNNER_TEMP/workspace-root-wheel"
           echo "The root's wheel is $wheel."
+      # On a `v*` tag, a listed member the root depends on is not uploaded
+      # with it, so it must be on the index already, at a release within the
+      # root's range: the member goes first, the root after. A pre-release
+      # counts only where the root's range names one. `listed-pins` holds the
+      # version found, for the install check below.
+      - name: Check the index has each listed member the root needs
+        run: |
+          set -euo pipefail
+          : > "$RUNNER_TEMP/listed-pins"
+          if [ ! -s "$RUNNER_TEMP/release-needs" ]; then
+            echo "The root needs no member released on its own tags."
+            exit 0
+          fi
+          while IFS=$'\t' read -r need prefix; do
+            if ! got="$(printf '%s\n' "$need" | uv pip compile - --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
+              printf '%s\n' "$got"
+              echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release of it within that range. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it ${prefix}v<version> and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
+              exit 1
+            fi
+            pin="$(printf '%s\n' "$got" | sed '/^#/d' | grep -E '^[^ ]+==' || true)"
+            if [ -z "$pin" ]; then
+              printf '%s\n' "$got"
+              echo "::error title=A member the root needs is not on the index::Resolving $need against $INDEX_URL gave no version, so this run cannot tell that the index has it. Nothing was uploaded."
+              exit 1
+            fi
+            printf '%s\n' "$pin" | tee -a "$RUNNER_TEMP/listed-pins"
+          done < "$RUNNER_TEMP/release-needs"
       # A software bill of materials (SBOM), attached to the GitHub Release.
       # The wheel names what it needs, not what it installs, so the SBOM is
       # of a fresh environment with the built wheel installed at the runtime
@@ -256,10 +300,11 @@ jobs:
             # version on the index is not taken instead. This does not show
             # that PyPI has that member's code: a member changed without a
             # new version is skipped at the upload. A member released on its
-            # own tags is not in dist/, and comes from the index.
+            # own tags comes from the index, at the version found above.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
-            cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
-            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
+            cat "$RUNNER_TEMP/workspace-pins" "$RUNNER_TEMP/listed-pins" >> "$RUNNER_TEMP/constraints.txt"
+            listed="$(cat "$RUNNER_TEMP/listed-pins")"
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist ${listed:+--index "$INDEX_URL"} "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
           else
             uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl

@@ -2663,14 +2663,21 @@ def test_package_sbom_is_of_the_wheel_installed_and_never_goes_to_pypi(
 
 TAG_STEP = "Check the tag against pyproject.toml's version"
 FIND_ROOT = "Find the workspace's root wheel and its members' versions"
+INDEX_STEP = "Check the index has each listed member the root needs"
 SBOM_STEP = "Make the SBOM of the wheel and what it installs"
 #: A name no index has: installed at all, it came from `dist/`.
 MEMBER = "plinth-fixture-member"
 
 
-def _make_workspace(out: Path, member_version: str = "0.1.0") -> None:
+def _make_workspace(
+    out: Path,
+    member_version: str = "0.1.0",
+    need: str = MEMBER,
+    own_tags: str | None = None,
+) -> None:
     """Turn a rendered project into a uv workspace whose root depends, at run
-    time, on a member that is a package, and lock it."""
+    time (`need`), on a member that is a package, and lock it. `own_tags`
+    is the member's prefix under [tool.plinth.release] own-tags, if any."""
     member = out / "packages" / "member"
     module = member / "src" / MEMBER.replace("-", "_")
     module.mkdir(parents=True)
@@ -2684,11 +2691,13 @@ def _make_workspace(out: Path, member_version: str = "0.1.0") -> None:
     pyproject = out / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
     assert "dependencies = []\n" in text
-    text = text.replace("dependencies = []\n", f'dependencies = ["{MEMBER}"]\n', 1)
+    text = text.replace("dependencies = []\n", f'dependencies = ["{need}"]\n', 1)
     text += (
         '\n[tool.uv.workspace]\nmembers = ["packages/*"]\n'
         f"\n[tool.uv.sources]\n{MEMBER} = {{ workspace = true }}\n"
     )
+    if own_tags is not None:
+        text += f'\n[tool.plinth.release]\nown-tags = {{ "{MEMBER}" = "{own_tags}" }}\n'
     pyproject.write_text(text, encoding="utf-8")
     subprocess.run(["uv", "lock", "--quiet"], cwd=out, check=True)  # noqa: S607
 
@@ -2698,12 +2707,14 @@ def _release_build(
     tmp: Path,
     upto: str = SBOM_STEP,
     tag: str = "v0.1.0",
+    index: Path | None = None,
 ) -> dict[str, subprocess.CompletedProcess[str]]:
     """The build job's steps, as rendered, in order, until one fails or
     `upto` has run: the tag check, then the build on (the commit-on-main
     check and the downloads left out). `syft` is a stand-in that writes the
     file it is asked for: what is under test is what was built and what
-    installs."""
+    installs. `index` is a stub of the package index, a directory laid out
+    as PyPI's simple pages are; without one, an empty stub."""
     runner = tmp / "runner"
     fake = tmp / "bin"
     runner.mkdir()
@@ -2721,13 +2732,42 @@ def _release_build(
         "RUNNER_TEMP": str(runner),
         "GITHUB_OUTPUT": str(runner / "output"),
         "GITHUB_REF_NAME": tag,
+        "INDEX_URL": (index or _stub_index(tmp / "empty-index")).as_uri(),
     }
     done: dict[str, subprocess.CompletedProcess[str]] = {}
-    for name in (TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP):
+    for name in (TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP):
         done[name] = _run_step(out, name, env)
         if done[name].returncode != 0 or name == upto:
             break
     return done
+
+
+def _stub_index(where: Path, *versions: str) -> Path:
+    """A package index on disk, laid out as PyPI's simple pages are, holding
+    a wheel of MEMBER at each of `versions` and nothing else."""
+    project = where / MEMBER
+    project.mkdir(parents=True, exist_ok=True)
+    links = []
+    for version in versions:
+        src = where / "src" / version
+        module = src / "src" / MEMBER.replace("-", "_")
+        module.mkdir(parents=True)
+        (module / "__init__.py").write_text("NAME = 'member'\n", encoding="utf-8")
+        (src / "pyproject.toml").write_text(
+            f'[project]\nname = "{MEMBER}"\nversion = "{version}"\nrequires-python = ">=3.12"\n\n'
+            '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
+            encoding="utf-8",
+        )
+        subprocess.run(  # noqa: S603
+            ["uv", "build", "--wheel", "--quiet", "--out-dir", str(project), str(src)],  # noqa: S607
+            check=True,
+        )
+    for wheel in sorted(project.glob("*.whl")):
+        links.append(f'<a href="{wheel.name}">{wheel.name}</a>')
+    (project / "index.html").write_text(
+        "<html><body>" + "".join(links) + "</body></html>\n", encoding="utf-8"
+    )
+    return where
 
 
 def _built(out: Path) -> list[str]:
@@ -2755,7 +2795,7 @@ def test_a_workspace_release_builds_every_package_and_installs_the_root(tmp_path
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP]
     member = MEMBER.replace("-", "_")
     assert _built(out) == [
         f"{member}-0.1.0-py3-none-any.whl",
@@ -2781,7 +2821,7 @@ def test_a_workspace_member_keeps_its_own_version(tmp_path: Path) -> None:
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP]
     member = MEMBER.replace("-", "_")
     assert f"{member}-1.0.0-py3-none-any.whl" in _built(out)
     assert "probe-0.1.0-py3-none-any.whl" in _built(out)
@@ -2836,7 +2876,7 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP]
     assert _built(out) == [
         "probe-0.1.0-py3-none-any.whl",
         "probe-0.1.0.tar.gz",
@@ -2859,6 +2899,49 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
 
 PREFIX = "member-"
 WHEEL = MEMBER.replace("-", "_")
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_root_tag_leaves_a_listed_member_out_and_takes_it_from_the_index(
+    tmp_path: Path,
+) -> None:
+    """A member listed under [tool.plinth.release] own-tags is not built
+    for upload on a `v*` tag; the root's range on it is met by a release the
+    index already has, and the install check takes that one."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(out, "1.0.0", need=f"{MEMBER}>=1.0,<2", own_tags=PREFIX)
+    index = _stub_index(tmp_path / "index", "0.9.0", "1.0.0")
+    done = _release_build(out, tmp_path, index=index)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP]
+    assert _built(out) == ["probe-0.1.0-py3-none-any.whl", "probe-0.1.0.tar.gz"]
+    assert f"{MEMBER}==1.0.0" in done[INDEX_STEP].stdout
+    assert _installed(tmp_path) == {"probe", MEMBER}
+    site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
+    assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
+    said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
+    assert said == "workspace=true\n"
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("on_index", [(), ("0.9.0",), ("1.0.0rc1",), ("2.0.0",)])
+def test_a_root_tag_stops_before_any_upload_when_the_index_lacks_the_member(
+    tmp_path: Path, on_index: tuple[str, ...]
+) -> None:
+    """None of these is a release within `>=1.0,<2`: a pre-release counts
+    only where the range names one. The member goes first, the root after."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(out, "1.0.0", need=f"{MEMBER}>=1.0,<2", own_tags=PREFIX)
+    index = _stub_index(tmp_path / "index", *on_index)
+    done = _release_build(out, tmp_path, index=index)
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP]
+    step = done[INDEX_STEP]
+    assert step.returncode == 1
+    assert "::error title=A member the root needs is not on the index::" in step.stdout
+    assert f"asks for {MEMBER}>=1.0,<2" in step.stdout
+    assert f"tag it {PREFIX}v<version>" in step.stdout
+    assert "Nothing was uploaded." in step.stdout
 
 
 def _fake_uv_build(tmp: Path, files: dict[str, str | None]) -> Path:
@@ -2945,6 +3028,19 @@ def test_a_built_file_without_metadata_stops_a_release_that_lists_a_member(
     assert step.returncode == 1
     assert "::error title=A built file's name could not be read::" in step.stdout
     assert "Nothing was uploaded." in step.stdout
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_need_for_another_platform_is_still_checked_on_the_index(tmp_path: Path) -> None:
+    """The check runs on Linux; a need marked for Windows alone would
+    resolve to nothing there and let the root out without its member."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    need = f"{MEMBER}>=1.0,<2; sys_platform == 'win32'"
+    _make_workspace(out, "1.0.0", need=need, own_tags=PREFIX)
+    done = _release_build(out, tmp_path, index=_stub_index(tmp_path / "index"))
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP]
+    assert done[INDEX_STEP].returncode == 1
+    assert f"asks for {MEMBER}>=1.0,<2," in done[INDEX_STEP].stdout
 
 
 def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:
