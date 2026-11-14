@@ -1990,14 +1990,14 @@ def test_release_runs_only_on_a_version_tag_and_stores_no_secret(rendered: Path)
     stay on, and no stored secret is read."""
     text = (rendered / RELEASE).read_text(encoding="utf-8")
     data = _release(rendered)
-    assert data[True] == {"push": {"tags": ["v*"]}}
+    assert data[True] == {"push": {"tags": ["v*", "*-v*"]}}
     assert data["permissions"] == {}
     jobs = data["jobs"]
     assert set(jobs) == {"build", "publish", "github-release"}
     for name, job in jobs.items():
         assert "if" not in job, f"job {name} is skipped with if:"
     assert jobs["publish"]["needs"] == "build"
-    assert jobs["github-release"]["needs"] == "publish"
+    assert jobs["github-release"]["needs"] == ["build", "publish"]
     assert jobs["publish"]["environment"] == "pypi"
     assert jobs["publish"]["permissions"] == {"id-token": "write"}
     assert all("id-token" not in jobs[n]["permissions"] for n in ("build", "github-release"))
@@ -2805,7 +2805,7 @@ def test_a_workspace_release_builds_every_package_and_installs_the_root(tmp_path
     ]
     assert _installed(tmp_path) == {"probe", MEMBER}
     said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
-    assert said == "workspace=true\n"
+    assert said == "member=\nworkspace=true\n"
     assert (out / "sbom" / SBOM).is_file()
 
 
@@ -2842,7 +2842,9 @@ def test_only_a_workspace_release_skips_a_file_pypi_already_has(rendered: Path) 
     (publish,) = [
         s for s in jobs["publish"]["steps"] if "pypa/gh-action-pypi-publish" in s.get("uses", "")
     ]
-    assert publish["with"]["skip-existing"] == "${{ needs.build.outputs.workspace == 'true' }}"
+    assert publish["with"]["skip-existing"] == (
+        "${{ needs.build.outputs.workspace == 'true' && needs.build.outputs.member == '' }}"
+    )
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
@@ -2883,7 +2885,7 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
     ]
     assert "No uv workspace" in done[FIND_ROOT].stdout
     said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
-    assert said == "workspace=false\n"
+    assert said == "member=\nworkspace=false\n"
     assert _installed(tmp_path) == {"probe"}
     build = _step_script(out, BUILD)
     assert "uv build --all-packages\nelse" in build
@@ -2895,7 +2897,7 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
     assert "dist/*.whl" in plain
 
 
-# ── a member listed under [tool.plinth.release] own-tags (coolbress/plinth#931)
+# ── a member released on its own tags (coolbress/plinth#931) ─────────────
 
 PREFIX = "member-"
 WHEEL = MEMBER.replace("-", "_")
@@ -2921,7 +2923,7 @@ def test_a_root_tag_leaves_a_listed_member_out_and_takes_it_from_the_index(
     site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
     assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
     said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
-    assert said == "workspace=true\n"
+    assert said == "member=\nworkspace=true\n"
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
@@ -3058,10 +3060,65 @@ def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     _list_member(out, PREFIX)
-    env = {"GITHUB_REF_NAME": "v0.1.0", "RUNNER_TEMP": str(tmp_path)}
+    env = {"GITHUB_REF_NAME": f"{PREFIX}v1.0.0", "RUNNER_TEMP": str(tmp_path)}
     step = _run_step(out, TAG_STEP, env)
     assert step.returncode == 0, step.stdout + step.stderr
-    assert (tmp_path / "release-listed").read_text(encoding="utf-8") == f"{WHEEL}\n"
+    assert (tmp_path / "release-member").read_text(encoding="utf-8") == MEMBER
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_member_tag_builds_and_installs_that_member_alone(tmp_path: Path) -> None:
+    """`<prefix>v1.0.0-rc.1` releases the member at 1.0.0rc1, its version
+    in PEP 440's normal form: only its files, built without the workspace's
+    sources, and the upload then fails on a file PyPI has."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(out, "1.0.0rc1", need=f"{MEMBER}>=1.0,<2", own_tags=PREFIX)
+    done = _release_build(out, tmp_path, tag=f"{PREFIX}v1.0.0-rc.1")
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP]
+    assert _built(out) == [f"{WHEEL}-1.0.0rc1-py3-none-any.whl", f"{WHEEL}-1.0.0rc1.tar.gz"]
+    assert _installed(tmp_path) == {MEMBER}
+    said = (tmp_path / "runner" / "output").read_text(encoding="utf-8")
+    assert said == f"member={MEMBER}\nworkspace=true\n"
+    assert 'uv build --package "$member" --no-sources' in _step_script(out, BUILD)
+    assert (out / "sbom" / SBOM).is_file()
+
+
+@pytest.mark.parametrize(
+    ("version", "tag", "matches"),
+    [
+        ("1.0.0rc1", "v1.0.0-rc.1", True),
+        ("1.0.0rc1", "v1.0.0rc1", True),
+        ("1.0.0", "v1.0.0", True),
+        ("1.0.0.post2", "v1.0.0-2", True),
+        ("1.0.0b3", "v1.0.0-beta.3", True),
+        ("1.0.0", "v1.0", False),
+        ("1.0.0rc1", "v1.0.0-rc.2", False),
+        ("1.0.0rc1", "v1.0.0", False),
+        ("1.0.0", "v1.0.1", False),
+        ("1.0.0", "vnext", False),
+    ],
+)
+def test_a_member_tag_is_compared_with_its_version_after_normalisation(
+    tmp_path: Path, version: str, tag: str, matches: bool
+) -> None:
+    """The tag's version and the member's are compared in PEP 440's normal
+    form, which spells each release one way: `1.0` is not `1.0.0`."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _member_files(out, version)
+    _list_member(out, PREFIX)
+    step = _run_step(out, TAG_STEP, {"GITHUB_REF_NAME": PREFIX + tag, "RUNNER_TEMP": str(tmp_path)})
+    if matches:
+        assert step.returncode == 0, step.stdout + step.stderr
+        assert (tmp_path / "release-member").read_text(encoding="utf-8") == MEMBER
+        assert (tmp_path / "release-version").read_text(encoding="utf-8") == version
+    else:
+        assert step.returncode == 1, tag
+        assert "::error title=The tag and the version differ::" in step.stdout
+        assert f'its pyproject.toml says version = "{version}"' in step.stdout
+        assert f"tag a commit on main {PREFIX}v{version}" in step.stdout
+        assert "Nothing was uploaded." in step.stdout
 
 
 @pytest.mark.parametrize(
@@ -3090,6 +3147,52 @@ def test_an_own_tags_list_that_cannot_be_read_stops_the_release(
     assert step.returncode == 1
     assert "::error title=The own-tags list cannot be read::" in step.stdout
     assert said in step.stdout
+
+
+def test_a_member_shaped_tag_without_the_list_fails_and_says_why(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """`*-v*` starts the workflow in every project; without a listed member
+    such a tag is not a release, and the run says what would make it one."""
+    step = _run_step(
+        rendered, TAG_STEP, {"GITHUB_REF_NAME": "member-v1.0.0", "RUNNER_TEMP": str(tmp_path)}
+    )
+    assert step.returncode == 1
+    assert "::error title=The tag and the version differ::" in step.stdout
+    assert "releases a member only when [tool.plinth.release] own-tags" in step.stdout
+
+
+def test_a_member_release_is_never_marked_the_latest(rendered: Path) -> None:
+    jobs = _release(rendered)["jobs"]
+    assert jobs["build"]["outputs"]["member"] == "${{ steps.tag.outputs.member }}"
+    steps = jobs["github-release"]["steps"]
+    (create,) = [s for s in steps if s.get("name") == "Create the GitHub Release"]
+    assert create["env"]["MEMBER"] == "${{ needs.build.outputs.member }}"
+    assert "${MEMBER:+--latest=false}" in create["run"]
+    index = jobs["build"]["env"]["INDEX_URL"]
+    assert "startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/')" in index
+    assert "'https://test.pypi.org/simple/'" in index
+    assert "'https://pypi.org/simple/'" in index
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library"])
+def test_the_how_to_says_how_to_list_a_member_and_in_which_order_to_tag(
+    tmp_path: Path, archetype: str
+) -> None:
+    """The opt-in, its publisher and environment rule, and the order: the
+    member first, the root after. The line that said it was not supported
+    is gone."""
+    out = render(tmp_path, archetype=archetype)
+    howto = " ".join((out / RELEASE_HOWTO).read_text(encoding="utf-8").split())
+    assert "are not supported" not in howto
+    assert "## A member released on its own tags" in howto
+    assert '[tool.plinth.release] own-tags = { "<member\'s name>" = "checker-" }' in howto
+    assert "The member needs its own pending publisher on PyPI" in howto
+    assert "add a second tag rule with its prefix and `v*`: `checker-v*`" in howto
+    assert "**Tag the member first, the root after.**" in howto
+    member = howto.index("git push origin checker-v1.0.0")
+    assert "git push origin v0.2.0" in howto[member:]
+    assert '`checker-v1.0.0-rc.1` matches `version = "1.0.0rc1"`' in howto
 
 
 def _member_files(out: Path, version: str) -> None:
