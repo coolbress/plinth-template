@@ -21,6 +21,14 @@
 # PyPI already has is skipped, not uploaded again. Each published package
 # needs its own publisher on PyPI. Without a workspace, one package is built
 # and published, and a file PyPI already has fails the run.
+#
+# A member the root's pyproject.toml lists with a prefix that ends in `-`,
+#
+#   [tool.plinth.release]
+#   own-tags = { "<member's name>" = "<prefix>-" }
+#
+# is released on its own tags, apart from the root: a `v*` tag leaves it
+# out of the build and the upload.
 name: Release
 
 on:
@@ -52,16 +60,69 @@ jobs:
           # The whole history, to tell whether the tagged commit is on main.
           fetch-depth: 0
           persist-credentials: false   # nothing here pushes
+      # The tag is `v` and the root's version exactly. A member listed under
+      # [tool.plinth.release] own-tags is read and checked here. Writes
+      # `release-listed` under $RUNNER_TEMP, for the build below: each listed
+      # member as a wheel's file name spells it.
       - name: Check the tag against pyproject.toml's version
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
-          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-          if [ "$tag" != "v$version" ]; then
-            echo "::error title=The tag and the version differ::The tag is $tag, but pyproject.toml says version = \"$version\". Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. To release $version, tag a commit on main v$version. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it."
-            exit 1
-          fi
-          echo "The tag $tag matches pyproject.toml's version $version."
+          python3 - <<'PY'
+          import glob, os, re, sys, tomllib
+          from pathlib import Path
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          temp = Path(os.environ["RUNNER_TEMP"])
+          STAY = "Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete it."
+
+          def stop(title, text):
+              print(f"::error title={title}::{text} Nothing was uploaded.")
+              sys.exit(1)
+
+          def key(name):
+              return re.sub(r"[-_.]+", "-", name).lower()
+
+          root = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          version = root["project"]["version"]
+          listed = root.get("tool", {}).get("plinth", {}).get("release", {}).get("own-tags", {})
+          workspace = root.get("tool", {}).get("uv", {}).get("workspace")
+          LIST = "[tool.plinth.release] own-tags in pyproject.toml"
+          FIX = f"Fix {LIST} in a pull request, merge it, and tag the merged commit with a version that has no tag yet. {STAY}"
+          if not isinstance(listed, dict) or not all(isinstance(v, str) for v in listed.values()):
+              stop("The own-tags list cannot be read", f"{LIST} is not a table of member names and prefixes. {FIX}")
+
+          # The workspace's members, by name: where each is and its version.
+          members = {}
+          if listed and not isinstance(workspace, dict):
+              stop("The own-tags list cannot be read", f"{LIST} lists members, and pyproject.toml has no [tool.uv.workspace]. {FIX}")
+          if listed:
+              # As uv reads them: `**` crosses directories, hidden ones too.
+              dirs = {d for p in workspace.get("members", []) for d in glob.glob(p, recursive=True, include_hidden=True)}
+              dirs -= {d for p in workspace.get("exclude", []) for d in glob.glob(p, recursive=True, include_hidden=True)}
+              for d in sorted(dirs):
+                  f = Path(d) / "pyproject.toml"
+                  if f.is_file():
+                      project = tomllib.loads(f.read_text(encoding="utf-8")).get("project", {})
+                      if "name" in project:
+                          members[key(project["name"])] = project
+          prefixes = {}
+          for name, prefix in listed.items():
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*-", prefix):
+                  stop("The own-tags list cannot be read", f"{LIST} gives {name} the prefix {prefix!r}: a prefix is letters, digits, dots, underscores and hyphens, and ends in a hyphen, so that its tags match *-v*. {FIX}")
+              if key(name) not in members or key(name) == key(root["project"]["name"]):
+                  stop("The own-tags list cannot be read", f"{LIST} lists {name}, which is not a member of this workspace. {FIX}")
+              if prefix in prefixes.values():
+                  stop("The own-tags list cannot be read", f"{LIST} gives two members the prefix {prefix}. {FIX}")
+              prefixes[name] = prefix
+          (temp / "release-listed").write_text(
+              "".join(re.sub(r"[-_.]+", "_", n).lower() + "\n" for n in prefixes), encoding="utf-8")
+
+          if tag != f"v{version}":
+              stop("The tag and the version differ", f"The tag is {tag}, but pyproject.toml says version = \"{version}\". {STAY} To release {version}, tag a commit on main v{version}. To release another version, change version in pyproject.toml in a pull request to one that has no tag yet, merge it, and tag the merged commit with it.")
+          print(f"The tag {tag} matches pyproject.toml's version {version}.")
+          for name in prefixes:
+              print(f"{name} is released on its own tags ({prefixes[name]}v*), not on this one.")
+          PY
       - name: Check the tagged commit is on main
         run: |
           set -euo pipefail
@@ -104,6 +165,37 @@ jobs:
           else
             echo "workspace=false" >> "$GITHUB_OUTPUT"; uv build
           fi
+          # A member listed under [tool.plinth.release] own-tags is released on
+          # its own tags only: its files leave dist/ before anything reads it.
+          # Each file is known by the Name in its own metadata, not its file
+          # name, which an older build backend spells with hyphens; a file
+          # whose metadata cannot be read stops the run.
+          python3 - <<'PY'
+          import os, re, sys, tarfile, zipfile
+          from email.parser import HeaderParser
+          from pathlib import Path
+
+          listed = set(Path(os.environ["RUNNER_TEMP"], "release-listed").read_text(encoding="utf-8").split())
+          if not listed:
+              sys.exit(0)
+          for f in sorted(Path("dist").glob("[!.]*")):
+              try:
+                  if f.name.endswith(".whl"):
+                      with zipfile.ZipFile(f) as z:
+                          (meta,) = [n for n in z.namelist() if re.fullmatch(r"[^/]+\.dist-info/METADATA", n)]
+                          text = z.read(meta).decode()
+                  else:
+                      with tarfile.open(f) as t:
+                          (meta,) = [m for m in t.getmembers() if re.fullmatch(r"[^/]+/PKG-INFO", m.name)]
+                          text = t.extractfile(meta).read().decode()
+                  name = HeaderParser().parsestr(text)["Name"]
+              except Exception as e:
+                  print(f"::error title=A built file's name could not be read::{f} has no metadata this run can read ({e!r}), so it cannot tell whether it is a member released on its own tags. Nothing was uploaded.")
+                  sys.exit(1)
+              if re.sub(r"[-_.]+", "_", name).lower() in listed:
+                  f.unlink()
+                  print(f"Left out {f}: {name} is released on its own tags.")
+          PY
       # The tag is the root's version, checked above; each member has its own.
       # The install check below needs the root's wheel and, for each member,
       # the version just built, both read from the wheels' file names.
@@ -163,7 +255,8 @@ jobs:
             # in dist/ too, each pinned to the version just built, so another
             # version on the index is not taken instead. This does not show
             # that PyPI has that member's code: a member changed without a
-            # new version is skipped at the upload.
+            # new version is skipped at the upload. A member released on its
+            # own tags is not in dist/, and comes from the index.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist "$(cat "$RUNNER_TEMP/workspace-root-wheel")"

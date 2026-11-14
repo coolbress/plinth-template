@@ -12,13 +12,16 @@ This file never reaches an instance: `_subdirectory: template` makes
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -2062,13 +2065,14 @@ def _run_step(
 
 
 def test_a_tag_that_differs_from_pyproject_fails_and_says_which_to_change(
-    rendered: Path,
+    rendered: Path, tmp_path: Path
 ) -> None:
     name = "Check the tag against pyproject.toml's version"
-    same = _run_step(rendered, name, {"GITHUB_REF_NAME": "v0.1.0"})
+    env = {"RUNNER_TEMP": str(tmp_path)}
+    same = _run_step(rendered, name, {**env, "GITHUB_REF_NAME": "v0.1.0"})
     assert same.returncode == 0, same.stdout + same.stderr
     for tag in ("v0.2.0", "0.1.0", "v0.1.0-rc1"):
-        other = _run_step(rendered, name, {"GITHUB_REF_NAME": tag})
+        other = _run_step(rendered, name, {**env, "GITHUB_REF_NAME": tag})
         assert other.returncode == 1, tag
         said = other.stdout
         assert "::error title=The tag and the version differ::" in said
@@ -2195,11 +2199,10 @@ def test_backend_release_pushes_its_image_on_a_tag_only(backend: Path, rendered:
     assert "password:" not in text
     for ref in re.findall(r"uses:\s*(\S+)", text):
         assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
-    for name in (
-        "Check the tag against pyproject.toml's version",
-        "Check the tagged commit is on main",
-    ):
-        assert _step_script(backend, name, "image") == _step_script(rendered, name)
+    # The tag check is a package's own from coolbress/plinth#931: a member of
+    # a uv workspace can be released on its own tags. The rest is shared.
+    name = "Check the tagged commit is on main"
+    assert _step_script(backend, name, "image") == _step_script(rendered, name)
 
 
 def test_backend_release_runs_the_image_before_and_after_the_push(backend: Path) -> None:
@@ -2455,11 +2458,10 @@ def test_data_ml_release_runs_on_a_tag_only_and_uploads_no_pickle(
     assert "password:" not in text
     for ref in re.findall(r"uses:\s*(\S+)", text):
         assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
-    for name in (
-        "Check the tag against pyproject.toml's version",
-        "Check the tagged commit is on main",
-    ):
-        assert _step_script(data_ml, name, "model") == _step_script(rendered, name)
+    # The tag check is a package's own from coolbress/plinth#931: a member of
+    # a uv workspace can be released on its own tags. The rest is shared.
+    name = "Check the tagged commit is on main"
+    assert _step_script(data_ml, name, "model") == _step_script(rendered, name)
     create = _steps(data_ml, "publish")["Create the GitHub Release"]["run"]
     assert create.rstrip().endswith("$ASSETS SHA256SUMS"), create
     files = [*data["env"]["ASSETS"].split(), "SHA256SUMS"]
@@ -2676,6 +2678,7 @@ def test_package_sbom_is_of_the_wheel_installed_and_never_goes_to_pypi(
 
 # ── a uv workspace's release (#225) ───────────────────────────────────────
 
+TAG_STEP = "Check the tag against pyproject.toml's version"
 FIND_ROOT = "Find the workspace's root wheel and its members' versions"
 SBOM_STEP = "Make the SBOM of the wheel and what it installs"
 #: A name no index has: installed at all, it came from `dist/`.
@@ -2708,11 +2711,16 @@ def _make_workspace(out: Path, member_version: str = "0.1.0") -> None:
 
 
 def _release_build(
-    out: Path, tmp: Path, upto: str = SBOM_STEP
+    out: Path,
+    tmp: Path,
+    upto: str = SBOM_STEP,
+    tag: str = "v0.1.0",
 ) -> dict[str, subprocess.CompletedProcess[str]]:
-    """The build job's steps from the build on, as rendered, in order, until
-    one fails or `upto` has run. `syft` is a stand-in that writes the file it
-    is asked for: what is under test is what was built and what installs."""
+    """The build job's steps, as rendered, in order, until one fails or
+    `upto` has run: the tag check, then the build on (the commit-on-main
+    check and the downloads left out). `syft` is a stand-in that writes the
+    file it is asked for: what is under test is what was built and what
+    installs."""
     runner = tmp / "runner"
     fake = tmp / "bin"
     runner.mkdir()
@@ -2729,10 +2737,10 @@ def _release_build(
         "PATH": path,
         "RUNNER_TEMP": str(runner),
         "GITHUB_OUTPUT": str(runner / "output"),
-        "GITHUB_REF_NAME": "v0.1.0",
+        "GITHUB_REF_NAME": tag,
     }
     done: dict[str, subprocess.CompletedProcess[str]] = {}
-    for name in (BUILD, FIND_ROOT, SBOM_STEP):
+    for name in (TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP):
         done[name] = _run_step(out, name, env)
         if done[name].returncode != 0 or name == upto:
             break
@@ -2764,7 +2772,7 @@ def test_a_workspace_release_builds_every_package_and_installs_the_root(tmp_path
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [BUILD, FIND_ROOT, SBOM_STEP]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP]
     member = MEMBER.replace("-", "_")
     assert _built(out) == [
         f"{member}-0.1.0-py3-none-any.whl",
@@ -2785,14 +2793,12 @@ def test_a_workspace_member_keeps_its_own_version(tmp_path: Path) -> None:
     the version just built."""
     out = render(tmp_path / "ws", archetype="library", owner="someone")
     _make_workspace(out, member_version="1.0.0")
-    tag = _run_step(
-        out, "Check the tag against pyproject.toml's version", {"GITHUB_REF_NAME": "v0.1.0"}
-    )
+    tag = _run_step(out, TAG_STEP, {"GITHUB_REF_NAME": "v0.1.0", "RUNNER_TEMP": str(tmp_path)})
     assert tag.returncode == 0, tag.stdout + tag.stderr
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [BUILD, FIND_ROOT, SBOM_STEP]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP]
     member = MEMBER.replace("-", "_")
     assert f"{member}-1.0.0-py3-none-any.whl" in _built(out)
     assert "probe-0.1.0-py3-none-any.whl" in _built(out)
@@ -2807,7 +2813,7 @@ def test_only_a_workspace_release_skips_a_file_pypi_already_has(rendered: Path) 
     Without a workspace the same refusal still fails the run, as before. The
     build step is what says which it is."""
     jobs = _release(rendered)["jobs"]
-    assert jobs["build"]["outputs"] == {"workspace": "${{ steps.build.outputs.workspace }}"}
+    assert jobs["build"]["outputs"]["workspace"] == "${{ steps.build.outputs.workspace }}"
     (build,) = [s for s in jobs["build"]["steps"] if s.get("id") == "build"]
     assert build["name"] == BUILD
     (publish,) = [
@@ -2829,7 +2835,7 @@ def test_a_workspace_whose_root_is_not_a_package_stops_before_any_upload(tmp_pat
     pyproject.write_text(text.replace(table, ""), encoding="utf-8")
     _make_workspace(out)
     done = _release_build(out, tmp_path)
-    assert list(done) == [BUILD, FIND_ROOT]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT]
     assert done[BUILD].returncode == 0, done[BUILD].stdout + done[BUILD].stderr
     assert done[FIND_ROOT].returncode == 1
     said = done[FIND_ROOT].stdout
@@ -2847,7 +2853,7 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
     done = _release_build(out, tmp_path)
     for name, step in done.items():
         assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
-    assert list(done) == [BUILD, FIND_ROOT, SBOM_STEP]
+    assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, SBOM_STEP]
     assert _built(out) == [
         "probe-0.1.0-py3-none-any.whl",
         "probe-0.1.0.tar.gz",
@@ -2864,6 +2870,171 @@ def test_without_a_workspace_the_release_builds_one_package_as_before(tmp_path: 
     assert "--no-emit-project" in plain
     assert "--find-links" not in plain
     assert "dist/*.whl" in plain
+
+
+# ── a member listed under [tool.plinth.release] own-tags (coolbress/plinth#931)
+
+PREFIX = "member-"
+WHEEL = MEMBER.replace("-", "_")
+
+
+def _fake_uv_build(tmp: Path, files: dict[str, str | None]) -> Path:
+    """A `uv` whose `uv build` copies `files` to dist/: each a file name and
+    the Name its metadata carries, or None for a file with no metadata."""
+    made = tmp / "made"
+    made.mkdir()
+    for name, project in files.items():
+        meta = f"Metadata-Version: 2.1\nName: {project}\n".encode()
+        if project is None:
+            (made / name).write_bytes(b"not a package")
+        elif name.endswith(".whl"):
+            with zipfile.ZipFile(made / name, "w") as z:
+                z.writestr("x-1.dist-info/METADATA", meta)
+        else:
+            with tarfile.open(made / name, "w:gz") as t:
+                info = tarfile.TarInfo("x-1/PKG-INFO")
+                info.size = len(meta)
+                t.addfile(info, io.BytesIO(meta))
+    fake = tmp / "fake-uv"
+    fake.mkdir()
+    uv = fake / "uv"
+    uv.write_text(f'#!/bin/sh\nmkdir -p dist && cp "{made}"/* dist/\n', encoding="utf-8")
+    uv.chmod(0o755)
+    return fake
+
+
+def test_a_listed_member_is_left_out_by_its_metadata_not_its_file_name(tmp_path: Path) -> None:
+    """An older build backend writes `plinth-fixture-member-1.0.0.tar.gz`,
+    hyphens kept: the file is still the listed member's, and it leaves
+    dist/ on the root's tag, or it would reach PyPI unreviewed."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _member_files(out, "1.0.0")
+    _list_member(out, PREFIX)
+    files: dict[str, str | None] = {
+        f"{MEMBER}-1.0.0.tar.gz": MEMBER,
+        f"{WHEEL}-1.0.0-py3-none-any.whl": MEMBER,
+        "probe-0.1.0.tar.gz": "probe",
+        "probe-0.1.0-py3-none-any.whl": "probe",
+    }
+    fake = _fake_uv_build(tmp_path, files)
+    env = {
+        "GITHUB_REF_NAME": "v0.1.0",
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(tmp_path / "o"),
+    }
+    assert _run_step(out, TAG_STEP, env).returncode == 0
+    env["PATH"] = f"{fake}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    step = subprocess.run(  # noqa: S603
+        ["bash", "-c", _step_script(out, BUILD)],  # noqa: S607
+        cwd=out,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert step.returncode == 0, step.stdout + step.stderr
+    assert _built(out) == ["probe-0.1.0-py3-none-any.whl", "probe-0.1.0.tar.gz"]
+    assert f"Left out dist/{MEMBER}-1.0.0.tar.gz" in step.stdout
+
+
+def test_a_built_file_without_metadata_stops_a_release_that_lists_a_member(
+    tmp_path: Path,
+) -> None:
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _member_files(out, "1.0.0")
+    _list_member(out, PREFIX)
+    fake = _fake_uv_build(tmp_path, {"probe-0.1.0.tar.gz": None})
+    env = {
+        "GITHUB_REF_NAME": "v0.1.0",
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(tmp_path / "o"),
+    }
+    assert _run_step(out, TAG_STEP, env).returncode == 0
+    env["PATH"] = f"{fake}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    step = subprocess.run(  # noqa: S603
+        ["bash", "-c", _step_script(out, BUILD)],  # noqa: S607
+        cwd=out,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert step.returncode == 1
+    assert "::error title=A built file's name could not be read::" in step.stdout
+    assert "Nothing was uploaded." in step.stdout
+
+
+def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:
+    """uv reads `**` in `members` across directories; so does the tag check."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    member = out / "packages" / "team" / "sub" / "member"
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text(
+        f'[project]\nname = "{MEMBER}"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    pyproject = out / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8")
+        + '\n[tool.uv.workspace]\nmembers = ["packages/**/member"]\n',
+        encoding="utf-8",
+    )
+    _list_member(out, PREFIX)
+    env = {"GITHUB_REF_NAME": "v0.1.0", "RUNNER_TEMP": str(tmp_path)}
+    step = _run_step(out, TAG_STEP, env)
+    assert step.returncode == 0, step.stdout + step.stderr
+    assert (tmp_path / "release-listed").read_text(encoding="utf-8") == f"{WHEEL}\n"
+
+
+@pytest.mark.parametrize(
+    ("table", "said"),
+    [
+        (f'own-tags = {{ "{MEMBER}" = "member" }}', "ends in a hyphen"),
+        (f'own-tags = {{ "{MEMBER}" = "a/b-" }}', "ends in a hyphen"),
+        ('own-tags = { "not-a-member" = "x-" }', "not-a-member, which is not a member"),
+        ('own-tags = { "probe" = "x-" }', "probe, which is not a member"),
+        ('own-tags = "member-"', "is not a table"),
+    ],
+)
+def test_an_own_tags_list_that_cannot_be_read_stops_the_release(
+    tmp_path: Path, table: str, said: str
+) -> None:
+    """A wrong list fails every tag, the root's too: what it leaves out of
+    an upload, or lets out on its own, would otherwise be a guess."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _member_files(out, "1.0.0")
+    pyproject = out / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8") + f"\n[tool.plinth.release]\n{table}\n",
+        encoding="utf-8",
+    )
+    step = _run_step(out, TAG_STEP, {"GITHUB_REF_NAME": "v0.1.0", "RUNNER_TEMP": str(tmp_path)})
+    assert step.returncode == 1
+    assert "::error title=The own-tags list cannot be read::" in step.stdout
+    assert said in step.stdout
+
+
+def _member_files(out: Path, version: str) -> None:
+    """MEMBER, at `version`, as the one member of a workspace, unlocked:
+    the tag check reads files only."""
+    member = out / "packages" / "member"
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text(
+        f'[project]\nname = "{MEMBER}"\nversion = "{version}"\n', encoding="utf-8"
+    )
+    pyproject = out / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8") + '\n[tool.uv.workspace]\nmembers = ["packages/*"]\n',
+        encoding="utf-8",
+    )
+
+
+def _list_member(out: Path, prefix: str) -> None:
+    pyproject = out / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8")
+        + f'\n[tool.plinth.release]\nown-tags = {{ "{MEMBER}" = "{prefix}" }}\n',
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.parametrize("archetype", ["cli", "library"])
