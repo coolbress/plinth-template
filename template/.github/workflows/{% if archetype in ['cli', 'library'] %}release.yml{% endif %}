@@ -67,7 +67,7 @@ jobs:
     # The index a listed member is looked up on: PyPI's, or TestPyPI's when
     # the release goes there.
     env:
-      INDEX_URL: ${{ vars.PYPI_REPOSITORY_URL == 'https://test.pypi.org/legacy/' && 'https://test.pypi.org/simple/' || 'https://pypi.org/simple/' }}
+      INDEX_URL: ${{ startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/') && 'https://test.pypi.org/simple/' || 'https://pypi.org/simple/' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -246,13 +246,35 @@ jobs:
           fi
           # A member listed under [tool.plinth.release] own-tags is released on
           # its own tags only: its files leave dist/ before anything reads it.
-          # A wheel is <name>-<version>-<tags>.whl; neither part holds a hyphen.
-          name() { n="${1#dist/}"; printf '%s' "${n%%-*}" | tr '[:upper:]' '[:lower:]' | tr -s '._' '__'; }
-          while IFS= read -r listed; do
-            for f in dist/*; do
-              if [ "$(name "$f")" = "$listed" ]; then rm -- "$f"; echo "Left out $f: it is released on its own tags."; fi
-            done
-          done < "$RUNNER_TEMP/release-listed"
+          # Each file is known by the Name in its own metadata, not its file
+          # name, which an older build backend spells with hyphens; a file
+          # whose metadata cannot be read stops the run.
+          python3 - <<'PY'
+          import os, re, sys, tarfile, zipfile
+          from email.parser import HeaderParser
+          from pathlib import Path
+
+          listed = set(Path(os.environ["RUNNER_TEMP"], "release-listed").read_text(encoding="utf-8").split())
+          if not listed:
+              sys.exit(0)
+          for f in sorted(Path("dist").glob("[!.]*")):
+              try:
+                  if f.name.endswith(".whl"):
+                      with zipfile.ZipFile(f) as z:
+                          (meta,) = [n for n in z.namelist() if re.fullmatch(r"[^/]+\.dist-info/METADATA", n)]
+                          text = z.read(meta).decode()
+                  else:
+                      with tarfile.open(f) as t:
+                          (meta,) = [m for m in t.getmembers() if re.fullmatch(r"[^/]+/PKG-INFO", m.name)]
+                          text = t.extractfile(meta).read().decode()
+                  name = HeaderParser().parsestr(text)["Name"]
+              except Exception as e:
+                  print(f"::error title=A built file's name could not be read::{f} has no metadata this run can read ({e!r}), so it cannot tell whether it is a member released on its own tags. Nothing was uploaded.")
+                  sys.exit(1)
+              if re.sub(r"[-_.]+", "_", name).lower() in listed:
+                  f.unlink()
+                  print(f"Left out {f}: {name} is released on its own tags.")
+          PY
       # The tag is the root's version, checked above; each member has its own.
       # The install check below needs the root's wheel and, for each member,
       # the version just built, both read from the wheels' file names.

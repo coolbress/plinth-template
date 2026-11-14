@@ -17,7 +17,8 @@ means `copier update` on an instance needs hands.
   version after PEP 440 normalisation (`checker-v1.0.0-rc.1` matches
   `1.0.0rc1`), uploads with `skip-existing` off, and its GitHub release is
   not marked the latest. A `v*` tag leaves the listed members out of the
-  build and the upload, and first checks that the index (PyPI, or TestPyPI
+  build and the upload (each file known by the name in its own metadata),
+  and first checks that the index (PyPI, or TestPyPI
   when `PYPI_REPOSITORY_URL` names it) has a release of each listed member
   the root depends on within the root's range; without one it stops before
   anything is uploaded. Before, the next `v*` tag uploaded every member at
@@ -25,7 +26,7 @@ means `copier update` on an instance needs hands.
   `*-v*` tags; such a tag that names no listed member fails at its first
   step and uploads nothing. A wrong list (a name that is not a member, a
   prefix that does not end in a hyphen) fails every tag. Without the list a
-  release runs as before. `docs/how-to/publish-a-release.md` says how to
+  `v*` release runs as before. `docs/how-to/publish-a-release.md` says how to
   list a member, its publisher and `pypi` environment rule, and the order:
   the member first, the root after. Each step before the upload is tested
   against a stand-in index; no real tag has run it. No job, check, question

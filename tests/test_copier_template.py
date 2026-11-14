@@ -12,13 +12,16 @@ This file never reaches an instance: `_subdirectory: template` makes
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -2943,6 +2946,92 @@ def test_a_root_tag_stops_before_any_upload_when_the_index_lacks_the_member(
     assert "Nothing was uploaded." in step.stdout
 
 
+def _fake_uv_build(tmp: Path, files: dict[str, str | None]) -> Path:
+    """A `uv` whose `uv build` copies `files` to dist/: each a file name and
+    the Name its metadata carries, or None for a file with no metadata."""
+    made = tmp / "made"
+    made.mkdir()
+    for name, project in files.items():
+        meta = f"Metadata-Version: 2.1\nName: {project}\n".encode()
+        if project is None:
+            (made / name).write_bytes(b"not a package")
+        elif name.endswith(".whl"):
+            with zipfile.ZipFile(made / name, "w") as z:
+                z.writestr("x-1.dist-info/METADATA", meta)
+        else:
+            with tarfile.open(made / name, "w:gz") as t:
+                info = tarfile.TarInfo("x-1/PKG-INFO")
+                info.size = len(meta)
+                t.addfile(info, io.BytesIO(meta))
+    fake = tmp / "fake-uv"
+    fake.mkdir()
+    uv = fake / "uv"
+    uv.write_text(f'#!/bin/sh\nmkdir -p dist && cp "{made}"/* dist/\n', encoding="utf-8")
+    uv.chmod(0o755)
+    return fake
+
+
+def test_a_listed_member_is_left_out_by_its_metadata_not_its_file_name(tmp_path: Path) -> None:
+    """An older build backend writes `plinth-fixture-member-1.0.0.tar.gz`,
+    hyphens kept: the file is still the listed member's, and it leaves
+    dist/ on the root's tag, or it would reach PyPI unreviewed."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _member_files(out, "1.0.0")
+    _list_member(out, PREFIX)
+    files: dict[str, str | None] = {
+        f"{MEMBER}-1.0.0.tar.gz": MEMBER,
+        f"{WHEEL}-1.0.0-py3-none-any.whl": MEMBER,
+        "probe-0.1.0.tar.gz": "probe",
+        "probe-0.1.0-py3-none-any.whl": "probe",
+    }
+    fake = _fake_uv_build(tmp_path, files)
+    env = {
+        "GITHUB_REF_NAME": "v0.1.0",
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(tmp_path / "o"),
+    }
+    assert _run_step(out, TAG_STEP, env).returncode == 0
+    env["PATH"] = f"{fake}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    step = subprocess.run(  # noqa: S603
+        ["bash", "-c", _step_script(out, BUILD)],  # noqa: S607
+        cwd=out,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert step.returncode == 0, step.stdout + step.stderr
+    assert _built(out) == ["probe-0.1.0-py3-none-any.whl", "probe-0.1.0.tar.gz"]
+    assert f"Left out dist/{MEMBER}-1.0.0.tar.gz" in step.stdout
+
+
+def test_a_built_file_without_metadata_stops_a_release_that_lists_a_member(
+    tmp_path: Path,
+) -> None:
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _member_files(out, "1.0.0")
+    _list_member(out, PREFIX)
+    fake = _fake_uv_build(tmp_path, {"probe-0.1.0.tar.gz": None})
+    env = {
+        "GITHUB_REF_NAME": "v0.1.0",
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(tmp_path / "o"),
+    }
+    assert _run_step(out, TAG_STEP, env).returncode == 0
+    env["PATH"] = f"{fake}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    step = subprocess.run(  # noqa: S603
+        ["bash", "-c", _step_script(out, BUILD)],  # noqa: S607
+        cwd=out,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert step.returncode == 1
+    assert "::error title=A built file's name could not be read::" in step.stdout
+    assert "Nothing was uploaded." in step.stdout
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_a_member_tag_builds_and_installs_that_member_alone(tmp_path: Path) -> None:
     """`<prefix>v1.0.0-rc.1` releases the member at 1.0.0rc1, its version
@@ -3047,6 +3136,7 @@ def test_a_member_release_is_never_marked_the_latest(rendered: Path) -> None:
     assert create["env"]["MEMBER"] == "${{ needs.build.outputs.member }}"
     assert "${MEMBER:+--latest=false}" in create["run"]
     index = jobs["build"]["env"]["INDEX_URL"]
+    assert "startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/')" in index
     assert "'https://test.pypi.org/simple/'" in index
     assert "'https://pypi.org/simple/'" in index
 
