@@ -6,7 +6,6 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ### Added
 
 - **A member of a uv workspace can be released on its own tags, apart from
@@ -34,7 +33,7 @@ means `copier update` on an instance needs hands.
   or action is added, so the Actions allowlist is unchanged and
   `copier update` needs no hands. An existing project gets it through
   `/plinth:template-update`.
-=======
+
 ### Changed
 
 - **`AGENTS.md` names `/plinth:guide` for what to do next** (#234): asked in
@@ -48,7 +47,6 @@ means `copier update` on an instance needs hands.
   changes, so `copier update` needs no hands. An existing project gets the
   line through `/plinth:template-update` (on GitLab, the `copier update` line
   `/plinth:floor-check` prints).
->>>>>>> origin/main
 
 ## [1.43.1] - 2026-11-10
 
