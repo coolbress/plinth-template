@@ -2672,12 +2672,13 @@ MEMBER = "plinth-fixture-member"
 def _make_workspace(
     out: Path,
     member_version: str = "0.1.0",
-    need: str = MEMBER,
+    need: str | list[str] = MEMBER,
     own_tags: str | None = None,
 ) -> None:
     """Turn a rendered project into a uv workspace whose root depends, at run
-    time (`need`), on a member that is a package, and lock it. `own_tags`
-    is the member's prefix under [tool.plinth.release] own-tags, if any."""
+    time (`need`, one requirement or several), on a member that is a
+    package, and lock it. `own_tags` is the member's prefix under
+    [tool.plinth.release] own-tags, if any."""
     member = out / "packages" / "member"
     module = member / "src" / MEMBER.replace("-", "_")
     module.mkdir(parents=True)
@@ -2691,7 +2692,8 @@ def _make_workspace(
     pyproject = out / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
     assert "dependencies = []\n" in text
-    text = text.replace("dependencies = []\n", f'dependencies = ["{need}"]\n', 1)
+    needs = [need] if isinstance(need, str) else need
+    text = text.replace("dependencies = []\n", f"dependencies = {json.dumps(needs)}\n", 1)
     text += (
         '\n[tool.uv.workspace]\nmembers = ["packages/*"]\n'
         f"\n[tool.uv.sources]\n{MEMBER} = {{ workspace = true }}\n"
@@ -2742,9 +2744,10 @@ def _release_build(
     return done
 
 
-def _stub_index(where: Path, *versions: str) -> Path:
+def _stub_index(where: Path, *versions: str, tag: str = "py3-none-any") -> Path:
     """A package index on disk, laid out as PyPI's simple pages are, holding
-    a wheel of MEMBER at each of `versions` and nothing else."""
+    a wheel of MEMBER at each of `versions` and nothing else, each named for
+    the platform `tag`."""
     project = where / MEMBER
     project.mkdir(parents=True, exist_ok=True)
     links = []
@@ -2763,6 +2766,7 @@ def _stub_index(where: Path, *versions: str) -> Path:
             check=True,
         )
     for wheel in sorted(project.glob("*.whl")):
+        wheel = wheel.rename(wheel.with_name(wheel.name.replace("py3-none-any", tag)))
         links.append(f'<a href="{wheel.name}">{wheel.name}</a>')
     (project / "index.html").write_text(
         "<html><body>" + "".join(links) + "</body></html>\n", encoding="utf-8"
@@ -3030,17 +3034,54 @@ def test_a_built_file_without_metadata_stops_a_release_that_lists_a_member(
     assert "Nothing was uploaded." in step.stdout
 
 
+WINDOWS = f"{MEMBER}>=1.0,<2; sys_platform == 'win32'"
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_a_need_for_another_platform_is_still_checked_on_the_index(tmp_path: Path) -> None:
     """The check runs on Linux; a need marked for Windows alone would
     resolve to nothing there and let the root out without its member."""
     out = render(tmp_path / "ws", archetype="library", owner="someone")
-    need = f"{MEMBER}>=1.0,<2; sys_platform == 'win32'"
-    _make_workspace(out, "1.0.0", need=need, own_tags=PREFIX)
+    _make_workspace(out, "1.0.0", need=WINDOWS, own_tags=PREFIX)
     done = _release_build(out, tmp_path, index=_stub_index(tmp_path / "index"))
     assert list(done) == [TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP]
     assert done[INDEX_STEP].returncode == 1
-    assert f"asks for {MEMBER}>=1.0,<2," in done[INDEX_STEP].stdout
+    assert f"asks for {WINDOWS}, and" in done[INDEX_STEP].stdout
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_need_for_another_platform_is_met_by_a_wheel_for_it(tmp_path: Path) -> None:
+    """A member published only as a Windows wheel meets a Windows-only need:
+    the check reads it for that platform, and the Linux install leaves it
+    out, as the marker says."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(out, "1.0.0", need=WINDOWS, own_tags=PREFIX)
+    index = _stub_index(tmp_path / "index", "1.0.0", tag="py3-none-win_amd64")
+    done = _release_build(out, tmp_path, index=index)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    assert f"{MEMBER}==1.0.0 ; sys_platform == 'win32'" in done[INDEX_STEP].stdout
+    assert _installed(tmp_path) == {"probe"}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_two_ranges_under_exclusive_markers_each_keep_their_marker(tmp_path: Path) -> None:
+    """Each pin keeps its need's marker, so two ranges for two platforms
+    never constrain one install to two versions."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    needs = [
+        f"{MEMBER}>=1,<3; sys_platform == 'win32'",
+        f"{MEMBER}>=1,<2; sys_platform != 'win32'",
+    ]
+    _make_workspace(out, "1.0.0", need=needs, own_tags=PREFIX)
+    done = _release_build(out, tmp_path, index=_stub_index(tmp_path / "index", "1.0.0", "2.0.0"))
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    said = done[INDEX_STEP].stdout
+    assert f"{MEMBER}==2.0.0 ; sys_platform == 'win32'" in said
+    assert f"{MEMBER}==1.0.0 ; sys_platform != 'win32'" in said
+    site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
+    assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
 
 
 def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:

@@ -133,9 +133,7 @@ jobs:
               m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", need)
               for name, prefix in prefixes.items():
                   if m and key(m[1]) == key(name):
-                      # Without its environment marker: the check runs on
-                      # Linux, and a Windows-only need would be skipped.
-                      needs += f"{need.split(';', 1)[0].strip()}\t{prefix}\n"
+                      needs += f"{need.strip()}\t{prefix}\n"
           for name in prefixes:
               print(f"{name} is released on its own tags ({prefixes[name]}v*), not on this one.")
           (temp / "release-needs").write_text(needs, encoding="utf-8")
@@ -246,8 +244,11 @@ jobs:
       # On a `v*` tag, a listed member the root depends on is not uploaded
       # with it, so it must be on the index already, at a release within the
       # root's range: the member goes first, the root after. A pre-release
-      # counts only where the root's range names one. `listed-pins` holds the
-      # version found, for the install check below.
+      # counts only where the root's range names one. Each need is resolved
+      # for every platform (`--universal`), its environment marker kept: a
+      # need for Windows alone is checked on this Linux runner too, against
+      # Windows wheels. `listed-pins` holds the version found, with that
+      # marker, for the install check below.
       - name: Check the index has each listed member the root needs
         run: |
           set -euo pipefail
@@ -257,7 +258,7 @@ jobs:
             exit 0
           fi
           while IFS=$'\t' read -r need prefix; do
-            if ! got="$(printf '%s\n' "$need" | uv pip compile - --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
+            if ! got="$(printf '%s\n' "$need" | uv pip compile - --universal --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
               printf '%s\n' "$got"
               echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release of it within that range. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it ${prefix}v<version> and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
               exit 1
