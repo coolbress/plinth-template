@@ -1923,6 +1923,23 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_agents_names_the_guide_for_what_to_do_next(tmp_path: Path, host: str) -> None:
+    """Asked in plain words what to do next, a session reached
+    `/plinth:guide` in 0 of 6 runs: `AGENTS.md` named only the arsenal, and
+    the guide is user-invoked, so the agent can only tell the person to type
+    it (#234). One line of its own names it; the arsenal line stays."""
+    agents = (render(tmp_path, host=host) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    guide = [ln for ln in agents if "/plinth:guide" in ln]
+    assert len(guide) == 1, "AGENTS.md does not name /plinth:guide on one line"
+    assert guide[0].startswith("- Asked what to do next"), guide[0]
+    assert "type `/plinth:guide`" in guide[0], "the line does not say the person types it"
+    arsenal = [ln for ln in agents if "/plinth:arsenal" in ln]
+    assert len(arsenal) == 1, "AGENTS.md does not name /plinth:arsenal on one line"
+    assert "choosing a tool" in arsenal[0], "the arsenal line no longer covers choosing a tool"
+
+
 @pytest.mark.parametrize("review", [True, False])
 def test_the_pin_step_names_third_party_yml_only_where_it_is(tmp_path: Path, review: bool) -> None:
     """`third-party.yml` calls plinth at the pin too, so the pin step names it,
