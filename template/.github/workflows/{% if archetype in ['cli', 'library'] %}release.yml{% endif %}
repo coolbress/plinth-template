@@ -321,33 +321,40 @@ jobs:
       # On a `v*` tag, a listed member the root depends on is not uploaded
       # with it, so it must be on the index already, at a release within the
       # root's range: the member goes first, the root after. A pre-release
-      # counts only where the root's range names one. Each need is resolved
-      # for every platform (`--universal`), its environment marker kept: a
+      # counts only where the root's range names one. The needs are resolved
+      # together, for every platform (`--universal`), its environment marker kept: a
       # need for Windows alone is checked on this Linux runner too, against
-      # Windows wheels. `listed-pins` holds the version found, with that
-      # marker, for the install check below.
+      # Windows wheels. It proves the index has the member; it does not
+      # choose the version: the install check below takes the member from
+      # the index within all the root's needs, as anyone installing it does.
       - name: Check the index has each listed member the root needs
         run: |
           set -euo pipefail
-          : > "$RUNNER_TEMP/listed-pins"
+          : > "$RUNNER_TEMP/listed-found"
           if [ ! -s "$RUNNER_TEMP/release-needs" ]; then
             echo "The root needs no member released on its own tags."
             exit 0
           fi
-          while IFS=$'\t' read -r need prefix; do
-            if ! got="$(printf '%s\n' "$need" | uv pip compile - --universal --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
-              printf '%s\n' "$got"
-              echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release of it within that range. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it ${prefix}v<version> and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
-              exit 1
-            fi
-            pin="$(printf '%s\n' "$got" | sed '/^#/d' | grep -E '^[^ ]+==' || true)"
-            if [ -z "$pin" ]; then
-              printf '%s\n' "$got"
-              echo "::error title=A member the root needs is not on the index::Resolving $need against $INDEX_URL gave no version, so this run cannot tell that the index has it. Nothing was uploaded."
-              exit 1
-            fi
-            printf '%s\n' "$pin" | tee -a "$RUNNER_TEMP/listed-pins"
-          done < "$RUNNER_TEMP/release-needs"
+          # All together: two needs on one member, both applying on one
+          # platform, then get one version that meets both.
+          cut -f1 "$RUNNER_TEMP/release-needs" > "$RUNNER_TEMP/needs.txt"
+          need="$(paste -sd '|' "$RUNNER_TEMP/needs.txt" | sed 's/|/ and /g')"
+          tags="$(cut -f2 "$RUNNER_TEMP/release-needs" | sort -u | sed 's/$/v<version>/' | paste -sd ' ' -)"
+          if ! got="$(uv pip compile "$RUNNER_TEMP/needs.txt" --universal --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
+            printf '%s\n' "$got"
+            echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release that meets it. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it $tags and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
+            exit 1
+          fi
+          printf '%s\n' "$got" | sed '/^#/d' | grep -E '^[^ ]+==' > "$RUNNER_TEMP/listed-found" || true
+          # Every member needed has a version, or the check did not run.
+          key() { sed -E 's/^[[:space:]]*([A-Za-z0-9][A-Za-z0-9._-]*).*/\1/' | tr '[:upper:]' '[:lower:]' | tr -s '._-' '---' | sort -u; }
+          missing="$(comm -23 <(key < "$RUNNER_TEMP/needs.txt") <(key < "$RUNNER_TEMP/listed-found"))"
+          if [ -n "$missing" ]; then
+            printf '%s\n' "$got"
+            echo "::error title=A member the root needs is not on the index::Resolving $need against $INDEX_URL gave no version of $(paste -sd ' ' - <<<"$missing"), so this run cannot tell that the index has it. Nothing was uploaded."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/listed-found"
       # A software bill of materials (SBOM), attached to the GitHub Release.
       # The wheel names what it needs, not what it installs, so the SBOM is
       # of a fresh environment with the built wheel installed at the runtime
@@ -378,10 +385,10 @@ jobs:
             # version on the index is not taken instead. This does not show
             # that PyPI has that member's code: a member changed without a
             # new version is skipped at the upload. A member released on its
-            # own tags comes from the index, at the version found above.
+            # own tags comes from the index, within the root's needs.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
-            cat "$RUNNER_TEMP/workspace-pins" "$RUNNER_TEMP/listed-pins" >> "$RUNNER_TEMP/constraints.txt"
-            listed="$(cat "$RUNNER_TEMP/listed-pins")"
+            cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
+            listed="$(cat "$RUNNER_TEMP/listed-found")"
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist ${listed:+--index "$INDEX_URL"} "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
           elif [ -s "$RUNNER_TEMP/release-member" ]; then
             # A member's own tag: its wheel, under the lockfile's versions of

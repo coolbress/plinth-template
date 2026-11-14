@@ -1926,6 +1926,23 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
 
 
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_agents_names_the_guide_for_what_to_do_next(tmp_path: Path, host: str) -> None:
+    """Asked in plain words what to do next, a session reached
+    `/plinth:guide` in 0 of 6 runs: `AGENTS.md` named only the arsenal, and
+    the guide is user-invoked, so the agent can only tell the person to type
+    it (#234). One line of its own names it; the arsenal line stays."""
+    agents = (render(tmp_path, host=host) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    guide = [ln for ln in agents if "/plinth:guide" in ln]
+    assert len(guide) == 1, "AGENTS.md does not name /plinth:guide on one line"
+    assert guide[0].startswith("- Asked what to do next"), guide[0]
+    assert "type `/plinth:guide`" in guide[0], "the line does not say the person types it"
+    arsenal = [ln for ln in agents if "/plinth:arsenal" in ln]
+    assert len(arsenal) == 1, "AGENTS.md does not name /plinth:arsenal on one line"
+    assert "choosing a tool" in arsenal[0], "the arsenal line no longer covers choosing a tool"
+
+
 @pytest.mark.parametrize("review", [True, False])
 def test_the_pin_step_names_third_party_yml_only_where_it_is(tmp_path: Path, review: bool) -> None:
     """`third-party.yml` calls plinth at the pin too, so the pin step names it,
@@ -2674,11 +2691,13 @@ def _make_workspace(
     member_version: str = "0.1.0",
     need: str | list[str] = MEMBER,
     own_tags: str | None = None,
+    index: Path | None = None,
 ) -> None:
     """Turn a rendered project into a uv workspace whose root depends, at run
     time (`need`, one requirement or several), on a member that is a
     package, and lock it. `own_tags` is the member's prefix under
-    [tool.plinth.release] own-tags, if any."""
+    [tool.plinth.release] own-tags, if any; `index`, a stub index the lock
+    also reads."""
     member = out / "packages" / "member"
     module = member / "src" / MEMBER.replace("-", "_")
     module.mkdir(parents=True)
@@ -2700,6 +2719,8 @@ def _make_workspace(
     )
     if own_tags is not None:
         text += f'\n[tool.plinth.release]\nown-tags = {{ "{MEMBER}" = "{own_tags}" }}\n'
+    if index is not None:
+        text += f'\n[[tool.uv.index]]\nurl = "{index.as_uri()}"\n'
     pyproject.write_text(text, encoding="utf-8")
     subprocess.run(["uv", "lock", "--quiet"], cwd=out, check=True)  # noqa: S607
 
@@ -2744,10 +2765,17 @@ def _release_build(
     return done
 
 
-def _stub_index(where: Path, *versions: str, tag: str = "py3-none-any", name: str = MEMBER) -> Path:
+def _stub_index(
+    where: Path,
+    *versions: str,
+    tag: str = "py3-none-any",
+    name: str = MEMBER,
+    requires: dict[str, str] | None = None,
+) -> Path:
     """A package index on disk, laid out as PyPI's simple pages are, holding
-    a wheel of `name` (MEMBER unless said) at each of `versions` and nothing
-    else, each named for the platform `tag`."""
+    a wheel of `name` (MEMBER unless named) at each of `versions`, each named
+    for the platform `tag`; `requires` gives a version one requirement.
+    Called again on the same `where`, it adds another project."""
     project = where / name
     project.mkdir(parents=True, exist_ok=True)
     links = []
@@ -2756,8 +2784,10 @@ def _stub_index(where: Path, *versions: str, tag: str = "py3-none-any", name: st
         module = src / "src" / name.replace("-", "_")
         module.mkdir(parents=True)
         (module / "__init__.py").write_text("NAME = 'member'\n", encoding="utf-8")
+        need = json.dumps([(requires or {})[version]] if version in (requires or {}) else [])
         (src / "pyproject.toml").write_text(
-            f'[project]\nname = "{name}"\nversion = "{version}"\nrequires-python = ">=3.12"\n\n'
+            f'[project]\nname = "{name}"\nversion = "{version}"\nrequires-python = ">=3.12"\n'
+            f"dependencies = {need}\n\n"
             '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
             encoding="utf-8",
         )
@@ -3068,8 +3098,8 @@ def test_a_need_for_another_platform_is_met_by_a_wheel_for_it(tmp_path: Path) ->
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_two_ranges_under_exclusive_markers_each_keep_their_marker(tmp_path: Path) -> None:
-    """Each pin keeps its need's marker, so two ranges for two platforms
-    never constrain one install to two versions."""
+    """Each version found keeps its need's marker, and the install check
+    takes the one the runner's platform needs."""
     out = render(tmp_path / "ws", archetype="library", owner="someone")
     needs = [
         f"{MEMBER}>=1,<3; sys_platform == 'win32'",
@@ -3084,6 +3114,39 @@ def test_two_ranges_under_exclusive_markers_each_keep_their_marker(tmp_path: Pat
     assert f"{MEMBER}==1.0.0 ; sys_platform != 'win32'" in said
     site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
     assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_two_needs_on_one_member_are_met_by_one_version(tmp_path: Path) -> None:
+    """Two needs that both apply on one platform are resolved together: one
+    version meets both."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(out, "1.0.0", need=[f"{MEMBER}>=1,<3", f"{MEMBER}>=1,<2"], own_tags=PREFIX)
+    done = _release_build(out, tmp_path, index=_stub_index(tmp_path / "index", "1.0.0", "2.0.0"))
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    found = (tmp_path / "runner" / "listed-found").read_text(encoding="utf-8")
+    assert found == f"{MEMBER}==1.0.0\n"
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_listed_member_is_installed_within_the_roots_other_needs(tmp_path: Path) -> None:
+    """The index check proves the member is there; it does not choose its
+    version. Member 2.0.0 needs `dep>=2`, the root `dep<2`: the install
+    check takes member 1.0.0, as anyone installing the root would."""
+    dep = "plinth-fixture-dep"
+    index = _stub_index(tmp_path / "index", "1.0.0", "2.0.0", requires={"2.0.0": f"{dep}>=2"})
+    _stub_index(index, "1.0.0", "2.0.0", name=dep)
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(
+        out, "1.0.0", need=[f"{MEMBER}>=1,<3", f"{dep}<2"], own_tags=PREFIX, index=index
+    )
+    done = _release_build(out, tmp_path, index=index)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
+    assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
+    assert (site / "plinth_fixture_dep-1.0.0.dist-info").is_dir()
 
 
 def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:

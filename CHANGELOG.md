@@ -6,6 +6,7 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 ### Added
 
 - **A member of a uv workspace can be released on its own tags, apart from
@@ -33,6 +34,21 @@ means `copier update` on an instance needs hands.
   or action is added, so the Actions allowlist is unchanged and
   `copier update` needs no hands. An existing project gets it through
   `/plinth:template-update`.
+=======
+### Changed
+
+- **`AGENTS.md` names `/plinth:guide` for what to do next** (#234): asked in
+  plain words what to do next, a session on a rendered project reached the
+  guide in 0 of 6 runs (coolbress/plinth#920), since `AGENTS.md` named only
+  `/plinth:arsenal` and the guide is started only by the person. One line
+  under "Where you are" now tells the agent to have the person type
+  `/plinth:guide`; the arsenal line stays for choosing a tool, and no other
+  line changes. Whether a session now reaches the guide is not measured yet:
+  that is coolbress/plinth#920's re-run. `AGENTS.md` is 52 lines. No job, check, question or action
+  changes, so `copier update` needs no hands. An existing project gets the
+  line through `/plinth:template-update` (on GitLab, the `copier update` line
+  `/plinth:floor-check` prints).
+>>>>>>> origin/main
 
 ## [1.43.1] - 2026-11-10
 
