@@ -3084,6 +3084,19 @@ def test_two_ranges_under_exclusive_markers_each_keep_their_marker(tmp_path: Pat
     assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
 
 
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_two_needs_on_one_member_are_met_by_one_version(tmp_path: Path) -> None:
+    """Two needs that both apply on one platform are resolved together: one
+    version meets both, so the install check is not pinned to two."""
+    out = render(tmp_path / "ws", archetype="library", owner="someone")
+    _make_workspace(out, "1.0.0", need=[f"{MEMBER}>=1,<3", f"{MEMBER}>=1,<2"], own_tags=PREFIX)
+    done = _release_build(out, tmp_path, index=_stub_index(tmp_path / "index", "1.0.0", "2.0.0"))
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    pins = (tmp_path / "runner" / "listed-pins").read_text(encoding="utf-8")
+    assert pins == f"{MEMBER}==1.0.0\n"
+
+
 def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:
     """uv reads `**` in `members` across directories; so does the tag check."""
     out = render(tmp_path / "ws", archetype="library", owner="someone")
