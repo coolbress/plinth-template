@@ -558,7 +558,10 @@ it.
 
 **Not yet checked on a tag run.** Each step before the upload is tested
 against a stand-in for PyPI; a real tag has not run it. Rehearse on
-TestPyPI first (step 4.2): the check then reads TestPyPI too.
+TestPyPI first (step 4.2): the index check then reads TestPyPI, and the
+install check takes from TestPyPI only the workspace's packages that come
+from the index (a listed member on a `v*` tag; the workspace's other
+packages on a member's tag), and everything else from PyPI or from `dist/`.
 
 ## When a release fails
 

@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete this tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."

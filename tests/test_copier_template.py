@@ -2133,6 +2133,12 @@ def test_a_tag_off_main_fails_before_the_build(tmp_path: Path) -> None:
         "::error title=The tag is not on main::v0.1.0 points at a commit that is not on main"
         in refused.stdout
     )
+    # The step runs on a member's own tag too: it names no one kind of tag.
+    member = _run_step(out, name, {"GITHUB_SHA": off_main, "GITHUB_REF_NAME": "member-v1.0.0"})
+    assert member.returncode == 1
+    assert "member-v1.0.0 points at a commit that is not on main" in member.stdout
+    assert "refuses to move or delete this tag" in member.stdout
+    assert "v* tag" not in member.stdout
 
 
 def test_the_how_to_names_what_the_workflow_uses(tmp_path: Path) -> None:
@@ -2731,13 +2737,17 @@ def _release_build(
     upto: str = SBOM_STEP,
     tag: str = "v0.1.0",
     index: Path | None = None,
+    pypi: Path | None = None,
 ) -> dict[str, subprocess.CompletedProcess[str]]:
     """The build job's steps, as rendered, in order, until one fails or
     `upto` has run: the tag check, then the build on (the commit-on-main
     check and the downloads left out). `syft` is a stand-in that writes the
     file it is asked for: what is under test is what was built and what
     installs. `index` is a stub of the package index, a directory laid out
-    as PyPI's simple pages are; without one, an empty stub."""
+    as PyPI's simple pages are; without one, an empty stub. `pypi`, another
+    stub, is uv's default index in the install check, where the workflow
+    has https://pypi.org/simple/; the build still takes hatchling from
+    PyPI's own."""
     runner = tmp / "runner"
     fake = tmp / "bin"
     runner.mkdir()
@@ -2759,7 +2769,8 @@ def _release_build(
     }
     done: dict[str, subprocess.CompletedProcess[str]] = {}
     for name in (TAG_STEP, BUILD, FIND_ROOT, INDEX_STEP, SBOM_STEP):
-        done[name] = _run_step(out, name, env)
+        default = {"UV_DEFAULT_INDEX": pypi.as_uri()} if pypi and name == SBOM_STEP else {}
+        done[name] = _run_step(out, name, {**env, **default})
         if done[name].returncode != 0 or name == upto:
             break
     return done
@@ -3147,6 +3158,119 @@ def test_a_listed_member_is_installed_within_the_roots_other_needs(tmp_path: Pat
     site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
     assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
     assert (site / "plinth_fixture_dep-1.0.0.dist-info").is_dir()
+
+
+#: A dependency both stubs have under one name: the lockfile's version on
+#: the PyPI stub, an unrelated older upload on the TestPyPI one.
+DEP = "plinth-fixture-dep"
+#: On the PyPI stub; only TestPyPI's copies of the workspace's packages
+#: need it, so it is installed only when they came from there.
+FROM_TESTPYPI = "plinth-fixture-from-testpypi"
+
+
+def _testpypi_rehearsal(
+    tmp: Path, monkeypatch: pytest.MonkeyPatch, shadowed: bool, *also: str
+) -> tuple[Path, Path, Path]:
+    """A project and two stub indexes standing for a TestPyPI rehearsal.
+    PyPI, uv's default index while locking (the test unsets it before the
+    build) and in the install check, has DEP 2.0.0, which the lock takes.
+    TestPyPI has MEMBER and each package named in `also` at 1.0.0 and, when
+    `shadowed`, DEP 0.1.0, as TestPyPI holds old or unrelated uploads under
+    the names PyPI's packages use. PyPI has MEMBER and those at 1.0.0 too;
+    TestPyPI's copies alone need FROM_TESTPYPI. The project has no dev
+    tools: the PyPI stub has none to lock."""
+    pypi = _stub_index(tmp / "pypi", "2.0.0", name=DEP)
+    _stub_index(pypi, "1.0.0", name=FROM_TESTPYPI)
+    testpypi = tmp / "testpypi"
+    for name in (MEMBER, *also):
+        _stub_index(pypi, "1.0.0", name=name)
+        _stub_index(testpypi, "1.0.0", name=name, requires={"1.0.0": FROM_TESTPYPI})
+    if shadowed:
+        _stub_index(testpypi, "0.1.0", name=DEP)
+    monkeypatch.setenv("UV_DEFAULT_INDEX", pypi.as_uri())
+    out = render(tmp / "ws", archetype="library", owner="someone")
+    pyproject = out / "pyproject.toml"
+    text = re.sub(r"\[dependency-groups\]\ndev = \[[^]]*\]\n", "", pyproject.read_text("utf-8"))
+    assert "[dependency-groups]" not in text
+    pyproject.write_text(text, encoding="utf-8")
+    return out, pypi, testpypi
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("shadowed", [True, False])
+def test_a_testpypi_rehearsal_of_a_v_tag_takes_other_needs_from_pypi(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shadowed: bool
+) -> None:
+    """On a `v*` tag the listed member comes from the selected index, though
+    PyPI has it too; DEP, pinned by the lockfile at 2.0.0, comes from PyPI,
+    though TestPyPI has an older copy under its name. Before #241 the
+    shadowed case stopped the install check."""
+    out, pypi, testpypi = _testpypi_rehearsal(tmp_path, monkeypatch, shadowed)
+    _make_workspace(out, "1.0.0", need=[f"{MEMBER}>=1,<2", f"{DEP}>=2"], own_tags=PREFIX)
+    monkeypatch.delenv("UV_DEFAULT_INDEX")
+    done = _release_build(out, tmp_path, index=testpypi, pypi=pypi)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
+    assert (site / f"{WHEEL}-1.0.0.dist-info").is_dir()
+    assert (site / "plinth_fixture_dep-2.0.0.dist-info").is_dir()
+    assert (site / "plinth_fixture_from_testpypi-1.0.0.dist-info").is_dir()
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_testpypi_rehearsal_keeps_a_members_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A listed member the root needs on another platform alone is named
+    for the index with its marker, and is not installed here."""
+    out, pypi, testpypi = _testpypi_rehearsal(tmp_path, monkeypatch, True)
+    other = "win32" if sys.platform != "win32" else "linux"
+    need = f"{MEMBER}>=1,<2 ; sys_platform == '{other}'"
+    _make_workspace(out, "1.0.0", need=[need, f"{DEP}>=2"], own_tags=PREFIX)
+    monkeypatch.delenv("UV_DEFAULT_INDEX")
+    done = _release_build(out, tmp_path, index=testpypi, pypi=pypi)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    named = (tmp_path / "runner" / "from-index" / "pyproject.toml").read_text(encoding="utf-8")
+    assert f"sys_platform == '{other}'" in named
+    assert _installed(tmp_path) == {"probe", DEP}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("shadowed", [True, False])
+def test_a_testpypi_rehearsal_of_a_member_tag_takes_other_needs_from_pypi(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shadowed: bool
+) -> None:
+    """On a member's own tag the workspace's other packages come from the
+    selected index, though PyPI has them too; DEP, which the member needs
+    at the lockfile's 2.0.0, comes from PyPI. Before #241 the shadowed case
+    stopped the install check."""
+    helper = "plinth-fixture-helper"
+    out, pypi, testpypi = _testpypi_rehearsal(tmp_path, monkeypatch, shadowed, helper)
+    _make_workspace(out, "1.0.0", own_tags=PREFIX)
+    src = out / "packages" / "helper"
+    (src / "src" / helper.replace("-", "_")).mkdir(parents=True)
+    (src / "src" / helper.replace("-", "_") / "__init__.py").write_text("", encoding="utf-8")
+    (src / "pyproject.toml").write_text(
+        f'[project]\nname = "{helper}"\nversion = "1.0.0"\nrequires-python = ">=3.12"\n\n'
+        '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
+        encoding="utf-8",
+    )
+    member = out / "packages" / "member" / "pyproject.toml"
+    text = member.read_text(encoding="utf-8").replace(
+        'requires-python = ">=3.12"\n',
+        f'requires-python = ">=3.12"\ndependencies = ["{helper}>=1", "{DEP}>=2"]\n',
+    )
+    member.write_text(text + f"\n[tool.uv.sources]\n{helper} = {{ workspace = true }}\n", "utf-8")
+    subprocess.run(["uv", "lock", "--quiet"], cwd=out, check=True)  # noqa: S607
+    monkeypatch.delenv("UV_DEFAULT_INDEX")
+    done = _release_build(out, tmp_path, tag=f"{PREFIX}v1.0.0", index=testpypi, pypi=pypi)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    site = next((tmp_path / "runner" / "sbom-env" / "lib").glob("*/site-packages"))
+    assert (site / f"{helper.replace('-', '_')}-1.0.0.dist-info").is_dir()
+    assert (site / "plinth_fixture_dep-2.0.0.dist-info").is_dir()
+    assert (site / "plinth_fixture_from_testpypi-1.0.0.dist-info").is_dir()
 
 
 def test_a_member_found_by_a_recursive_glob_is_a_member(tmp_path: Path) -> None:

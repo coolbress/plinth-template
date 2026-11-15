@@ -65,7 +65,8 @@ jobs:
       # The listed member a `<prefix>-v*` tag releases; empty for a `v*` tag.
       member: ${{ steps.tag.outputs.member }}
     # The index a listed member is looked up on: PyPI's, or TestPyPI's when
-    # the release goes there.
+    # the release goes there. The install check takes the workspace's own
+    # packages alone from it; everything else comes from PyPI.
     env:
       INDEX_URL: ${{ startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/') && 'https://test.pypi.org/simple/' || 'https://pypi.org/simple/' }}
     steps:
@@ -206,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete this tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."
@@ -360,6 +361,11 @@ jobs:
       # of a fresh environment with the built wheel installed at the runtime
       # versions uv.lock names. It travels apart from dist/: the publish job
       # uploads dist/ whole, and PyPI refuses a file that is not a package.
+      # The workspace's packages the install takes from the index come from
+      # $INDEX_URL alone, and nothing else does: TestPyPI holds old or
+      # unrelated uploads under the names PyPI's packages have, and uv takes
+      # each package from the first index that has it, so `--index` would
+      # send every dependency there.
       - name: Install syft (official release, SHA256 verified)
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -379,6 +385,40 @@ jobs:
           set -euo pipefail
           env="$RUNNER_TEMP/sbom-env"
           uv venv --quiet "$env"
+          # `from-index/pyproject.toml`, read with -r: each package of the
+          # workspace that uv.lock's closure (`closure.txt`) installs and that
+          # the index gives (on a member's tag, every one but the member; on
+          # a `v*` tag, the listed ones), its marker kept, pinned to $INDEX_URL
+          # as an explicit index. uv applies such a pin only to a package the
+          # file requires itself.
+          from_index() {
+            python3 - <<'PY'
+          import json, os, re, tomllib
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          def key(name):
+              return re.sub(r"[-_.]+", "-", name).lower()
+          member = (temp / "release-member").read_text(encoding="utf-8")
+          listed = {key(n) for n in (temp / "release-listed").read_text(encoding="utf-8").split()}
+          needs = []
+          for line in (temp / "closure.txt").read_text(encoding="utf-8").splitlines():
+              line = line.removeprefix("-e ").strip()
+              if not line.startswith("."):
+                  continue
+              path, _, marker = line.partition(";")
+              name = tomllib.loads((Path(path.strip()) / "pyproject.toml").read_text(encoding="utf-8"))["project"]["name"]
+              if (key(name) != key(member)) if member else (key(name) in listed):
+                  needs.append((name, marker.strip()))
+                  print(f"{name} comes from {os.environ['INDEX_URL']}.")
+          text = '[project]\nname = "release-install-check"\nversion = "0"\n'
+          text += f"dependencies = {json.dumps([n + (f' ; {m}' if m else '') for n, m in needs])}\n"
+          text += f'\n[[tool.uv.index]]\nname = "release"\nurl = {json.dumps(os.environ["INDEX_URL"])}\nexplicit = true\n'
+          text += "\n[tool.uv.sources]\n" + "".join(f'{json.dumps(n)} = {{ index = "release" }}\n' for n, _ in needs)
+          (temp / "from-index").mkdir(exist_ok=True)
+          (temp / "from-index" / "pyproject.toml").write_text(text, encoding="utf-8")
+          PY
+          }
           if [ -s "$RUNNER_TEMP/workspace-root" ]; then
             # A workspace: the root's wheel alone. Its members are looked up
             # in dist/ too, each pinned to the version just built, so another
@@ -388,15 +428,18 @@ jobs:
             # own tags comes from the index, within the root's needs.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
-            listed="$(cat "$RUNNER_TEMP/listed-found")"
-            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist ${listed:+--index "$INDEX_URL"} "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
+            uv export --locked --no-dev --no-hashes --quiet -o "$RUNNER_TEMP/closure.txt"
+            from_index
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist -r "$RUNNER_TEMP/from-index/pyproject.toml" "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
           elif [ -s "$RUNNER_TEMP/release-member" ]; then
             # A member's own tag: its wheel, under the lockfile's versions of
             # what it needs, the workspace's other packages included; those
             # come from the index, as they will for whoever installs it.
             uv export --locked --no-dev --package "$(cat "$RUNNER_TEMP/release-member")" --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/release-sibling-pins" >> "$RUNNER_TEMP/constraints.txt"
-            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --index "$INDEX_URL" dist/*.whl
+            uv export --locked --no-dev --package "$(cat "$RUNNER_TEMP/release-member")" --no-hashes --quiet -o "$RUNNER_TEMP/closure.txt"
+            from_index
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" -r "$RUNNER_TEMP/from-index/pyproject.toml" dist/*.whl
           else
             uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl

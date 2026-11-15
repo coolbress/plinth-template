@@ -6,6 +6,24 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A TestPyPI rehearsal of a uv workspace release takes only the
+  workspace's own packages from TestPyPI** (#241): when
+  `PYPI_REPOSITORY_URL` names TestPyPI, the install check in `release.yml`
+  passed `--index` for TestPyPI, and uv takes each package from the first
+  index that has it, so a dependency the lockfile pins (for example
+  `pandas==2.x`) was looked up on TestPyPI's old or unrelated copy alone and
+  the run stopped before the upload. Both a `v*` tag that needs a listed
+  member and a member's own tag stopped this way; a test reproduced both
+  against stub indexes. The check now names the workspace's packages it
+  needs (from `uv.lock`, markers kept) for that index alone, and takes
+  everything else from PyPI; `--index-strategy unsafe-best-match` is not
+  used. The "tag is not on main" error, which also runs on a member's tag,
+  says "this tag" instead of "a v* tag", in every archetype's
+  `release.yml`, which share that step. An existing project gets this
+  through `/plinth:template-update`.
+
 ## [1.44.0] - 2026-11-15
 
 **A uv workspace member can be released on its own tags, and `AGENTS.md` names `/plinth:guide` for what to do next.** A `cli` or `library` that lists a member under `[tool.plinth.release] own-tags` releases it only on `<prefix>-v<version>` tags, and a `v*` tag leaves it out after checking the index has the release the root needs; without the list a `v*` release runs as before. No job, check, question or action is added, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
