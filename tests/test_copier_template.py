@@ -3874,13 +3874,14 @@ def test_github_settings_deny_gh_auth_status_printing_the_token(rendered: Path) 
 def _documented_match(rule: str, command: str) -> bool:
     """One `Bash(...)` rule against one command under Claude Code's documented
     matching: a trailing `:*` is a trailing ` *`, the space is part of the rule,
-    and a trailing ` *` also matches the bare command; any other `*` matches
-    any text, spaces included; a rule with no `*` matches that text only."""
+    and a trailing ` *` also matches the bare command only when it is the
+    rule's only `*`; any other `*` matches any text, spaces included; a rule
+    with no `*` matches that text only."""
     body = rule[len("Bash(") : -1]
     if body.endswith(":*"):
         body = body[:-2] + " *"
     tail = ""
-    if body.endswith(" *"):
+    if body.endswith(" *") and body.count("*") == 1:
         body, tail = body[:-2], "(?: .*)?"
     pattern = ".*".join(re.escape(part) for part in body.split("*")) + tail
     return re.fullmatch(pattern, command, re.DOTALL) is not None
@@ -3938,6 +3939,16 @@ def test_settings_deny_the_force_push_spellings_an_agent_writes(tmp_path: Path, 
     deny = permissions["deny"]
     wrong = [(cmd, want) for cmd, want in FORCE_PUSH_SPELLINGS if _denied(cmd, deny) != want]
     assert wrong == [], f"(spelling, should be denied) the rules get wrong: {wrong}"
+
+
+def test_a_trailing_wildcard_matches_the_bare_command_only_when_it_is_the_only_one() -> None:
+    """The permissions page lets a trailing ` *` match the bare command only
+    when it is the rule's only wildcard, so `Bash(git push * -f *)` alone does
+    not refuse `git push origin b -f`; the test above must not count it as
+    refusing that spelling (plinth-template #246)."""
+    assert not _denied("git push origin b -f", ["Bash(git push * -f *)"])
+    assert _denied("git push origin b -f x", ["Bash(git push * -f *)"])
+    assert _denied("git push -f", ["Bash(git push -f *)"])
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
