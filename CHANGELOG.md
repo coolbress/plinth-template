@@ -6,6 +6,38 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The deny list refuses the force-push spellings an agent writes**
+  (coolbress/plinth#942). `Bash(git push --force:*)` and
+  `Bash(git push -f:*)` matched only those words written first, so
+  `git push --force-with-lease`, `git push origin <b> --force`,
+  `git push origin +<b>` and `git -C <dir> push --force` matched no rule;
+  in auto mode such a command goes to the classifier, not a prompt, and in
+  a real project it let a `--force-with-lease` push to a pull request's
+  branch through. `.claude/settings.json` now also denies `--force` (with
+  `-with-lease` and `-if-includes`) anywhere after `git push`, `-f` after
+  other arguments, a `+` refspec, and the same with options between `git`
+  and `push`. The rules read text, so a commit message or a branch name
+  holding such text is refused too and is reworded. A test holds a table
+  of spellings against the rendered rules under Claude Code's documented
+  matching. An existing project gets the rules through
+  `/plinth:template-update`.
+- **`AGENTS.md` no longer says the permission prompt stops a spelling no
+  rule matches.** That holds only in a mode that asks; in auto mode the
+  classifier decides. It names what the deny cannot stop (a path to `git`,
+  `sh -c`, a git alias, combined short flags such as `-uf`), says the
+  boundary is the host's protection of `main`, and says a pull request's
+  branch is brought up to date by merging `origin/main` in (on GitLab by
+  `glab mr rebase`), never by a rebase and a force push. The `gh auth
+  status` sentence that made the same promise is corrected.
+- A pull request's branch stays unprotected on GitHub: `non_fast_forward`
+  on every branch would break Dependabot, which rebases its pull requests
+  by force-pushing, and a person's own rebase or GitHub's "Update branch
+  (rebase)". A force-pushed pull request branch never reaches `main`, and
+  its earlier commits stay reachable from the pull request's timeline and
+  the local reflog.
+
 ## [1.44.1] - 2026-11-16
 
 **A TestPyPI rehearsal of a uv workspace release takes only the workspace's own packages from TestPyPI.** Before, the install check looked up every dependency on TestPyPI first and could stop on an old or unrelated copy there before the upload. The release workflow's install check, one error line and the how-to only: no job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
