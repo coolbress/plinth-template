@@ -3857,7 +3857,8 @@ def test_github_settings_deny_gh_auth_status_printing_the_token(rendered: Path) 
     `gh auth token` does, and no document uses them (plinth #642, Findings 2);
     the GitLab render denies `glab`'s two spellings the same way. A prefix
     deny does not reach the options in another order (`-t` after
-    `--hostname`); no allow rule does either, so the prompt stops that one."""
+    `--hostname`); no allow rule does either, so it asks, or in auto mode
+    goes to the classifier."""
     permissions = _settings(rendered)["permissions"]
     assert isinstance(permissions, dict)
     for rule in ("Bash(gh auth status --show-token*)", "Bash(gh auth status -t*)"):
@@ -3868,6 +3869,88 @@ def test_github_settings_deny_gh_auth_status_printing_the_token(rendered: Path) 
     reordered = "gh auth status --hostname github.com -t"
     assert not _matches(reordered, *deny), reordered
     assert not _matches(reordered, *allow), reordered
+
+
+def _documented_match(rule: str, command: str) -> bool:
+    """One `Bash(...)` rule against one command under Claude Code's documented
+    matching: a trailing `:*` is a trailing ` *`, the space is part of the rule,
+    and a trailing ` *` also matches the bare command; any other `*` matches
+    any text, spaces included; a rule with no `*` matches that text only."""
+    body = rule[len("Bash(") : -1]
+    if body.endswith(":*"):
+        body = body[:-2] + " *"
+    tail = ""
+    if body.endswith(" *"):
+        body, tail = body[:-2], "(?: .*)?"
+    pattern = ".*".join(re.escape(part) for part in body.split("*")) + tail
+    return re.fullmatch(pattern, command, re.DOTALL) is not None
+
+
+def _denied(command: str, deny: list[str]) -> bool:
+    """Deny rules apply to each subcommand of a compound command."""
+    parts = [p.strip() for p in re.split(r"&&|\|\||;|\|", command)]
+    rules = [d for d in deny if d.startswith("Bash(")]
+    return any(_documented_match(r, p) for p in parts for r in rules)
+
+
+# Each spelling, and whether the rendered deny list refuses it (plinth #942).
+# The last two over-match on purpose: the rules read text, not git's
+# arguments, and refusing a commit message is the closed side to fail on.
+FORCE_PUSH_SPELLINGS = [
+    ("git push --force", True),
+    ("git push -f", True),
+    ("git push --force-with-lease", True),
+    ("git push --force-if-includes --force-with-lease", True),
+    ("git push origin b --force", True),
+    ("git push origin b --force-with-lease", True),
+    ("git push origin b -f", True),
+    ("git push -u origin b -f", True),
+    ("git push origin +b", True),
+    ("git push origin +HEAD:b", True),
+    ("git -C d push --force", True),
+    ("git -C d push -f", True),
+    ("git -c a.b=c push origin b -f", True),
+    ("git -C d push origin +b", True),
+    ("cd d && git push --force", True),
+    ("git fetch origin; git push origin b --force-with-lease", True),
+    # What the rules leave, named in AGENTS.md.
+    ("/usr/bin/git push --force", False),
+    ("sh -c 'git push --force'", False),
+    ("git push -uf origin b", False),
+    # Ordinary pushes still pass the deny list (and ask, as permissions.md says).
+    ("git push", False),
+    ("git push -u origin fix/a-b", False),
+    ("git push origin HEAD", False),
+    ("git push --follow-tags origin main", False),
+    # Over-matches that fail closed.
+    ('git commit -m "never git push --force"', True),
+    ("git push origin a+b", True),
+]
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_settings_deny_the_force_push_spellings_an_agent_writes(tmp_path: Path, host: str) -> None:
+    """`Bash(git push --force:*)` matched only `git push --force` written
+    first; an agent in auto mode pushed `--force-with-lease` and nothing
+    stopped it (plinth #942)."""
+    permissions = _settings(render(tmp_path / host, host=host))["permissions"]
+    assert isinstance(permissions, dict)
+    deny = permissions["deny"]
+    wrong = [(cmd, want) for cmd, want in FORCE_PUSH_SPELLINGS if _denied(cmd, deny) != want]
+    assert wrong == [], f"(spelling, should be denied) the rules get wrong: {wrong}"
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_agents_md_says_what_the_force_push_deny_cannot_stop(tmp_path: Path, host: str) -> None:
+    """No sentence promises a permission prompt: in auto mode a command no rule
+    matches goes to the classifier, which let a force push through (plinth
+    #942). The host's protection is the boundary, and it covers `main` only."""
+    agents = " ".join((render(tmp_path / host, host=host) / "AGENTS.md").read_text().split())
+    assert not re.search(r"prompt stops|stopped by the (permission )?prompt", agents), agents
+    for words in ("`/usr/bin/git push --force`", "`sh -c", "alias", "`-uf`", "auto mode"):
+        assert words in agents, f"AGENTS.md does not name {words}"
+    branch = "A merge request's branch" if host == "gitlab" else "A pull request's branch"
+    assert re.search(rf"{branch}[^.]*never[^.]*force push", agents), agents
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
