@@ -65,7 +65,8 @@ jobs:
       # The listed member a `<prefix>-v*` tag releases; empty for a `v*` tag.
       member: ${{ steps.tag.outputs.member }}
     # The index a listed member is looked up on: PyPI's, or TestPyPI's when
-    # the release goes there.
+    # the release goes there. The install check takes the workspace's own
+    # packages alone from it; everything else comes from PyPI.
     env:
       INDEX_URL: ${{ startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/') && 'https://test.pypi.org/simple/' || 'https://pypi.org/simple/' }}
     steps:
@@ -206,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete a v* tag. Tag a commit on main with a version that has no tag yet."
+            echo "::error title=The tag is not on main::$GITHUB_REF_NAME points at a commit that is not on main, so it never passed the checks a pull request needs. Nothing was uploaded. Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete this tag. Tag a commit on main with a version that has no tag yet."
             exit 1
           fi
           echo "$GITHUB_REF_NAME is on main."
@@ -360,6 +361,11 @@ jobs:
       # of a fresh environment with the built wheel installed at the runtime
       # versions uv.lock names. It travels apart from dist/: the publish job
       # uploads dist/ whole, and PyPI refuses a file that is not a package.
+      # The workspace's packages the install takes from the index come from
+      # $INDEX_URL alone, and nothing else does: TestPyPI holds old or
+      # unrelated uploads under the names PyPI's packages have, and uv takes
+      # each package from the first index that has it, so `--index` would
+      # send every dependency there.
       - name: Install syft (official release, SHA256 verified)
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -379,6 +385,47 @@ jobs:
           set -euo pipefail
           env="$RUNNER_TEMP/sbom-env"
           uv venv --quiet "$env"
+          # `from-index/pyproject.toml`, read with -r: what this release
+          # itself needs of the workspace's packages that the index gives,
+          # each requirement as written, its marker kept, pinned to
+          # $INDEX_URL as an explicit index. On a `v*` tag, the root's
+          # requirements on listed members (`release-needs`); on a member's
+          # tag, the built wheel's requirements on the workspace's other
+          # packages. uv applies such a pin only to a package the file
+          # requires itself, so a workspace package needed only further down
+          # the chain is looked up on PyPI: in a TestPyPI rehearsal it is not
+          # taken from TestPyPI.
+          from_index() {
+            python3 - <<'PY'
+          import json, os, re, zipfile
+          from email.parser import HeaderParser
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          def key(name):
+              return re.sub(r"[-_.]+", "-", name).lower()
+          def named(req):
+              return re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", req)[1]
+          if (temp / "release-member").read_text(encoding="utf-8"):
+              siblings = {key(p.split("==")[0]) for p in (temp / "release-sibling-pins").read_text(encoding="utf-8").split()}
+              (wheel,) = Path("dist").glob("*.whl")
+              with zipfile.ZipFile(wheel) as z:
+                  (meta,) = [n for n in z.namelist() if re.fullmatch(r"[^/]+\.dist-info/METADATA", n)]
+                  reqs = HeaderParser().parsestr(z.read(meta).decode()).get_all("Requires-Dist") or []
+              # A requirement under an extra is not installed without it.
+              needs = [r.strip() for r in reqs if key(named(r)) in siblings and "extra" not in r.partition(";")[2]]
+          else:
+              needs = [line.split("\t")[0] for line in (temp / "release-needs").read_text(encoding="utf-8").splitlines() if line]
+          for need in needs:
+              print(f"{need} comes from {os.environ['INDEX_URL']}.")
+          text = '[project]\nname = "release-install-check"\nversion = "0"\n'
+          text += f"dependencies = {json.dumps(needs)}\n"
+          text += f'\n[[tool.uv.index]]\nname = "release"\nurl = {json.dumps(os.environ["INDEX_URL"])}\nexplicit = true\n'
+          text += "\n[tool.uv.sources]\n" + "".join(f'{json.dumps(n)} = {{ index = "release" }}\n' for n in dict.fromkeys(named(r) for r in needs))
+          (temp / "from-index").mkdir(exist_ok=True)
+          (temp / "from-index" / "pyproject.toml").write_text(text, encoding="utf-8")
+          PY
+          }
           if [ -s "$RUNNER_TEMP/workspace-root" ]; then
             # A workspace: the root's wheel alone. Its members are looked up
             # in dist/ too, each pinned to the version just built, so another
@@ -388,15 +435,16 @@ jobs:
             # own tags comes from the index, within the root's needs.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
-            listed="$(cat "$RUNNER_TEMP/listed-found")"
-            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist ${listed:+--index "$INDEX_URL"} "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
+            from_index
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist -r "$RUNNER_TEMP/from-index/pyproject.toml" "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
           elif [ -s "$RUNNER_TEMP/release-member" ]; then
             # A member's own tag: its wheel, under the lockfile's versions of
             # what it needs, the workspace's other packages included; those
             # come from the index, as they will for whoever installs it.
             uv export --locked --no-dev --package "$(cat "$RUNNER_TEMP/release-member")" --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/release-sibling-pins" >> "$RUNNER_TEMP/constraints.txt"
-            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --index "$INDEX_URL" dist/*.whl
+            from_index
+            uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" -r "$RUNNER_TEMP/from-index/pyproject.toml" dist/*.whl
           else
             uv export --locked --no-dev --no-emit-project --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" dist/*.whl
