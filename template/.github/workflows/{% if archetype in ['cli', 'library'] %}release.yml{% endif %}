@@ -390,7 +390,8 @@ jobs:
           # the index gives (on a member's tag, every one but the member; on
           # a `v*` tag, the listed ones), its marker kept, pinned to $INDEX_URL
           # as an explicit index. uv applies such a pin only to a package the
-          # file requires itself.
+          # file requires itself. The closure is the runtime one: no
+          # dependency group, a default one (tool.uv.default-groups) included.
           from_index() {
             python3 - <<'PY'
           import json, os, re, tomllib
@@ -428,7 +429,7 @@ jobs:
             # own tags comes from the index, within the root's needs.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
-            uv export --locked --no-dev --no-hashes --quiet -o "$RUNNER_TEMP/closure.txt"
+            uv export --locked --no-dev --no-default-groups --no-hashes --quiet -o "$RUNNER_TEMP/closure.txt"
             from_index
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" --find-links dist -r "$RUNNER_TEMP/from-index/pyproject.toml" "$(cat "$RUNNER_TEMP/workspace-root-wheel")"
           elif [ -s "$RUNNER_TEMP/release-member" ]; then
@@ -437,7 +438,7 @@ jobs:
             # come from the index, as they will for whoever installs it.
             uv export --locked --no-dev --package "$(cat "$RUNNER_TEMP/release-member")" --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/release-sibling-pins" >> "$RUNNER_TEMP/constraints.txt"
-            uv export --locked --no-dev --package "$(cat "$RUNNER_TEMP/release-member")" --no-hashes --quiet -o "$RUNNER_TEMP/closure.txt"
+            uv export --locked --no-dev --no-default-groups --package "$(cat "$RUNNER_TEMP/release-member")" --no-hashes --quiet -o "$RUNNER_TEMP/closure.txt"
             from_index
             uv pip install --quiet --python "$env" --constraint "$RUNNER_TEMP/constraints.txt" -r "$RUNNER_TEMP/from-index/pyproject.toml" dist/*.whl
           else

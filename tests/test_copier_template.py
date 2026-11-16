@@ -3237,6 +3237,30 @@ def test_a_testpypi_rehearsal_keeps_a_members_marker(
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_default_groups_need_is_not_taken_from_the_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A listed member that only a default dependency group needs is not
+    something the root installs: the install check leaves it out."""
+    out, pypi, testpypi = _testpypi_rehearsal(tmp_path, monkeypatch, True)
+    _make_workspace(out, "1.0.0", need=f"{DEP}>=2", own_tags=PREFIX)
+    pyproject = out / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8")
+        + f'\n[dependency-groups]\ndocs = ["{MEMBER}"]\n\n[tool.uv]\ndefault-groups = ["docs"]\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["uv", "lock", "--quiet"], cwd=out, check=True)  # noqa: S607
+    monkeypatch.delenv("UV_DEFAULT_INDEX")
+    done = _release_build(out, tmp_path, index=testpypi, pypi=pypi)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    named = (tmp_path / "runner" / "from-index" / "pyproject.toml").read_text(encoding="utf-8")
+    assert MEMBER not in named
+    assert _installed(tmp_path) == {"probe", DEP}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 @pytest.mark.parametrize("shadowed", [True, False])
 def test_a_testpypi_rehearsal_of_a_member_tag_takes_other_needs_from_pypi(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shadowed: bool
