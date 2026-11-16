@@ -16,10 +16,13 @@ means `copier update` on an instance needs hands.
   `pandas==2.x`) was looked up on TestPyPI's old or unrelated copy alone and
   the run stopped before the upload. Both a `v*` tag that needs a listed
   member and a member's own tag stopped this way; a test reproduced both
-  against stub indexes. The check now names the workspace's packages it
-  needs (from `uv.lock`, markers kept) for that index alone, and takes
-  everything else from PyPI; `--index-strategy unsafe-best-match` is not
-  used. The "tag is not on main" error, which also runs on a member's tag,
+  against stub indexes. The check now takes from that index alone the
+  workspace's packages the release needs directly (the root's requirements
+  on listed members, or the member's requirements on the workspace's other
+  packages, markers kept), and everything else from PyPI;
+  `--index-strategy unsafe-best-match` is not used. A workspace package
+  needed only further down the chain is looked up on PyPI in a TestPyPI
+  rehearsal. The "tag is not on main" error, which also runs on a member's tag,
   says "this tag" instead of "a v* tag", in every archetype's
   `release.yml`, which share that step. An existing project gets this
   through `/plinth:template-update`.

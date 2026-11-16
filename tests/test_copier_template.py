@@ -3237,6 +3237,49 @@ def test_a_testpypi_rehearsal_keeps_a_members_marker(
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_local_members_needs_are_not_taken_from_the_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The root needs MEMBER>=1,<3. The local MEMBER 2.0.0 needs `helper`,
+    another listed member that is published nowhere; the index has MEMBER
+    1.0.0 alone, which does not. The install check names what the root
+    itself needs, and takes MEMBER 1.0.0 without `helper`."""
+    helper = "plinth-fixture-helper"
+    out, pypi, testpypi = _testpypi_rehearsal(tmp_path, monkeypatch, False)
+    _make_workspace(out, "2.0.0", need=f"{MEMBER}>=1,<3", own_tags=PREFIX)
+    src = out / "packages" / "helper"
+    (src / "src" / helper.replace("-", "_")).mkdir(parents=True)
+    (src / "src" / helper.replace("-", "_") / "__init__.py").write_text("", encoding="utf-8")
+    (src / "pyproject.toml").write_text(
+        f'[project]\nname = "{helper}"\nversion = "1.0.0"\nrequires-python = ">=3.12"\n\n'
+        '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
+        encoding="utf-8",
+    )
+    member = out / "packages" / "member" / "pyproject.toml"
+    text = member.read_text(encoding="utf-8").replace(
+        'requires-python = ">=3.12"\n',
+        f'requires-python = ">=3.12"\ndependencies = ["{helper}>=1"]\n',
+    )
+    member.write_text(text + f"\n[tool.uv.sources]\n{helper} = {{ workspace = true }}\n", "utf-8")
+    pyproject = out / "pyproject.toml"
+    listed = f'own-tags = {{ "{MEMBER}" = "{PREFIX}" }}'
+    text = pyproject.read_text(encoding="utf-8")
+    assert listed in text
+    pyproject.write_text(
+        text.replace(listed, f'own-tags = {{ "{MEMBER}" = "{PREFIX}", "{helper}" = "helper-" }}'),
+        encoding="utf-8",
+    )
+    subprocess.run(["uv", "lock", "--quiet"], cwd=out, check=True)  # noqa: S607
+    monkeypatch.delenv("UV_DEFAULT_INDEX")
+    done = _release_build(out, tmp_path, index=testpypi, pypi=pypi)
+    for name, step in done.items():
+        assert step.returncode == 0, f"{name}\n{step.stdout}\n{step.stderr}"
+    named = (tmp_path / "runner" / "from-index" / "pyproject.toml").read_text(encoding="utf-8")
+    assert helper not in named
+    assert _installed(tmp_path) == {"probe", MEMBER, FROM_TESTPYPI}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_a_default_groups_need_is_not_taken_from_the_index(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
