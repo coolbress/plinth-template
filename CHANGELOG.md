@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.44.1] - 2026-11-16
+
+**A TestPyPI rehearsal of a uv workspace release takes only the workspace's own packages from TestPyPI.** Before, the install check looked up every dependency on TestPyPI first and could stop on an old or unrelated copy there before the upload. The release workflow's install check, one error line and the how-to only: no job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
+
 ### Fixed
 
 - **A TestPyPI rehearsal of a uv workspace release takes only the
