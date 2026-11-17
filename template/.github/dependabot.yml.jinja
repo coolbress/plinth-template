@@ -9,7 +9,12 @@ updates:
     open-pull-requests-limit: 5
     # Grouped: one pull request per group, not one per package. Security
     # updates bypass grouping and schedule and open at once, so grouping never
-    # delays a CVE fix. No cooldown: a three-day wait is GitHub's default.
+    # delays a CVE fix. No cooldown: GitHub's default waits three days after a
+    # release of each package a pull request names. A package `uv lock` moves
+    # along with them is not held: Dependabot runs `uv lock --upgrade-package`
+    # for the package it names, with no age limit (read in dependabot-core,
+    # plinth #949). These groups and the cooldown are this
+    # project's to change: docs/how-to/keep-this-project-current.md says when.
     groups:
       # Development tools (ruff, mypy, pytest) in one pull request; a break
       # here breaks CI, not the product.

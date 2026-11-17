@@ -6,6 +6,26 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **`docs/how-to/keep-this-project-current.md` says what to do when a
+  dependency pull request stays red** (coolbress/plinth#949). On GitHub a
+  section after the three steps says to read why first; when one package in
+  a group is the cause, take it out with the group's `exclude-patterns` (or
+  regenerate on its branch, which Dependabot then stops rebasing) and merge
+  the rest; and that `@dependabot ignore <name>` is a lasting pin until
+  `@dependabot unignore <name>`, not a way past one red run. It says
+  `.github/dependabot.yml`'s groups and cooldown are the project's to change:
+  floor-check checks only that the file exists, and a template update keeps
+  the project's lines unless the template changed the same ones.
+- **`.github/dependabot.yml`'s cooldown comment says what the wait holds.**
+  GitHub's default three days (`DEFAULT_COOLDOWN_DAYS` in dependabot-core,
+  every ecosystem) hold the release of each package a pull request names; a
+  package `uv lock --upgrade-package` moves along with them has no age limit,
+  read in dependabot-core's source, not run. The comment said only "a
+  three-day wait is GitHub's default". No job, check, question or action
+  changes. An existing project gets both through `/plinth:template-update`.
+
 ## [1.44.2] - 2026-11-16
 
 **The deny list refuses the force-push spellings an agent writes, and `AGENTS.md` says what it cannot stop.** `.claude/settings.json` now also refuses `--force`, `--force-with-lease` and `--force-if-includes` anywhere after `git push`, `-f` after other arguments, a `+` refspec, and the same with options between `git` and `push`; `AGENTS.md` no longer says the permission prompt stops a spelling no rule matches (in auto mode a classifier decides), names the forms the rules cannot stop, and says a pull request's branch is updated by merging the base in, never by a force push. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
