@@ -5833,6 +5833,114 @@ def test_an_existing_project_whose_name_does_not_collide_still_updates(tmp_path:
     assert _answers(proj)["project_name"] == "access"
 
 
+def _two_tag_template(
+    tmp_path: Path, old: Callable[[Path], None], new: Callable[[Path], None]
+) -> Path:
+    """This template copied twice into one repository, `old` then `new` applied to
+    each copy, tagged `v9.0.0` and `v9.1.0`."""
+    tpl = tmp_path / "tpl"
+    tpl.mkdir()
+    _git(tpl, "init", "-q", "-b", "main", ".")
+    for tag, change in (("v9.0.0", old), ("v9.1.0", new)):
+        for entry in tpl.iterdir():
+            if entry.name != ".git":
+                shutil.rmtree(
+                    entry
+                ) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
+        shutil.copytree(
+            TEMPLATE_ROOT,
+            tpl,
+            symlinks=True,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(
+                ".git",
+                ".venv",
+                "dist",
+                "__pycache__",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".ruff_cache",
+            ),
+        )
+        change(tpl)
+        _git(tpl, "add", "-A")
+        _git(tpl, "commit", "-qm", tag)
+        _git(tpl, "tag", "-a", "-m", tag, tag)
+    return tpl
+
+
+def _render_and_update(tpl: Path, proj: Path, name: str, own: str | None = None) -> str:
+    """Render `name` (`cli`) at `v9.0.0`, write `own` as its test when given, update to
+    `v9.1.0`, and return the test afterwards."""
+    import copier
+
+    data = {"project_name": name, "license": "MIT", "archetype": "cli", "owner": "someone"}
+    copier.run_copy(
+        str(tpl), str(proj), data=data, defaults=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    test = proj / "tests" / f"test_{name}.py"
+    if own is not None:
+        test.write_text(own, encoding="utf-8")
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.1.0"
+    )
+    assert _answers(proj)["_commit"] == "v9.1.0"
+    return test.read_text(encoding="utf-8") if test.is_file() else ""
+
+
+def _left_out_as_before(tpl: Path) -> None:
+    """The template as it was before coolbress/plinth-template#258: a `cli` project
+    named `access` rendered without its own test."""
+    config = tpl / "copier.yml"
+    text = config.read_text(encoding="utf-8")
+    config.write_text(
+        text.replace("_exclude:\n", "_exclude:\n  - tests/test_access.py\n", 1), encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize(
+    "own", [None, "from access import greet\n\n\ndef test_mine() -> None:\n    assert greet('a')\n"]
+)
+def test_a_project_that_rendered_without_its_own_test_updates_without_hands(
+    tmp_path: Path, own: str | None
+) -> None:
+    """A `cli` project named `access` rendered without `tests/test_access.py`, and its
+    owner may have written one. The update adds the file where it is missing and
+    keeps one that exists, without conflict markers (coolbress/plinth-template#258)."""
+    tpl = _two_tag_template(tmp_path, _left_out_as_before, lambda _: None)
+    after = _render_and_update(tpl, tmp_path / "access", "access", own)
+    if own is None:
+        assert "from access import greet" in after, after
+    else:
+        assert after == own, after
+
+
+def test_an_ordinary_project_still_receives_changes_to_its_own_test(tmp_path: Path) -> None:
+    """Only the names a shipped test takes are skipped when they exist: every other
+    project's own test still follows the template, so a change to the code and
+    its test arrive together."""
+    later = "\n\n# a later template change\n"
+
+    def append(tpl: Path) -> None:
+        source = tpl / "template" / "tests" / "test_{{ package_name }}.py.jinja"
+        source.write_text(source.read_text(encoding="utf-8") + later, encoding="utf-8")
+
+    tpl = _two_tag_template(tmp_path, lambda _: None, append)
+    assert _render_and_update(tpl, tmp_path / "probe", "probe").endswith(later.rstrip("\n") + "\n")
+
+
+def test_the_own_tests_kept_on_update_are_the_names_a_shipped_test_takes() -> None:
+    """The `_skip_if_exists` list names the package names whose own test an
+    `_exclude` line left out before coolbress/plinth-template#258; `tree_hygiene` is
+    refused under every archetype, so no project carries it."""
+    (entry,) = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["_skip_if_exists"]
+    listed = set(re.findall(r"'(\w+)'", entry))
+    assert listed == set(_shipped_test_packages()) - {"tree_hygiene"}, listed
+
+
 @pytest.mark.parametrize("bad", ["_demo", "demo_", "demo-", "-demo", ".demo"])
 def test_a_name_that_is_not_a_distribution_name_is_refused(tmp_path: Path, bad: str) -> None:
     """The package name is also `pyproject.toml`'s `name`; a distribution name starts

@@ -19,15 +19,19 @@ _preserve_symlinks: true
 # repository crashes plinth's floor checker, which reads every `*.md` here.
 # copier drops the suffix from the link's name and keeps its target.
 
-# The project's own test is the project's from its first render on. A project
-# whose name an `_exclude` line matched rendered without it, and its owner may
-# have written one by hand; `copier update` adds the file where it is missing
+# A project named like a shipped test rendered without its own
+# `tests/test_<package>.py`, since the `_exclude` line that left out the
+# shipped test matched it too, and its owner may have written one by hand.
+# For these names only, `copier update` adds the file where it is missing
 # and keeps one that exists, with no conflict to resolve
-# (coolbress/plinth-template#258). The price: a later change to this file in
-# the template reaches new renders only, never an existing project
-# (measured with copier 9.19.1).
+# (coolbress/plinth-template#258). The price is theirs alone: a later
+# template change to their own test reaches new renders, not them, nor
+# `copier recopy`. Every other project's own test follows the template, so
+# a change to the code and its test arrive together. The names are the
+# shipped tests' but `tree_hygiene`, which every archetype refuses; the
+# template's own test fails when the two disagree. Measured with copier 9.19.1.
 _skip_if_exists:
-  - "tests/test_{{ package_name }}.py"
+  - "{% if package_name in ['access', 'built_wheel', 'entry_point', 'pages', 'passwords', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.

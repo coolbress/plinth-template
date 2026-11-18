@@ -50,20 +50,21 @@ means `copier update` on an instance needs hands.
   Every archetype's render is otherwise byte for byte what it was (the five
   archetypes under `probe` and the six names, compared with the previous
   `main`).
-  `copier.yml` now lists `tests/test_<package>.py` in `_skip_if_exists`.
-  On `copier update`, such a project gets the missing test, which imports
-  the package and checks `greet`, with no questions; one whose owner already
-  wrote a file at that path keeps it as written, with no conflict markers;
-  a new render writes the test as before. `copier update` needs no hands.
-  Measured with copier 9.19.1, from the previous `main` to this change, for
-  a `cli` project named `access` with and without a hand-written test, and
-  a new render of `cli` projects named `access` and `probe`; another copier
-  version was not run. The cost: a later change to the project's own test
-  in the template reaches new renders only, never an existing project,
-  `probe` included (measured with a later template that appends a line to
-  it). Not changed here: a project named `dist`, or `data` outside
-  `data-ml`, renders with an empty `src/`, since those `_exclude` entries
-  match the package folder too (coolbress/plinth-template#260).
+  For those six names only, `copier.yml` lists the project's own
+  test in `_skip_if_exists`. On `copier update`, such a project gets the
+  missing test, which imports the package and checks `greet`, with no
+  questions; one whose owner already wrote a file at that path keeps it as
+  written, with no conflict markers; a new render writes the test as
+  before. `copier update` needs no hands. The cost is theirs alone: a later
+  template change to their own test reaches new renders, not them, and
+  `copier recopy` keeps their file too. Every other project's own test
+  still follows the template, so a change to the code and its test arrive
+  together. Tested in `tests/`, with copier 9.19.1, for a `cli` project
+  named `access` with and without a hand-written test and a `cli` project
+  named `probe` receiving a later change to its test; another copier
+  version was not run. Not changed here: a project named `dist`, or `data`
+  outside `data-ml`, renders with an empty `src/`, since those `_exclude`
+  entries match the package folder too (coolbress/plinth-template#260).
 
 ## [1.45.1] - 2026-11-18
 
