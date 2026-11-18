@@ -13,13 +13,14 @@ means `copier update` on an instance needs hands.
   (coolbress/plinth-template#253). Followed once on a real project, the
   revert opened by `gh pr revert` landed on `main` with the one line GitHub
   writes as its squash commit. Section 1 now says to keep the title the host
-  writes and why the revert made by hand is titled `revert:` instead, and to
-  fill the description from the project's form before merging (on GitHub
-  with `gh pr edit <n> --body-file <file>` or the page's edit, on GitLab on
-  the page). Section 2 says a revert takes the default review in
-  `AGENTS.md`, or `Review: none (<reason>)` when it cannot wait; how to see
-  the checks finish; that a `not yet confirmed` line names a missing field;
-  and that step 7's `<sha>` is the revert's head commit. A new section 3
+  writes and why the revert made by hand is titled `revert:` instead; that a
+  revert takes the default review in `AGENTS.md`, run before the
+  description, or `Review: none (<reason>)` when it cannot wait; and to fill
+  the description from the project's form before merging (on GitHub with
+  `gh pr edit <n> --body-file <file>` or the page's edit; on GitLab on the
+  page, then a new pipeline, since GitLab runs none for an edit). Section 2
+  says how to see the checks finish, that a `not yet confirmed` line names a
+  missing field, and that step 7's `<sha>` is the revert's head commit. A new section 3
   says to reopen an issue the reverted change closed and correct its
   Outcome, and gives the `git diff` that prints nothing when `main` is back.
   `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. An existing project

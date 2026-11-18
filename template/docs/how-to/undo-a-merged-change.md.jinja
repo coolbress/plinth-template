@@ -40,36 +40,40 @@ who writes them, GitLab or a person.{% else %}because the title git writes there
 refuses.{% endif %} Both are this project's titles; the one {{ host_name }}
 writes needs no edit.
 
+A revert takes the same review as any change: the default review in
+`AGENTS.md`, a fresh-context review given the revert's diff, run before the
+description is written so its findings go in it. It is short, since the diff
+should be the reverted change turned around and nothing else. When the
+change does harm now and no one can review in time, merge without it and
+say so on the line, `Review: none (<reason>)`; the line is never left out.
+
 Then fill the description before anything else. {{ host_name }} writes only
 {% if host == 'gitlab' %}a line naming what is reverted{% else %}`Reverts <owner>/<repo>#<n>`{% endif %}, and the description becomes the squash
 commit on `main`, which cannot be fixed afterwards. Start from the project's
 form, {% if host == 'gitlab' %}`.gitlab/merge_request_templates/Default.md`{% else %}`.github/PULL_REQUEST_TEMPLATE.md`{% endif %}: write `Reverts {% if host == 'gitlab' %}!{% else %}#{% endif %}<n>.` and why
-under `What and why`, fill `What I checked myself`, keep the `Not verified:`
-line, fill the `Review:` line, put `Related to #<m>` for an issue the
-reverted change closed and the `Assisted-by` trailers last, and delete the
-comment lines.
+under `What and why`, fill `What I checked myself`, write a
+`Not verified:` line (`Not verified: nothing` when that is true), fill the
+`Review:` line with the review that ran, put `Related to #<m>` for an issue
+the reverted change closed and the `Assisted-by` trailers last, and delete
+the comment lines.
 {%- if host == 'gitlab' %} Edit the description on the merge request's page.
+GitLab starts no pipeline for an edit, so then press **Run pipeline** on the
+merge request's **Pipelines** tab: the one that started when it opened read
+GitLab's line, not yours.
 {%- else %} Edit the description on the pull request's page, or write it to
 a file outside the checkout and run `gh pr edit <n> --body-file <file>`, with
-the revert's number for `<n>`.
+the revert's number for `<n>`. The edit runs `ci / pr-title` again.
 {%- endif %}
 
 ## 2. Merge it
-
-A revert takes the same review as any change: the default review in
-`AGENTS.md`, a fresh-context review given the revert's diff. It is short,
-since the diff should be the reverted change turned around and nothing else.
-When the change does harm now and no one can review in time, merge without
-it and say so on the line, `Review: none (<reason>)`; the line is never left
-out.
 
 {% if host == 'gitlab' %}The pipeline runs as for any change and takes{% else %}The checks run as for any change and take{% endif %} about as long.
 {% if host == 'gitlab' -%}
 The merge request's page shows the pipeline, or run
 `glab ci status --branch <branch> --live` with the revert's branch for
 `<branch>`; it ends at passed or failed. A `not yet confirmed` line in
-`pr-title`'s log is a warning, not a failure: read it, since it names a
-description field that is missing.
+`pr-title`'s log is a warning, not a failure: read it in the pipeline run
+after the edit, since it names a description field that is missing.
 {%- else -%}
 `gh pr checks <n> --watch` with the revert's number for `<n>` returns when
 they finish. A `not yet confirmed` line in `ci / pr-title` is a warning, not

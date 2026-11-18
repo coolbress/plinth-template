@@ -1757,14 +1757,16 @@ _UNDO_LINES = {
 # what happens to the issue it closed and how `main` is seen back (#253).
 _UNDO_REVERT_FORM = {
     "github": (
-        "Keep the title GitHub writes, `Revert \"<title>\"`: `ci / pr-title` passes it",
+        'Keep the title GitHub writes, `Revert "<title>"`: `ci / pr-title` passes it',
         "because the title git writes there ends in `(#<n>)`, which the check refuses.",
         "Then fill the description before anything else. GitHub writes only "
         "`Reverts <owner>/<repo>#<n>`, and the description becomes the squash commit",
         "Start from the project's form, `.github/PULL_REQUEST_TEMPLATE.md`: "
         "write `Reverts #<n>.` and why under `What and why`, fill `What I checked myself`, "
-        "keep the `Not verified:` line, fill the `Review:` line",
+        "write a `Not verified:` line (`Not verified: nothing` when that is true), "
+        "fill the `Review:` line with the review that ran",
         "run `gh pr edit <n> --body-file <file>`",
+        "The edit runs `ci / pr-title` again.",
         "The checks run as for any change and take about as long.",
         "`gh pr checks <n> --watch` with the revert's number for `<n>` returns when they finish.",
         "A `not yet confirmed` line in `ci / pr-title` is a warning, not a failure",
@@ -1772,15 +1774,17 @@ _UNDO_REVERT_FORM = {
         "Reopen it (`gh issue reopen <m>`) and add to its `## Outcome`",
     ),
     "gitlab": (
-        "Keep the title GitLab writes, `Revert \"<title>\"`: `pr-title` passes it",
+        'Keep the title GitLab writes, `Revert "<title>"`: `pr-title` passes it',
         "the two differ only in who writes them, GitLab or a person.",
         "The pipeline runs as for any change and takes about as long.",
         "Then fill the description before anything else. GitLab writes only "
         "a line naming what is reverted, and the description becomes the squash commit",
         "Start from the project's form, `.gitlab/merge_request_templates/Default.md`: "
         "write `Reverts !<n>.` and why under `What and why`, fill `What I checked myself`, "
-        "keep the `Not verified:` line, fill the `Review:` line",
+        "write a `Not verified:` line (`Not verified: nothing` when that is true), "
+        "fill the `Review:` line with the review that ran",
         "Edit the description on the merge request's page.",
+        "GitLab starts no pipeline for an edit, so then press **Run pipeline**",
         "`glab ci status --branch <branch> --live`",
         "A `not yet confirmed` line in `pr-title`'s log is a warning, not a failure",
         "`glab mr view <n> -F json --jq .sha` prints it.",
@@ -1852,6 +1856,10 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     assert "Then fill the description before anything else." in opening, (
         "the description is filled in section 2 or later, after the merge is described"
     )
+    # `AGENTS.md`: the review runs before the description is written (#253).
+    assert opening.index("A revert takes the same review") < opening.index(
+        "Then fill the description"
+    ), "the description is written before the review that fills its `Review:` line"
     # `--body` skips the form, whose two fields `ci / pr-title` warns on (#212).
     # The one `--body` is the edit that writes the filled form back (#253).
     rest = page.replace("gh pr edit <n> --body-file <file>", "")
