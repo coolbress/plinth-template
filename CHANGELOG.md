@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.45.1] - 2026-11-18
+
+**The undo how-to says how to fill the revert's description, which review it takes, and how to see `main` back.** Followed once on a real project, the how-to's first path let a revert land on `main` without the description's fields; it now says to fill them from the form that applies before merging, which review a revert takes, how to watch the checks and read `not yet confirmed`, where step 7's `<sha>` comes from, and, in a new section 3, to reopen an issue the reverted change closed and check `main` is back. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
+
 ### Fixed
 
 - **`docs/how-to/undo-a-merged-change.md` says how the revert's description
