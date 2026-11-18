@@ -60,7 +60,7 @@ checksum of plinth's GitLab pipeline is.
   project's template is behind the tag its plinth commit was tested with,
   listing the update steps in order; it closes the issue once the project is
   current. It never updates anything itself.
-- `release.yml` for every kind but `web`: a version tag publishes the
+- `release.yml` on GitHub, for every kind but `web`: a version tag publishes the
   package to PyPI (`cli`, `library`; every package of a uv workspace, each at
   its own version), the image to GitHub's container registry
   (`backend`), or the training run's files to a GitHub Release (`data-ml`).
