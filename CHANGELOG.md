@@ -6,6 +6,42 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A project name that would write one path twice, or that is no
+  distribution name, is refused before a file is written**
+  (coolbress/plinth-template#256). The project's own test is
+  `tests/test_<package>.py`, beside the tests the template ships: a `web`
+  project named `access`, a `data-ml` one named `train`, a `cli` one named
+  `entry-point` or a `library` one named `built-wheel` wrote one path twice,
+  and copier stopped with `Interactive session required`. The `archetype`
+  question now refuses every pair that collides (these four, `tree-hygiene`
+  under any archetype, `pages` and `passwords` under `web`, and the rest of
+  the 14), naming the test and suggesting another name; the same name under
+  an archetype that ships no such test is accepted, as before. Renaming the
+  project's test instead would move a file in every existing project on
+  update. The package name is also `pyproject.toml`'s
+  distribution name, which starts and ends with a letter or digit: `_demo`
+  rendered and uv refused to read the project. The name question now refuses
+  a name that starts or ends with `-`, `_` or `.`.
+  An existing project is unaffected by the first refusal: its pair never
+  rendered, and an update of a project whose name does not collide runs as
+  before (a `cli` project named `access`, tested). The second reaches a
+  project already named that way: `copier update` validates the recorded
+  name again and stops at it (measured with copier 9.19.1; an update with
+  another copier version was not run). Such a project never ran a check:
+  rendered before this change as `_demo`, `demo_`, `demo-`, `-demo` and
+  `.demo`, each one's `uv sync --locked` exited 2 with uv's "Not a valid
+  package or extra name" (uv 0.9.27). It needs a new name before it can
+  update. New names are refused at the question,
+  earlier than the render; through coolbress/plinth's GitHub door that is
+  still after the remote repository is created, so a refused name ends in
+  the door's rollback, as a failed render did (coolbress/plinth#964). Not
+  changed here: a name that one archetype's shipped test takes, used under
+  another archetype, renders without the project's own test, since the
+  exclusion of that shipped test matches it too
+  (coolbress/plinth-template#258).
+
 ## [1.45.1] - 2026-11-18
 
 **The undo how-to says how to fill the revert's description, which review it takes, and how to see `main` back.** Followed once on a real project, the how-to's first path let a revert land on `main` without the description's fields; it now says to fill them from the form that applies before merging, which review a revert takes, how to watch the checks and read `not yet confirmed`, where step 7's `<sha>` comes from, and, in a new section 3, to reopen an issue the reverted change closed and check `main` is back. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays 8fd5052 (v2.32.0).

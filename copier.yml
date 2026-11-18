@@ -132,6 +132,11 @@ project_name:
   # allows `.` and a leading digit, Python does not. The package name is
   # derived from the repository name below; when that derivation cannot be a
   # Python identifier, stop here, before writing a single file.
+  #
+  # The package name is also `pyproject.toml`'s distribution name, which
+  # starts and ends with a letter or digit: `_demo` is an identifier, rendered,
+  # and uv refused to read the project (coolbress/plinth-template#256).
+  # A name whose test a shipped test takes is refused at `archetype`, below.
   validator: >-
     {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
     {%- if not project_name -%}
@@ -147,6 +152,10 @@ project_name:
     ] -%}
     The package name '{{ pkg }}' derived from '{{ project_name }}' is a Python keyword;
     it cannot be imported. Choose another repository name.
+    {%- elif pkg[:1] == '_' or pkg[-1:] == '_' -%}
+    The package name '{{ pkg }}' derived from '{{ project_name }}' is also the
+    distribution name in pyproject.toml, which must start and end with a letter or digit.
+    Choose a repository name without a leading or trailing '-', '_' or '.'.
     {%- endif -%}
 
 # Derived, never asked. Its default still reaches the render context.
@@ -198,6 +207,30 @@ archetype:
     Backend or API service: backend
     Data or ML: data-ml
     Web app with a database: web
+  # The package name also names `tests/test_<package>.py`, beside the tests
+  # this archetype ships: a `web` project named `access` would write
+  # `tests/test_access.py` twice, and copier stops on the second write
+  # (coolbress/plinth-template#256). Refused here, where the archetype is
+  # known, and only for the pairs that collide: such a pair never rendered,
+  # so no existing project carries one, and `copier update` validates the
+  # recorded answers again. Each list is the archetype's shipped
+  # `tests/test_*.py` as `_exclude` above leaves them; the template's own
+  # test renders every archetype and fails when a list disagrees.
+  validator: >-
+    {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
+    {%- set shipped = {
+      'cli': ['built_wheel', 'entry_point', 'tree_hygiene'],
+      'library': ['built_wheel', 'tree_hygiene'],
+      'backend': ['entry_point', 'tree_hygiene'],
+      'data-ml': ['entry_point', 'train', 'tree_hygiene'],
+      'web': ['access', 'pages', 'passwords', 'tree_hygiene'],
+    } -%}
+    {%- if pkg in shipped.get(archetype, []) -%}
+    The package name '{{ pkg }}' derived from '{{ project_name }}' would name the
+    project's test tests/test_{{ pkg }}.py, and the {{ archetype }} archetype already
+    ships a test by that name. Choose another repository name, for example
+    '{{ project_name }}-app'.
+    {%- endif -%}
 
 # The commit of coolbress/plinth whose reusable workflows the instance calls,
 # the one this template release was tested with. It is the only pin the
