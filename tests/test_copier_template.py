@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import warnings
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -5691,6 +5692,132 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
     assert not dest.exists() or not any(dest.iterdir()), (
         f"{bad} was refused but files were left behind"
     )
+
+
+def _shipped_test_packages() -> list[str]:
+    """Every package name whose `tests/test_<package>.py` a shipped test takes in
+    some archetype: `tests/test_access.py` and the rest, read from the source."""
+    stems = {
+        f.name.removesuffix(".jinja").removesuffix(".py").removeprefix("test_")
+        for f in (SUBDIR / "tests").glob("test_*.py*")
+        if "{{" not in f.name
+    }
+    assert stems, "no shipped test found: the glob no longer matches the tests folder"
+    return sorted(stems)
+
+
+def _refusal(dest: Path, **answers: str) -> str | None:
+    """copier's refusal of these answers, or None; `pretend` writes nothing, so a
+    pair the validator lets through is not stopped by the second write either."""
+    import copier
+    from copier.errors import DirtyLocalWarning, ShallowCloneWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DirtyLocalWarning)
+        warnings.simplefilter("ignore", ShallowCloneWarning)
+        try:
+            copier.run_copy(
+                str(TEMPLATE_ROOT),
+                str(dest),
+                data={"license": "MIT", **answers},
+                defaults=True,
+                quiet=True,
+                unsafe=False,
+                pretend=True,
+                vcs_ref="HEAD",
+            )
+        except ValueError as refused:
+            return str(refused)
+    return None
+
+
+@pytest.mark.parametrize(
+    ("archetype", "name"),
+    [
+        # The four renders the issue measured: each wrote one path twice
+        # (coolbress/plinth-template#256).
+        ("web", "access"),
+        ("data-ml", "train"),
+        ("cli", "entry-point"),
+        ("library", "built-wheel"),
+    ],
+)
+def test_a_name_whose_test_a_shipped_test_takes_is_refused(
+    tmp_path: Path, archetype: str, name: str
+) -> None:
+    """`tests/test_{{ package_name }}.py` beside a shipped `tests/test_access.py`:
+    copier stopped on the second write, after the door had created the remote."""
+    dest = tmp_path / "taken"
+    with pytest.raises(ValueError, match="already ships"):
+        render(dest, project_name=name, archetype=archetype)
+    assert not dest.exists() or not any(dest.iterdir())
+
+
+@pytest.mark.parametrize("archetype", sorted(SERVABLE))
+def test_an_archetype_refuses_exactly_the_names_its_shipped_tests_take(
+    tmp_path: Path, archetype: str
+) -> None:
+    """The refused pairs are what each archetype really renders into `tests/`, so a
+    test added there, or an `_exclude` line changed, fails here until the list in
+    `copier.yml` follows. A pair that does not collide is still accepted: a `cli`
+    project named `access` rendered before, and an update validates it again."""
+    out = render(tmp_path / "control", archetype=archetype)
+    shipped = {
+        f.name.removeprefix("test_").removesuffix(".py") for f in (out / "tests").glob("test_*.py")
+    } - {"probe"}
+    refused = {
+        stem: _refusal(tmp_path / stem, project_name=stem, archetype=archetype)
+        for stem in _shipped_test_packages()
+    }
+    assert {stem for stem, why in refused.items() if why} == shipped, refused
+    for stem in shipped:
+        assert f"tests/test_{stem}.py" in (refused[stem] or ""), refused[stem]
+
+
+def test_an_existing_project_whose_name_does_not_collide_still_updates(tmp_path: Path) -> None:
+    """`copier update` validates the recorded answers again and drops one that
+    fails, then stops on `--defaults`: refusing `access` for every archetype stopped
+    the update of a `cli` project named `access` (measured with copier 9.19.1)."""
+    import copier
+
+    tpl = tmp_path / "tpl"
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    _git(tpl, "init", "-q", "-b", "main", ".")
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-qm", "the template")
+    for tag in ("v9.0.0", "v9.1.0"):
+        _git(tpl, "commit", "-q", "--allow-empty", "-m", tag)
+        _git(tpl, "tag", "-a", "-m", tag, tag)
+    proj = tmp_path / "access"
+    data = {"project_name": "access", "license": "MIT", "archetype": "cli", "owner": "someone"}
+    copier.run_copy(
+        str(tpl), str(proj), data=data, defaults=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.1.0"
+    )
+    assert _answers(proj)["_commit"] == "v9.1.0"
+    assert _answers(proj)["project_name"] == "access"
+
+
+@pytest.mark.parametrize("bad", ["_demo", "demo_", "demo-", "-demo", ".demo"])
+def test_a_name_that_is_not_a_distribution_name_is_refused(tmp_path: Path, bad: str) -> None:
+    """The package name is also `pyproject.toml`'s `name`; a distribution name starts
+    and ends with a letter or digit, so `_demo` rendered and `uv lock --check` exited 2."""
+    dest = tmp_path / "dist"
+    with pytest.raises(ValueError, match="start and end with a letter or digit"):
+        render(dest, project_name=bad)
+    assert not dest.exists() or not any(dest.iterdir())
 
 
 # ── end to end ────────────────────────────────────────────────────────────
