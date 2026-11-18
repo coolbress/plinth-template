@@ -36,11 +36,27 @@ means `copier update` on an instance needs hands.
   update. New names are refused at the question,
   earlier than the render; through coolbress/plinth's GitHub door that is
   still after the remote repository is created, so a refused name ends in
-  the door's rollback, as a failed render did (coolbress/plinth#964). Not
-  changed here: a name that one archetype's shipped test takes, used under
-  another archetype, renders without the project's own test, since the
-  exclusion of that shipped test matches it too
-  (coolbress/plinth-template#258).
+  the door's rollback, as a failed render did (coolbress/plinth#964).
+- **A project's own test renders whatever its name**
+  (coolbress/plinth-template#258). A `cli` project named `access` rendered
+  without `tests/test_access.py`: the `_exclude` line that leaves out the
+  `web` archetype's shipped test matched the rendered path, so it left out
+  the project's own test too, and nothing said so. The same held for 21
+  pairs in all: `access`, `pages` and `passwords` outside `web`, `train`
+  outside `data-ml`, `entry-point` under `library` and `web`, and
+  `built-wheel` under `backend`, `data-ml` and `web`. The six shipped tests
+  now have source names that render empty outside the archetypes that ship
+  them, as the release workflows do, and their `_exclude` lines are gone.
+  Every archetype's render is otherwise byte for byte what it was (the five
+  archetypes under `probe` and the six names, compared with the previous
+  `main`).
+  On `copier update`, such a project gets the missing test, which imports
+  the package and checks `greet`, with no questions (measured with copier
+  9.19.1 for a `cli` project named `access` and `train` and a `library` one
+  named `entry-point`; another copier version was not run). A project that
+  already wrote its own file at that path gets conflict markers in it to
+  resolve by hand. A `web` project named `probe` updated with only its
+  answers file changed.
 
 ## [1.45.1] - 2026-11-18
 

@@ -5698,9 +5698,9 @@ def _shipped_test_packages() -> list[str]:
     """Every package name whose `tests/test_<package>.py` a shipped test takes in
     some archetype: `tests/test_access.py` and the rest, read from the source."""
     stems = {
-        f.name.removesuffix(".jinja").removesuffix(".py").removeprefix("test_")
-        for f in (SUBDIR / "tests").glob("test_*.py*")
-        if "{{" not in f.name
+        found.group(1)
+        for f in (SUBDIR / "tests").iterdir()
+        if "{{" not in f.name and (found := re.search(r"\btest_(\w+)\.py\b", f.name))
     }
     assert stems, "no shipped test found: the glob no longer matches the tests folder"
     return sorted(stems)
@@ -5772,6 +5772,29 @@ def test_an_archetype_refuses_exactly_the_names_its_shipped_tests_take(
     assert {stem for stem, why in refused.items() if why} == shipped, refused
     for stem in shipped:
         assert f"tests/test_{stem}.py" in (refused[stem] or ""), refused[stem]
+
+
+@pytest.mark.parametrize("archetype", sorted(SERVABLE))
+def test_a_name_another_archetypes_test_takes_still_renders_its_own_test(
+    tmp_path: Path, archetype: str
+) -> None:
+    """A `cli` project named `access` rendered without `tests/test_access.py`: the
+    `_exclude` line that leaves out the web archetype's shipped test matched the
+    rendered name, so it left out the project's own test with it
+    (coolbress/plinth-template#258). Every name the archetype accepts renders it."""
+    accepted = [
+        stem
+        for stem in _shipped_test_packages()
+        if not _refusal(tmp_path / f"refused-{stem}", project_name=stem, archetype=archetype)
+    ]
+    assert accepted, f"{archetype} refuses every shipped test's name: nothing was checked"
+    missing = []
+    for stem in accepted:
+        own = render(tmp_path / stem, project_name=stem, archetype=archetype) / "tests"
+        own /= f"test_{stem}.py"
+        if not own.is_file() or f"from {stem} import greet" not in own.read_text(encoding="utf-8"):
+            missing.append(stem)
+    assert not missing, f"{archetype} projects rendered without their own test: {missing}"
 
 
 def test_an_existing_project_whose_name_does_not_collide_still_updates(tmp_path: Path) -> None:
