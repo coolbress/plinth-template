@@ -1751,7 +1751,56 @@ _UNDO_LINES = {
     ),
 }
 
+# The revert opened in section 1 lands as written, so section 1 says to fill
+# its description from the form, which review it takes, which title is kept;
+# section 2 where the merge's `<sha>` and the checks' end are read; section 3
+# what happens to the issue it closed and how `main` is seen back (#253).
+_UNDO_REVERT_FORM = {
+    "github": (
+        'Keep the title GitHub writes, `Revert "<title>"`: `ci / pr-title` passes it',
+        "because the title git writes there ends in `(#<n>)`, which the check refuses.",
+        "Then fill the description before anything else. GitHub writes only "
+        "`Reverts <owner>/<repo>#<n>`, and the description becomes the squash commit",
+        "Start from the project's form, `.github/PULL_REQUEST_TEMPLATE.md`: "
+        "write `Reverts #<n>.` and why under `What and why`, fill `What I checked myself`, "
+        "write a `Not verified:` line (`Not verified: nothing` when that is true), "
+        "fill the `Review:` line with the review that ran",
+        "run `gh pr edit <n> --body-file <file>`",
+        "The edit runs `ci / pr-title` again.",
+        "The checks run as for any change and take about as long.",
+        "`gh pr checks <n> --watch` with the revert's number for `<n>` returns when they finish.",
+        "A `not yet confirmed` line in `ci / pr-title` is a warning, not a failure",
+        "`gh pr view <n> --json headRefOid --jq .headRefOid` prints it.",
+        "Reopen it (`gh issue reopen <m>`) and add to its `## Outcome`",
+    ),
+    "gitlab": (
+        'Keep the title GitLab writes, `Revert "<title>"`: `pr-title` passes it',
+        "the two differ only in who writes them, GitLab or a person.",
+        "The pipeline runs as for any change and takes about as long.",
+        "Then fill the description before anything else. GitLab writes only "
+        "a line naming what is reverted, and the description becomes the squash commit",
+        "Start from the project's form, `.gitlab/merge_request_templates/Default.md`: "
+        "write `Reverts !<n>.` and why under `What and why`, fill `What I checked myself`, "
+        "write a `Not verified:` line (`Not verified: nothing` when that is true), "
+        "fill the `Review:` line with the review that ran",
+        "Edit the description on the merge request's page.",
+        "GitLab starts no pipeline for an edit, so then press **Run pipeline**",
+        "`glab ci status --branch <branch> --live`",
+        "A `not yet confirmed` line in `pr-title`'s log is a warning, not a failure",
+        "`glab mr view <n> -F json --jq .sha` prints it.",
+        "Reopen it (`glab issue reopen <m>`) and add to its `## Outcome`",
+    ),
+}
+
 _UNDO_SHARED = (
+    "Both are this project's titles;",
+    "the `Assisted-by` trailers last, and delete the comment lines.",
+    "A revert takes the same review as any change: the default review in `AGENTS.md`",
+    "`Review: none (<reason>)`; the line is never left out.",
+    "the `<sha>` is the revert's head commit, the one the description was read against",
+    "## 3. After the merge",
+    "git diff --stat <merged commit>~1 origin/main -- "
+    "$(git diff --name-only <merged commit>~1 <merged commit>)",
     "A revert undoes the code, not what the code already did:",
     "A change that carried a database migration is not undone by reverting its code alone.",
 )
@@ -1796,7 +1845,7 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     out = render(tmp_path, **data)
     page = " ".join((out / UNDO_HOWTO).read_text(encoding="utf-8").split())
     assert page.startswith("# Undo a merged change")
-    for line in (*_UNDO_LINES[host], *_UNDO_SHARED):
+    for line in (*_UNDO_LINES[host], *_UNDO_REVERT_FORM[host], *_UNDO_SHARED):
         assert line in page, f"{UNDO_HOWTO} lacks: {line}"
     assert ("gh pr " in page) is (host == "github"), f"GitHub's command on {host}"
     assert ("glab " in page) is (host == "gitlab"), f"GitLab's command on {host}"
@@ -1804,8 +1853,17 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     opening = page.split("## 2. Merge it")[0]
     assert "--title" not in opening, "section 1 still asks for a title"
     assert "Give it a title" not in opening, "section 1 still asks for a title"
+    assert "Then fill the description before anything else." in opening, (
+        "the description is filled in section 2 or later, after the merge is described"
+    )
+    # `AGENTS.md`: the review runs before the description is written (#253).
+    assert opening.index("A revert takes the same review") < opening.index(
+        "Then fill the description"
+    ), "the description is written before the review that fills its `Review:` line"
     # `--body` skips the form, whose two fields `ci / pr-title` warns on (#212).
-    assert "--body" not in page, "a revert's command skips the pull-request form"
+    # The one `--body` is the edit that writes the filled form back (#253).
+    rest = page.replace("gh pr edit <n> --body-file <file>", "")
+    assert "--body" not in rest, "a revert's command skips the pull-request form"
     assert "--description" not in page, "a revert's command skips the merge-request form"
     if host == "gitlab":
         assert (out / ".gitlab" / "merge_request_templates" / "Default.md").is_file()
@@ -1818,6 +1876,20 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     broken = [ln for ln in agents if ln.startswith("- Something is broken:")]
     assert len(broken) == 1, "AGENTS.md has no one line for when something is broken"
     assert _UNDO_POINTER in broken[0], "AGENTS.md does not point at the page"
+
+
+def test_the_way_back_names_the_form_that_applies(tmp_path: Path) -> None:
+    """An owner whose `.github` publishes a pull request template gets no local
+    one, so the undo page names the owner's instead of a file that is not
+    there (#253, review of PR #254)."""
+    out = render(tmp_path, owner_has_pr_template=True)
+    assert not (out / ".github" / "PULL_REQUEST_TEMPLATE.md").exists()
+    page = " ".join((out / UNDO_HOWTO).read_text(encoding="utf-8").split())
+    assert "PULL_REQUEST_TEMPLATE.md" not in page, "the page names a form this project lacks"
+    assert (
+        "Start from the project's form, the pull request template in the owner "
+        "account's `.github` repository, which applies since this project has none:"
+    ) in page
 
 
 # ── keeping a project current (#206) ──────────────────────────────────────

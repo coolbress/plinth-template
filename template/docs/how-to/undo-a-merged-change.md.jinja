@@ -31,11 +31,82 @@ gh pr revert <n>
 pull request, on a new branch, that undoes the change.
 {%- endif %}
 
+Keep the title {{ host_name }} writes, `Revert "<title>"`: `{% if host == 'gitlab' %}pr-title{% else %}ci / pr-title{% endif %}` passes it
+when the title inside the quotes passes on its own. The revert made by hand,
+under [When the revert conflicts](#when-the-revert-conflicts), is titled
+`revert: <what the change did>` instead, with the type `revert` written out,
+{% if host == 'gitlab' %}which `pr-title` passes as one of the eleven types; the two differ only in
+who writes them, GitLab or a person.{% else %}because the title git writes there ends in `(#<n>)`, which the check
+refuses.{% endif %} Both are this project's titles; the one {{ host_name }}
+writes needs no edit.
+
+A revert takes the same review as any change: the default review in
+`AGENTS.md`, a fresh-context review given the revert's diff, run before the
+description is written so its findings go in it. It is short, since the diff
+should be the reverted change turned around and nothing else. When the
+change does harm now and no one can review in time, merge without it and
+say so on the line, `Review: none (<reason>)`; the line is never left out.
+
+Then fill the description before anything else. {{ host_name }} writes only
+{% if host == 'gitlab' %}a line naming what is reverted{% else %}`Reverts <owner>/<repo>#<n>`{% endif %}, and the description becomes the squash
+commit on `main`, which cannot be fixed afterwards. Start from the project's
+form, {% if host == 'gitlab' %}`.gitlab/merge_request_templates/Default.md`{% elif owner_has_pr_template | string | lower == 'true' %}the pull request template in the owner account's `.github` repository,
+which applies since this project has none{% else %}`.github/PULL_REQUEST_TEMPLATE.md`{% endif %}: write `Reverts {% if host == 'gitlab' %}!{% else %}#{% endif %}<n>.` and why
+under `What and why`, fill `What I checked myself`, write a
+`Not verified:` line (`Not verified: nothing` when that is true), fill the
+`Review:` line with the review that ran, put `Related to #<m>` for an issue
+the reverted change closed and the `Assisted-by` trailers last, and delete
+the comment lines.
+{%- if host == 'gitlab' %} Edit the description on the merge request's page.
+GitLab starts no pipeline for an edit, so then press **Run pipeline** on the
+merge request's **Pipelines** tab: the one that started when it opened read
+GitLab's line, not yours.
+{%- else %} Edit the description on the pull request's page, or write it to
+a file outside the checkout and run `gh pr edit <n> --body-file <file>`, with
+the revert's number for `<n>`. The edit runs `ci / pr-title` again.
+{%- endif %}
+
 ## 2. Merge it
 
+{% if host == 'gitlab' %}The pipeline runs as for any change and takes{% else %}The checks run as for any change and take{% endif %} about as long.
+{% if host == 'gitlab' -%}
+The merge request's page shows the pipeline, or run
+`glab ci status --branch <branch> --live` with the revert's branch for
+`<branch>`; it ends at passed or failed. A `not yet confirmed` line in
+`pr-title`'s log is a warning, not a failure: read it in the pipeline run
+after the edit, since it names a description field that is missing.
+{%- else -%}
+`gh pr checks <n> --watch` with the revert's number for `<n>` returns when
+they finish. A `not yet confirmed` line in `ci / pr-title` is a warning, not
+a failure, and is shown on the run's summary page: read it, since it names a
+description field that is missing.
+{%- endif %}
+
 Merge it like any other {{ req }}, with `CONTRIBUTING.md` step 7's command,
-once its {% if host == 'gitlab' %}pipeline passes{% else %}checks pass{% endif %}. Whatever a merge sets off, such as a deploy, runs again
-for the revert.
+once its {% if host == 'gitlab' %}pipeline passes{% else %}checks pass{% endif %}. The `<n>` there is the revert's number and
+the `<sha>` is the revert's head commit, the one the description was read
+against: {% if host == 'gitlab' %}`glab mr view <n> -F json --jq .sha`{% else %}`gh pr view <n> --json headRefOid --jq .headRefOid`{% endif %} prints it.
+Whatever a merge sets off, such as a deploy, runs again for the revert.
+
+## 3. After the merge
+
+An issue the reverted change closed is not done any more. Reopen it
+({% if host == 'gitlab' %}`glab issue reopen <m>`{% else %}`gh issue reopen <m>`{% endif %}) and add to its `## Outcome` that the change was
+reverted, by which {{ req }}, and why; untick the criteria it no longer
+meets.
+
+Then confirm `main` is back. With the reverted change's merged commit for
+`<merged commit>`:
+
+```bash
+git fetch origin
+git diff --stat <merged commit>~1 origin/main -- $(git diff --name-only <merged commit>~1 <merged commit>)
+```
+
+It prints nothing when every file the change touched is as it was before
+the change. A file it names was also changed by a later change, which the
+revert keeps; read that diff to see that only the later change's lines
+remain.
 
 ## When the revert conflicts
 
