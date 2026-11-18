@@ -6,7 +6,17 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.45.0] - 2026-11-18
+
+**A project's how-to says what to do when a dependency pull request stays red, and a new project calls plinth v2.32.0.** `docs/how-to/keep-this-project-current.md` gains a section for a Dependabot pull request that stays red: read why, take the one package out of its group, and know that `@dependabot ignore` is a lasting pin; `.github/dependabot.yml` is the project's to change, and its cooldown comment says the wait holds only the packages a pull request names. `CONTRIBUTING.md` shows the description with its `What I checked myself` section and `Review:` line. `plinth_sha`'s default rises from cecffe1 (v2.28.0) to 8fd5052 (v2.32.0), the commit this repository's own workflows call, with `plinth_gitlab_integrity` for that commit; an existing project keeps the pin it has. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands.
+
 ### Changed
+
+- `plinth_sha`'s default is 8fd50527f4c04c1a30f3d0f65f958b0f5a1a2695
+  (plinth v2.32.0), and `plinth_gitlab_integrity`'s default is that
+  commit's `gitlab/python-ci.yml` checksum. A new project's CI calls
+  v2.32.0 from its first commit, where it called v2.28.0 and waited for its
+  own Dependabot. An update passes the project's own pin and keeps it.
 
 - **`docs/how-to/keep-this-project-current.md` says what to do when a
   dependency pull request stays red** (coolbress/plinth#949). On GitHub a
