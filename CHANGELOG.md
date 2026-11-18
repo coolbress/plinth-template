@@ -65,6 +65,15 @@ means `copier update` on an instance needs hands.
   version was not run. Not changed here: a project named `dist`, or `data`
   outside `data-ml`, renders with an empty `src/`, since those `_exclude`
   entries match the package folder too (coolbress/plinth-template#260).
+- **A name no Python package can come from is refused with its reason**
+  (coolbress/plinth-template#262). The name question chose its message
+  with `is match`, a test copier's Jinja does not have, so a name such as
+  `9lives` or `my+app` was refused with copier's
+  `No test named 'match' found` instead of saying why. It now says the name
+  starts with a digit, or holds a character an identifier cannot. Nothing
+  was written before, and nothing is now. No other test or filter in
+  `copier.yml` is missing from copier's Jinja; a test now parses every
+  string there and fails on a name copier does not provide.
 
 ## [1.45.1] - 2026-11-18
 
