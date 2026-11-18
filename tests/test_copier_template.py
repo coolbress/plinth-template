@@ -1902,8 +1902,10 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     out = render(tmp_path, **data)
     page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
     assert page.startswith("# Keep this project current")
-    assert page.count("\n## ") == 3, "the page has exactly the three steps"
-    sections = re.split(r"\n(?=## )", page)[1:]
+    # GitHub adds one section after the steps: Dependabot's other pull
+    # requests (plinth #949). GitLab has no Dependabot.
+    assert page.count("\n## ") == (4 if host == "github" else 3), "three steps, then on GitHub one"
+    sections = re.split(r"\n(?=## )", page)[1:4]
     for section, (heading, phrases) in zip(sections, _KEEP_STEPS[host], strict=True):
         flat = " ".join(section.split())
         assert section.startswith(heading + "\n"), f"{heading!r} is not next: {section[:40]!r}"
@@ -1924,6 +1926,60 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
         "[docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
     )
     assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
+
+
+_DEPENDENCY_SECTION = "## Other dependency pull requests"
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_keep_current_says_what_to_do_when_a_dependency_update_stays_red(
+    tmp_path: Path, host: str
+) -> None:
+    """A real project's runtime group stayed red twice because one package in
+    it changed committed files, and nothing said what to do or that
+    `dependabot.yml` was the project's to change (plinth #949)."""
+    out = render(tmp_path, host=host)
+    page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
+    if host == "gitlab":
+        assert _DEPENDENCY_SECTION not in page
+        assert "dependabot" not in page.lower().replace("dependabot does not run on gitlab", "")
+        return
+    section = page.split(_DEPENDENCY_SECTION, 1)[1]
+    flat = " ".join(section.split())
+    for phrase in (
+        "one pull request at a time",
+        "read why",
+        "`exclude-patterns`",
+        "merge the rest of the group",
+        "no longer rebases",
+        "`@dependabot recreate`",
+        "`@dependabot ignore <name>`",
+        "`@dependabot unignore <name>`",
+        "lasting pin",
+        "not a way past one red run",
+        "are this project's to change",
+        "`/plinth:floor-check` checks only that the file exists",
+        "`/plinth:template-update` keeps this project's lines unless the template"
+        " changed the same ones",
+    ):
+        assert phrase in flat, f"the section lacks: {phrase}"
+    # The example names a key Dependabot reads, under the group it belongs to.
+    assert "runtime-minor:" in section
+    assert 'exclude-patterns: ["<name>"]' in section
+
+
+def test_dependabot_comment_says_what_the_cooldown_holds(rendered: Path) -> None:
+    """Dependabot's cooldown picks the version of each package a pull request
+    names; `uv lock --upgrade-package` moves other packages with no age limit
+    (read in dependabot-core for plinth #949). The comment says no more."""
+    dep = " ".join(
+        ln.strip().lstrip("#").strip()
+        for ln in (rendered / ".github" / "dependabot.yml").read_text(encoding="utf-8").splitlines()
+    )
+    assert "a three-day wait is GitHub's default." not in dep
+    assert "each package a pull request names" in dep
+    assert "is not held" in dep
+    assert "docs/how-to/keep-this-project-current.md" in dep
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
