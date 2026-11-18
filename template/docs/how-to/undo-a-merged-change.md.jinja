@@ -50,7 +50,8 @@ say so on the line, `Review: none (<reason>)`; the line is never left out.
 Then fill the description before anything else. {{ host_name }} writes only
 {% if host == 'gitlab' %}a line naming what is reverted{% else %}`Reverts <owner>/<repo>#<n>`{% endif %}, and the description becomes the squash
 commit on `main`, which cannot be fixed afterwards. Start from the project's
-form, {% if host == 'gitlab' %}`.gitlab/merge_request_templates/Default.md`{% else %}`.github/PULL_REQUEST_TEMPLATE.md`{% endif %}: write `Reverts {% if host == 'gitlab' %}!{% else %}#{% endif %}<n>.` and why
+form, {% if host == 'gitlab' %}`.gitlab/merge_request_templates/Default.md`{% elif owner_has_pr_template | string | lower == 'true' %}the pull request template in the owner account's `.github` repository,
+which applies since this project has none{% else %}`.github/PULL_REQUEST_TEMPLATE.md`{% endif %}: write `Reverts {% if host == 'gitlab' %}!{% else %}#{% endif %}<n>.` and why
 under `What and why`, fill `What I checked myself`, write a
 `Not verified:` line (`Not verified: nothing` when that is true), fill the
 `Review:` line with the review that ran, put `Related to #<m>` for an issue

@@ -1878,6 +1878,20 @@ def test_every_render_carries_the_way_back_from_a_merged_change(
     assert _UNDO_POINTER in broken[0], "AGENTS.md does not point at the page"
 
 
+def test_the_way_back_names_the_form_that_applies(tmp_path: Path) -> None:
+    """An owner whose `.github` publishes a pull request template gets no local
+    one, so the undo page names the owner's instead of a file that is not
+    there (#253, review of PR #254)."""
+    out = render(tmp_path, owner_has_pr_template=True)
+    assert not (out / ".github" / "PULL_REQUEST_TEMPLATE.md").exists()
+    page = " ".join((out / UNDO_HOWTO).read_text(encoding="utf-8").split())
+    assert "PULL_REQUEST_TEMPLATE.md" not in page, "the page names a form this project lacks"
+    assert (
+        "Start from the project's form, the pull request template in the owner "
+        "account's `.github` repository, which applies since this project has none:"
+    ) in page
+
+
 # ── keeping a project current (#206) ──────────────────────────────────────
 
 KEEP_HOWTO = Path("docs") / "how-to" / "keep-this-project-current.md"
