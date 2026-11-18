@@ -19,6 +19,20 @@ _preserve_symlinks: true
 # repository crashes plinth's floor checker, which reads every `*.md` here.
 # copier drops the suffix from the link's name and keeps its target.
 
+# A project named like a shipped test rendered without its own
+# `tests/test_<package>.py`, since the `_exclude` line that left out the
+# shipped test matched it too, and its owner may have written one by hand.
+# For these names only, `copier update` adds the file where it is missing
+# and keeps one that exists, with no conflict to resolve
+# (coolbress/plinth-template#258). The price is theirs alone: a later
+# template change to their own test reaches new renders, not them, nor
+# `copier recopy`. Every other project's own test follows the template, so
+# a change to the code and its test arrive together. The names are the
+# shipped tests' but `tree_hygiene`, which every archetype refuses; the
+# template's own test fails when the two disagree. Measured with copier 9.19.1.
+_skip_if_exists:
+  - "{% if package_name in ['access', 'built_wheel', 'entry_point', 'pages', 'passwords', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
+
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
 _subdirectory: template
@@ -49,14 +63,17 @@ _exclude:
   # `==`, not `not in`, because plinth's floor checker reads the first
   # `not in` list above as the image archetypes.
   - "{% if archetype == 'library' %}src/{{ package_name }}/__main__.py{% endif %}"
-  # The test of that entry point and the output it is compared with; a
-  # `library` instead tests its public name imported from the built wheel.
-  # `web` tests its own entry point in `tests/test_<package>.py`.
-  - "{% if archetype in ['library', 'web'] %}tests/test_entry_point.py{% endif %}"
+  # The output the entry point's test compares with; a `library` instead
+  # tests its public name imported from the built wheel. `web` tests its own
+  # entry point in `tests/test_<package>.py`.
+  #
+  # The archetype's shipped tests (`tests/test_entry_point.py`, the built
+  # wheel's, the web archetype's three, the model's) are not left out here:
+  # their source names render empty outside the archetypes that ship them,
+  # as the release workflows' do. An `_exclude` line matches the rendered
+  # path, so it also left out the project's own `tests/test_<package>.py`
+  # when the package was named `access` (coolbress/plinth-template#258).
   - "{% if archetype in ['library', 'web'] %}tests/entry_point.expected{% endif %}"
-  # The built wheel: a `library` imports its public name from it, a `cli`
-  # installs it and runs the command it puts on PATH.
-  - "{% if archetype in ['backend', 'data-ml', 'web'] %}tests/test_built_wheel.py{% endif %}"
   # The web archetype's Django project: its settings, routes, the ASGI
   # application the entry point serves, the pre-deploy step, and Django's
   # command line.
@@ -67,14 +84,10 @@ _exclude:
   - "{% if archetype != 'web' %}manage.py{% endif %}"
   - "{% if archetype != 'web' %}tests/conftest.py{% endif %}"
   - "{% if archetype != 'web' %}src/{{ package_name }}/notes{% endif %}"
-  - "{% if archetype != 'web' %}tests/test_access.py{% endif %}"
-  - "{% if archetype != 'web' %}tests/test_pages.py{% endif %}"
-  - "{% if archetype != 'web' %}tests/test_passwords.py{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
   # The data-ml archetype's model: the training run, its test, and the card
   # each release publishes beside the model (coolbress/plinth#716).
   - "{% if archetype != 'data-ml' %}src/{{ package_name }}/train.py{% endif %}"
-  - "{% if archetype != 'data-ml' %}tests/test_train.py{% endif %}"
   - "{% if archetype != 'data-ml' %}MODEL_CARD.md{% endif %}"
   # Where its data lives: `data/.gitignore` keeps all of it out of git but
   # the README that says what is there and where it came from.
@@ -214,7 +227,7 @@ archetype:
   # known, and only for the pairs that collide: such a pair never rendered,
   # so no existing project carries one, and `copier update` validates the
   # recorded answers again. Each list is the archetype's shipped
-  # `tests/test_*.py` as `_exclude` above leaves them; the template's own
+  # `tests/test_*.py` as their source names render them; the template's own
   # test renders every archetype and fails when a list disagrees.
   validator: >-
     {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
