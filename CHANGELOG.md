@@ -84,8 +84,8 @@ means `copier update` on an instance needs hands.
   folder: each needs a `.` or a leading `_`, which the name question
   refuses; 22 names nearest those lines rendered and committed whole.
   Under any other name, every archetype renders byte for byte what it did
-  (five archetypes, both hosts, three sets of community-file answers, under
-  `probe` and `my-app`: 54 trees rendered from the previous `main` and from
+  (five archetypes, on both hosts but `web` on GitHub only, three sets of
+  community-file answers, under `probe` and `my-app`: 54 trees rendered from the previous `main` and from
   this change, compared whole; only `_commit` in `.copier-answers.yml`
   differs).
   On `copier update`, a project under any other name changes nothing but

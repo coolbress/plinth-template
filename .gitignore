@@ -20,6 +20,8 @@ dist/
 /template/**/.coverage
 /template/**/coverage.xml
 /template/**/db.sqlite3
+/template/.claude/settings.local.json
+/template/.claude/worktrees/
 
 # Real values are never committed; only .env.example is.
 .env
