@@ -26,6 +26,15 @@ means `copier update` on an instance needs hands.
   three-day wait is GitHub's default". No job, check, question or action
   changes. An existing project gets both through `/plinth:template-update`.
 
+### Fixed
+
+- `CONTRIBUTING.md`'s step 5 shows the pull request description with the
+  `## What I checked myself` section and the `Review:` line that the
+  project's own form carries and `ci / pr-title` reads; the shape it showed
+  had neither. An existing project gets it through `/plinth:template-update`.
+- This repository's README says `release.yml` is rendered on GitHub only; a
+  GitLab project gets none.
+
 ## [1.44.2] - 2026-11-16
 
 **The deny list refuses the force-push spellings an agent writes, and `AGENTS.md` says what it cannot stop.** `.claude/settings.json` now also refuses `--force`, `--force-with-lease` and `--force-if-includes` anywhere after `git push`, `-f` after other arguments, a `+` refspec, and the same with options between `git` and `push`; `AGENTS.md` no longer says the permission prompt stops a spelling no rule matches (in auto mode a classifier decides), names the forms the rules cannot stop, and says a pull request's branch is updated by merging the base in, never by a force push. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays cecffe1 (v2.28.0).
