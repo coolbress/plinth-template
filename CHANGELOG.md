@@ -6,6 +6,31 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **A defect is a `bug`, whoever finds it, and a ready `bug` gains acceptance
+  criteria below the form's fields** (coolbress/plinth#957). An agent in a real
+  project wrote a defect it had reproduced as a task, and seven of that
+  project's ten defects carried no `bug` label: `docs/agents/issue-tracker.md`
+  said a bug *report* takes its own label and any other issue takes its kind
+  from its result, which read two ways. On both hosts the kinds paragraph now
+  starts by asking for the kind and the form (on GitLab, the template) before
+  the body, and says a defect is a `bug` whether a person reports it or an
+  agent reproduced it; the table's row reads "A defect, reported by anyone"
+  and says a `bug` made `ready-for-agent` gains `## Acceptance criteria` (and
+  `## Not building` when it helps) below the form's fields, in the same
+  issue, where `/implement` reads them. The Bug form itself is unchanged.
+- **The template reminder opens its issue as a `task` that is
+  `ready-for-human`** (coolbress/plinth#957). It opened with no label, against
+  the template's own rule that every issue carries a kind label. Each label is
+  added after the issue is created, one at a time: a repository without one of
+  them still gets the issue, and the run's log names the label it could not
+  add. An open reminder that is updated keeps the labels it has. The reminder
+  is GitHub only, as before.
+
+An existing project gets both through `/plinth:template-update`. Issues
+already open or closed are not relabelled: a closed body is the record.
+
 ## [1.45.1] - 2026-11-18
 
 **The undo how-to says how to fill the revert's description, which review it takes, and how to see `main` back.** Followed once on a real project, the how-to's first path let a revert land on `main` without the description's fields; it now says to fill them from the form that applies before merging, which review a revert takes, how to watch the checks and read `not yet confirmed`, where step 7's `<sha>` comes from, and, in a new section 3, to reopen an issue the reverted change closed and check `main` is back. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands. `plinth_sha`'s default stays 8fd5052 (v2.32.0).

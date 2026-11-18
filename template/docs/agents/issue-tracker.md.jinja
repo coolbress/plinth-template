@@ -22,11 +22,13 @@ anything. Writing into someone else's repository, use theirs.
 
 ## Four kinds of issue
 
-Pick the kind before you create the issue. A bug report or a feature request
-takes its own label (`bug`, `enhancement`); any other issue takes its kind from
-its result. When the result is a decision, an answer or a map, the issue is a
-record (`wayfinder:research`, `wayfinder:grilling`, `wayfinder:map`, or
-`spec`); when the result changes code or documents, it is a `task`. When work
+Name the kind, and the template you write it in, before you write the description.
+A defect is a `bug`, whoever finds it: a person who reports it, or an agent
+that reproduced it and can say what the fix must do. A feature request is an
+`enhancement`. Any other issue takes its kind from its result. When the result
+is a decision, an answer or a map, the issue is a record (`wayfinder:research`,
+`wayfinder:grilling`, `wayfinder:map`, or `spec`); when the result changes code
+or documents, it is a `task`. When work
 waits on a decision, open the record first, and open the task after the
 decision, from it. Every issue carries a
 kind label: after `glab issue create`, read it back with `glab issue view <n>`
@@ -38,7 +40,7 @@ headings and add the label yourself.
 
 | Kind | Template and label | Shape |
 | --- | --- | --- |
-| A request from anyone | Bug (`bug`), Feature (`enhancement`) | The template's headings: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried |
+| A defect, reported by anyone; a feature request | Bug (`bug`), Feature (`enhancement`) | The template's headings: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried. A `bug` made `ready-for-agent` gains `## Acceptance criteria` (and `## Not building` when it helps) below the template's headings, in the same issue: `/implement` reads them |
 | A task, one thing to build | Task (`task`) | `## Parent`, `## What to build`, `## Acceptance criteria`, `## Not building`, `## Blocked by`; while open, decisions go under `## Decisions` (dated) and the result under `## Outcome` |
 | The end of the project, or handing it over | End-or-hand-over (`task`) | The steps as a checklist (data, keys, users, package, image and service, repository), `## Not needed` for those that do not apply, and three questions: what went well, what the agent kept getting wrong, which rule or check to add |
 | A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, or `spec`, plus the triage label while open | `## Question`, `## Findings`, `## Decision`, `## Used by` for research; the map and the spec keep their own shape |
@@ -158,11 +160,13 @@ anything. Writing into someone else's repository, use theirs.
 
 ## Four kinds of issue
 
-Pick the kind before you create the issue. A bug report or a feature request
-takes its own label (`bug`, `enhancement`); any other issue takes its kind from
-its result. When the result is a decision, an answer or a map, the issue is a
-record (`wayfinder:research`, `wayfinder:grilling`, `wayfinder:map`, or
-`spec`); when the result changes code or documents, it is a `task`. When work
+Name the kind, and the form you write it in, before you write the body.
+A defect is a `bug`, whoever finds it: a person who reports it, or an agent
+that reproduced it and can say what the fix must do. A feature request is an
+`enhancement`. Any other issue takes its kind from its result. When the result
+is a decision, an answer or a map, the issue is a record (`wayfinder:research`,
+`wayfinder:grilling`, `wayfinder:map`, or `spec`); when the result changes code
+or documents, it is a `task`. When work
 waits on a decision, open the record first, and open the task after the
 decision, from it. Every issue carries a
 kind label: after `gh issue create`, read it back with
@@ -174,7 +178,7 @@ form's label yourself.
 
 | Kind | Form and label | Shape |
 | --- | --- | --- |
-| A request from anyone | Bug (`bug`), Feature request (`enhancement`) | The form's fields: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried |
+| A defect, reported by anyone; a feature request | Bug (`bug`), Feature request (`enhancement`) | The form's fields: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried. A `bug` made `ready-for-agent` gains `## Acceptance criteria` (and `## Not building` when it helps) below the form's fields, in the same issue: `/implement` reads them |
 | A task, one thing to build | Task (`task`) | `## Parent`, `## What to build`, `## Acceptance criteria`, `## Not building`, `## Blocked by`; while open, decisions go under `## Decisions` (dated) and the result under `## Outcome` |
 | The end of the project, or handing it over | End or hand over this project (`task`) | The steps as a checklist (data, keys, users, package, image and service, repository), `## Not needed` for those that do not apply, and three questions: what went well, what the agent kept getting wrong, which rule or check to add |
 | A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, or `spec` (`/plinth:new-project` creates them), plus the triage label while open | `## Question`, `## Findings`, `## Decision`, `## Used by` for research; the map and the spec keep their own shape |

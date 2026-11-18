@@ -134,5 +134,14 @@ jobs:
             gh issue edit "$open" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
             echo "updated the reminder: issue #$open"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
+            url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body")"
+            echo "opened the reminder: $url"
+            # Every issue carries a kind label: a `task`, for a person to do.
+            # `/plinth:new-project` makes both. Added once the issue exists and
+            # one at a time, so a label this repository lacks costs that label,
+            # never the issue. An open reminder's labels are left as they are.
+            for label in task ready-for-human; do
+              gh issue edit "$url" --repo "$GITHUB_REPOSITORY" --add-label "$label" >/dev/null \
+                || echo "could not add the label $label to $url (gh's error is above); the issue is open without it"
+            done
           fi
