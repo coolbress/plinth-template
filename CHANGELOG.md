@@ -17,7 +17,7 @@ means `copier update` on an instance needs hands.
   and copier stopped with `Interactive session required`. The `archetype`
   question now refuses every pair that collides (these four, `tree-hygiene`
   under any archetype, `pages` and `passwords` under `web`, and the rest of
-  the 13), naming the test and suggesting another name; the same name under
+  the 14), naming the test and suggesting another name; the same name under
   an archetype that ships no such test is accepted, as before. Renaming the
   project's test instead would move a file in every existing project on
   update. The package name is also `pyproject.toml`'s
@@ -29,12 +29,18 @@ means `copier update` on an instance needs hands.
   before (a `cli` project named `access`, tested). The second reaches a
   project already named that way: `copier update` validates the recorded
   name again and stops at it (measured with copier 9.19.1; an update with
-  another copier version was not run). Such a project
-  could not run `uv sync`, since uv refuses its `pyproject.toml`; it needs a
-  new name before it can update. New names are refused at the question,
+  another copier version was not run). Such a project never ran a check:
+  rendered before this change as `_demo`, `demo_`, `demo-`, `-demo` and
+  `.demo`, each one's `uv sync --locked` exited 2 with uv's "Not a valid
+  package or extra name" (uv 0.9.27). It needs a new name before it can
+  update. New names are refused at the question,
   earlier than the render; through coolbress/plinth's GitHub door that is
   still after the remote repository is created, so a refused name ends in
-  the door's rollback, as a failed render did.
+  the door's rollback, as a failed render did (coolbress/plinth#964). Not
+  changed here: a name that one archetype's shipped test takes, used under
+  another archetype, renders without the project's own test, since the
+  exclusion of that shipped test matches it too
+  (coolbress/plinth-template#258).
 
 ## [1.45.1] - 2026-11-18
 
