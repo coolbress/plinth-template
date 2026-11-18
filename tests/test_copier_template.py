@@ -5694,6 +5694,71 @@ def test_impossible_names_are_refused_before_anything_is_written(tmp_path: Path,
     )
 
 
+@pytest.mark.parametrize(
+    ("bad", "why"),
+    [
+        ("9lives", "'9lives' starts with a digit"),
+        ("my+app", "'my+app' contains a character an identifier cannot"),
+    ],
+)
+def test_a_name_no_package_can_come_from_says_why(tmp_path: Path, bad: str, why: str) -> None:
+    """The test above takes any error; this one reads the message. `9lives` once
+    stopped on Jinja's "No test named 'match'" instead (plinth-template #262)."""
+    dest = tmp_path / "why"
+    with pytest.raises(ValueError, match="No Python package name can be made") as refused:
+        render(dest, project_name=bad)
+    assert why in str(refused.value), str(refused.value)
+    assert "Choose another repository name." in str(refused.value)
+
+
+def test_copier_yml_uses_only_the_tests_and_filters_copier_provides() -> None:
+    """A validator or `when:` naming a test or filter copier's Jinja lacks fails only
+    when that branch runs: `is match` reached a person as an internal error, not the
+    refusal it guarded (plinth-template #262). Every string is parsed with copier's
+    default extensions, as copier 9.19.1 builds its environment (its `Worker`, which
+    holds the environment, is internal), and each name is looked up, including a
+    test or filter named as a string to `select`, `reject`, `*attr` or `map`."""
+    from jinja2 import nodes
+    from jinja2.sandbox import SandboxedEnvironment
+
+    env = SandboxedEnvironment(extensions=["jinja2_ansible_filters.AnsibleCoreFiltersExtension"])
+    config = yaml.safe_load((TEMPLATE_ROOT / "copier.yml").read_text(encoding="utf-8"))
+    assert "_jinja_extensions" not in config, "copier.yml adds extensions: add them here too"
+
+    def strings(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, dict):
+            return [s for v in value.values() for s in strings(v)]
+        if isinstance(value, list):
+            return [s for v in value for s in strings(v)]
+        return []
+
+    unknown = set()
+    for text in strings(config):
+        tree = env.parse(text)
+        filters = {n.name for n in tree.find_all(nodes.Filter)}
+        tests = {n.name for n in tree.find_all(nodes.Test)}
+        unknown |= {f"filter {name}" for name in filters - set(env.filters)}
+        unknown |= {f"test {name}" for name in tests - set(env.tests)}
+        for call in tree.find_all(nodes.Filter):
+            # The position of the name each higher-order filter takes, and its kind.
+            at, kind = {
+                "select": (0, "test"),
+                "reject": (0, "test"),
+                "selectattr": (1, "test"),
+                "rejectattr": (1, "test"),
+                "map": (0, "filter"),
+            }.get(call.name, (-1, ""))
+            arg = call.args[at] if 0 <= at < len(call.args) else None
+            if not isinstance(arg, nodes.Const):
+                continue
+            name = arg.value
+            if name not in (env.tests if kind == "test" else env.filters):
+                unknown.add(f"{kind} {name}")
+    assert not unknown, sorted(unknown)
+
+
 def _shipped_test_packages() -> list[str]:
     """Every package name whose `tests/test_<package>.py` a shipped test takes in
     some archetype: `tests/test_access.py` and the rest, read from the source."""
