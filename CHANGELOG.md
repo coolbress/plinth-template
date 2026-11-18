@@ -6,6 +6,25 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docs/how-to/undo-a-merged-change.md` says how the revert's description
+  is filled, which review it takes, and how to see `main` back**
+  (coolbress/plinth-template#253). Followed once on a real project, the
+  revert opened by `gh pr revert` landed on `main` with the one line GitHub
+  writes as its squash commit. Section 1 now says to keep the title the host
+  writes and why the revert made by hand is titled `revert:` instead, and to
+  fill the description from the project's form before merging (on GitHub
+  with `gh pr edit <n> --body-file <file>` or the page's edit, on GitLab on
+  the page). Section 2 says a revert takes the default review in
+  `AGENTS.md`, or `Review: none (<reason>)` when it cannot wait; how to see
+  the checks finish; that a `not yet confirmed` line names a missing field;
+  and that step 7's `<sha>` is the revert's head commit. A new section 3
+  says to reopen an issue the reverted change closed and correct its
+  Outcome, and gives the `git diff` that prints nothing when `main` is back.
+  `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. An existing project
+  gets it through `/plinth:template-update`.
+
 ## [1.45.0] - 2026-11-18
 
 **A project's how-to says what to do when a dependency pull request stays red, and a new project calls plinth v2.32.0.** `docs/how-to/keep-this-project-current.md` gains a section for a Dependabot pull request that stays red: read why, take the one package out of its group, and know that `@dependabot ignore` is a lasting pin; `.github/dependabot.yml` is the project's to change, and its cooldown comment says the wait holds only the packages a pull request names. `CONTRIBUTING.md` shows the description with its `What I checked myself` section and `Review:` line. `plinth_sha`'s default rises from cecffe1 (v2.28.0) to 8fd5052 (v2.32.0), the commit this repository's own workflows call, with `plinth_gitlab_integrity` for that commit; an existing project keeps the pin it has. No job, check, question or action changes, so the Actions allowlist is unchanged and `copier update` needs no hands.
