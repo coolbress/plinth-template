@@ -50,13 +50,20 @@ means `copier update` on an instance needs hands.
   Every archetype's render is otherwise byte for byte what it was (the five
   archetypes under `probe` and the six names, compared with the previous
   `main`).
+  `copier.yml` now lists `tests/test_<package>.py` in `_skip_if_exists`.
   On `copier update`, such a project gets the missing test, which imports
-  the package and checks `greet`, with no questions (measured with copier
-  9.19.1 for a `cli` project named `access` and `train` and a `library` one
-  named `entry-point`; another copier version was not run). A project that
-  already wrote its own file at that path gets conflict markers in it to
-  resolve by hand. A `web` project named `probe` updated with only its
-  answers file changed.
+  the package and checks `greet`, with no questions; one whose owner already
+  wrote a file at that path keeps it as written, with no conflict markers;
+  a new render writes the test as before. `copier update` needs no hands.
+  Measured with copier 9.19.1, from the previous `main` to this change, for
+  a `cli` project named `access` with and without a hand-written test, and
+  a new render of `cli` projects named `access` and `probe`; another copier
+  version was not run. The cost: a later change to the project's own test
+  in the template reaches new renders only, never an existing project,
+  `probe` included (measured with a later template that appends a line to
+  it). Not changed here: a project named `dist`, or `data` outside
+  `data-ml`, renders with an empty `src/`, since those `_exclude` entries
+  match the package folder too (coolbress/plinth-template#260).
 
 ## [1.45.1] - 2026-11-18
 

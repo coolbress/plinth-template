@@ -19,6 +19,16 @@ _preserve_symlinks: true
 # repository crashes plinth's floor checker, which reads every `*.md` here.
 # copier drops the suffix from the link's name and keeps its target.
 
+# The project's own test is the project's from its first render on. A project
+# whose name an `_exclude` line matched rendered without it, and its owner may
+# have written one by hand; `copier update` adds the file where it is missing
+# and keeps one that exists, with no conflict to resolve
+# (coolbress/plinth-template#258). The price: a later change to this file in
+# the template reaches new renders only, never an existing project
+# (measured with copier 9.19.1).
+_skip_if_exists:
+  - "tests/test_{{ package_name }}.py"
+
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
 _subdirectory: template
