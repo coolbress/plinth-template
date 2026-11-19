@@ -8,12 +8,12 @@ means `copier update` on an instance needs hands.
 
 ### Fixed
 
-- The `backend` and `web` image's run stage starts from `python:3.12-slim`
+- The `backend`, `data-ml` and `web` image's run stage starts from `python:3.12-slim`
   at a digest built 2026-11-05 (`5e2bdb1`), not 2026-10-28 (`b18b261`). The
   old image carries `apt` and `libapt-pkg7.0` 3.0.3, whose high
   CVE-2026-109518 has had a fix (3.0.4) since 2026-11-04. From 2026-11-19,
   14 days later, the `image` job's scan failed on every new project of
-  either archetype, at its first commit. The new digest carries 3.0.4, read
+  these archetypes, at its first commit. The new digest carries 3.0.4, read
   from the image's own package list. An existing project gets it through
   `/plinth:template-update`, or sooner through Dependabot's `docker` pull
   request (by hand on GitLab); a project whose digest Dependabot already
