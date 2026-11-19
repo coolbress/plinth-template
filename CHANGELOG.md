@@ -36,6 +36,24 @@ means `copier update` on an instance needs hands.
   An existing project gets it through `/plinth:template-update`; a map that
   already holds a log is left as it is.
 
+### Changed
+
+- **The pinned base images in `Dockerfile` are now raised and watched in
+  this repository, before new projects' `image` job fails on them** (#266).
+  On 2026-11-19 the run stage's `python:3.12-slim` digest, built 2026-10-28,
+  still carried apt 3.0.3, 15 days after apt 3.0.4 fixed a high CVE, and
+  every new `backend`, `data-ml` and `web` project failed `image` at its
+  first commit; nothing here had scanned the image or raised the digest.
+  Dependabot now raises both `FROM` digests in `template/Dockerfile.jinja`
+  weekly (digests and patches only, as in a project's own
+  `dependabot.yml`), and a weekly workflow, `Base-image watch`, renders
+  `backend` and `web` at the latest release, runs each render's own `image`
+  job with a grace of 7 days instead of 14, and opens one issue when that
+  fails, about a week before new projects would. A project's own job and
+  its 14 days are unchanged. On `copier update`, a project whose Dependabot
+  already raised the base-image digest may get a one-line conflict in
+  `Dockerfile`: keep the newer digest.
+
 ## [1.46.1] - 2026-11-19
 
 **A new `backend`, `data-ml` or `web` project's image scan no longer fails on `apt` 3.0.3.** The run stage's `python:3.12-slim` digest moves from an image built 2026-10-28, whose `apt` 3.0.3 the `image` job's scan refused from 2026-11-19, to one built 2026-11-05 with `apt` 3.0.4. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands, except for a project whose digest Dependabot already raised, which sees a conflict on that one line and keeps its own. `plinth_sha`'s default stays 8fd5052 (v2.32.0).

@@ -22,12 +22,12 @@ DEFAULT_ANSWERS: dict[str, Any] = {
 }
 
 
-def render(dest: Path, **answers: Any) -> Path:
+def render(dest: Path, *, vcs_ref: str = "HEAD", **answers: Any) -> Path:
     """Render the template into `dest` and return that path.
 
     `vcs_ref="HEAD"`: even for a local path, copier picks the latest tag of a
     git repository, which would test the last release instead of the working
-    tree.
+    tree. The weekly image watch passes a released tag instead.
     """
     import copier
     from copier.errors import DirtyLocalWarning, ShallowCloneWarning
@@ -49,6 +49,6 @@ def render(dest: Path, **answers: Any) -> Path:
             defaults=True,
             quiet=True,
             unsafe=False,
-            vcs_ref="HEAD",
+            vcs_ref=vcs_ref,
         )
     return dest

@@ -25,3 +25,21 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # The base images `template/Dockerfile.jinja` pins by digest (#266). The
+  # file name matches Dependabot's `dockerfile` pattern and it reads only the
+  # `FROM` lines, so the Jinja around them does not stop it. Digests and
+  # patches only, as in the rendered `dependabot.yml.jinja`: a Python minor
+  # moves both stages, `.python-version` and mypy's target together, which is
+  # a decision, not an update. A digest that ages anyway is what the weekly
+  # `.github/workflows/image-watch.yml` reports.
+  - package-ecosystem: "docker"
+    directory: "/template"
+    schedule:
+      interval: "weekly"
+    groups:
+      base-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

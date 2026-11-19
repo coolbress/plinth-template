@@ -112,6 +112,17 @@ and plinth pins one.
 3. Write the release note as the "why" for a consumer, then tell plinth: its
    `scripts/new-project.sh` pins the tested tag and its next release names it.
 
+## When the base-image watch opens an issue
+
+`.github/workflows/image-watch.yml` runs on Mondays and on demand (Actions,
+Base-image watch, Run workflow, with a tag or empty for the latest release).
+It renders `backend` and `web`, runs each render's own `image` job with a
+grace of 7 days, and on a failure opens, or comments on, one issue titled
+`Base-image watch: …`. The issue names each finding and the day new projects
+start failing on it. The fix is a raised digest in `template/Dockerfile.jinja`
+(Dependabot's `docker` pull request, or by hand), a template release, and
+plinth's pin raise. Close the issue once a run passes.
+
 ## What a change must keep true
 
 - The caller job in both `ci.yml` files stays named `ci`.
