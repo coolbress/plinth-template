@@ -63,6 +63,15 @@ means `copier update` on an instance needs hands.
   named `access` with and without a hand-written test and a `cli` project
   named `probe` receiving a later change to its test; another copier
   version was not run.
+- **A name no Python package can come from is refused with its reason**
+  (coolbress/plinth-template#262). The name question chose its message
+  with `is match`, a test copier's Jinja does not have, so a name such as
+  `9lives` or `my+app` was refused with copier's
+  `No test named 'match' found` instead of saying why. It now says the name
+  starts with a digit, or holds a character an identifier cannot. Nothing
+  was written before, and nothing is now. No other test or filter in
+  `copier.yml` is missing from copier's Jinja; a test now parses every
+  string there and fails on a name copier does not provide.
 - **A project named `dist`, `data`, `build`, `htmlcov` or `staticfiles`
   keeps its package** (coolbress/plinth-template#260). `_exclude` and
   `.gitignore` match a bare name at any depth. A project named `dist`
@@ -85,9 +94,9 @@ means `copier update` on an instance needs hands.
   refuses; 22 names nearest those lines rendered and committed whole.
   Under any other name, every archetype renders byte for byte what it did
   (five archetypes, on both hosts but `web` on GitHub only, three sets of
-  community-file answers, under `probe` and `my-app`: 54 trees rendered from the previous `main` and from
-  this change, compared whole; only `_commit` in `.copier-answers.yml`
-  differs).
+  community-file answers, under `probe` and `my-app`: 54 trees rendered
+  from the previous `main` and from this change, compared whole; only
+  `_commit` in `.copier-answers.yml` differs).
   On `copier update`, a project under any other name changes nothing but
   `_commit`, and its `.gitignore` cannot conflict: the template's file is
   the same before and after. Measured with copier 9.19.1 and 9.18.2 on a

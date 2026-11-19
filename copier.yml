@@ -161,7 +161,7 @@ project_name:
     The name is empty.
     {%- elif not (pkg | regex_search('^[a-z_][a-z0-9_]*$')) -%}
     No Python package name can be made from '{{ project_name }}': '{{ pkg }}'
-    {% if pkg[:1] is match('[0-9]') %}starts with a digit{% else %}contains a character an identifier cannot{% endif %}.
+    {% if pkg | regex_search('^[0-9]') %}starts with a digit{% else %}contains a character an identifier cannot{% endif %}.
     Choose another repository name.
     {%- elif pkg in [
       'and','as','assert','async','await','break','class','continue','def','del','elif','else',
