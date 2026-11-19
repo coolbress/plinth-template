@@ -1,10 +1,10 @@
-"""Run a rendered project's `image` job steps, for the base-image watch (#266).
+"""The weekly base-image watch (#266).
 
 The pinned base images in `template/Dockerfile.jinja` age, and a new
 project's `image` job fails once a high or critical fix is more than 14 days
-older than the image. The weekly watch runs that render's own `image` job
-steps in order, the verdict included, with its grace shortened; this module
-runs them and writes the issue body that says what to raise.
+older than the image. This renders a service archetype at a released tag,
+runs that render's own `image` job steps in order, the verdict included, with
+its grace shortened, and writes the issue body that says what to raise.
 
 The verdict logic is never copied here: the steps are read from the rendered
 `.github/workflows/ci.yml`, and only the one `GRACE_DAYS` value changes. The
@@ -16,15 +16,21 @@ reason the instance does not have.
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import copy
 import datetime
 import os
 import re
+import secrets
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from template_render import render
 
 #: Where the rendered job's steps come from, relative to the rendered project.
 CI = Path(".github") / "workflows" / "ci.yml"
@@ -271,3 +277,64 @@ def issue_body(
         " comments here instead of opening another.",
     ]
     return "\n".join(out) + "\n"
+
+
+def watch(archetype: str, *, ref: str, grace: int, token: str, work: Path) -> JobRun:
+    """Render `archetype` at `ref` and run its `image` job at `grace` days."""
+    out = render(work / archetype, vcs_ref=ref, archetype=archetype, owner="someone")
+    steps, rendered = set_grace(image_steps(out), grace)
+    try:
+        run = run_steps(steps, cwd=out, token=token, temp=work / f"{archetype}-temp")
+    finally:
+        # The web job leaves its container running under the job's name.
+        # Best effort: without docker the job has already failed, and says so.
+        with contextlib.suppress(OSError):
+            subprocess.run(
+                ["docker", "rm", "-f", "image-under-test"],  # noqa: S607
+                capture_output=True,
+                check=False,
+            )
+    run.project_grace = rendered
+    return run
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
+    p.add_argument("--ref", required=True, help="template tag to render")
+    p.add_argument("--archetype", action="append", required=True)
+    p.add_argument("--grace", type=int, required=True, help="days, shorter than the rendered one")
+    p.add_argument("--run-url", default="")
+    p.add_argument("--github-output", type=Path, help="where `failed` and `body` are written")
+    args = p.parse_args(argv)
+    token = os.environ.get("GITHUB_TOKEN", "")
+    today = datetime.datetime.now(datetime.UTC).date()
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    runs: dict[str, JobRun] = {}
+    with tempfile.TemporaryDirectory() as work:
+        for archetype in args.archetype:
+            if summary:
+                with open(summary, "a", encoding="utf-8") as f:
+                    f.write(f"\n## {archetype} at {args.ref}, grace {args.grace} days\n\n")
+            try:
+                runs[archetype] = watch(
+                    archetype, ref=args.ref, grace=args.grace, token=token, work=Path(work)
+                )
+            except Exception as exc:  # every failure is reported, none hidden
+                print(f"::error::{archetype}: the watch could not run the job: {exc}", flush=True)
+                runs[archetype] = JobRun(
+                    f"the watch itself ({type(exc).__name__}: {exc})", [], [], [], "", 0
+                )
+    failed = any(not r.ok for r in runs.values())
+    body = issue_body(runs, ref=args.ref, run_url=args.run_url, watch_grace=args.grace, today=today)
+    if args.github_output:
+        mark = f"EOF_{secrets.token_hex(8)}"
+        with args.github_output.open("a", encoding="utf-8") as f:
+            f.write(f"failed={'true' if failed else 'false'}\n")
+            f.write(f"body<<{mark}\n{body if failed else ''}{mark}\n")
+    for archetype, run in runs.items():
+        print(f"{archetype}: {'pass' if run.ok else 'fail'}")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
