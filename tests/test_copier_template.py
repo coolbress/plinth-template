@@ -5090,6 +5090,15 @@ def test_issue_tracker_says_the_map_is_not_the_log(tmp_path: Path, host: str) ->
         "dated line of the map: the map's lines move or leave.",
     ):
         assert sentence in prose, f"issue-tracker.md lacks: {sentence}"
+    # About 15 of a real project's 341 pull requests held an owner's answer only
+    # in the description. The sentence stands beside the comment rule, in the
+    # kinds section, not in the table's section.
+    beside = (
+        "a decision made in a comment is moved into the body. "
+        f"A decision made in a {request} description or a comment goes into the "
+        "issue's `## Decisions` too: the issue is where the next session looks."
+    )
+    assert beside in " ".join(tracker.split()), f"issue-tracker.md lacks: {beside}"
     # The wayfinding steps' Resolve added a map line for every closed child,
     # the growth the table is there to stop.
     (resolve,) = [line for line in tracker.splitlines() if line.startswith("- **Resolve**")]
