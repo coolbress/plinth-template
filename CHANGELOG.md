@@ -38,6 +38,18 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **Dependabot now raises the base-image digests in `Dockerfile`, here
+  first, before new projects' `image` job fails on them** (#266). On
+  2026-11-19 the run stage's `python:3.12-slim` digest, built 2026-10-28,
+  still carried apt 3.0.3, 15 days after apt 3.0.4 fixed a high CVE, and
+  every new `backend`, `data-ml` and `web` project failed `image` at its
+  first commit: nothing in this repository raised the digest. Its weekly
+  `docker` entry now raises both `FROM` digests in
+  `template/Dockerfile.jinja` (digests and patches only, as in a project's
+  own `dependabot.yml`). On `copier update`, a project whose Dependabot already raised the
+  base-image digest may get a one-line conflict in `Dockerfile`: keep the
+  newer digest.
+
 - **The README's Railway section no longer says a trial is planned.** A
   project that chose Railway read "A trial of Railway is planned in plinth's
   #680", which stops being true once that issue closes. It now says whether
