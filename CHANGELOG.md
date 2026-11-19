@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.46.0] - 2026-11-19
+
+**A project name is refused or kept whole wherever it used to break, and a defect is a `bug` whoever finds it.** A name that wrote two files to one path, or that is no distribution name, is refused before a file is written. A project's own test renders whatever its name. A project named `dist`, `data`, `build`, `htmlcov` or `staticfiles` keeps its package. A refused name says why instead of failing on an unknown Jinja test. `docs/agents/issue-tracker.md` says a defect is a `bug` whoever finds it and where a ready `bug`'s acceptance criteria go, and the template reminder opens as a `task` that is `ready-for-human`. MINOR: `copier update` needs no hands, except for a project whose name never worked (`_demo` and the like, which uv refused to read, and a `dist` or `build` project whose package was never committed, if its owner edited `.gitignore` beside that line); each case is in its entry below. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check or action changes, so the Actions allowlist is unchanged. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
+
 ### Changed
 
 - **A defect is a `bug`, whoever finds it, and a ready `bug` gains acceptance
@@ -58,9 +62,9 @@ means `copier update` on an instance needs hands.
   `.demo`, each one's `uv sync --locked` exited 2 with uv's "Not a valid
   package or extra name" (uv 0.9.27). It needs a new name before it can
   update. New names are refused at the question,
-  earlier than the render; through coolbress/plinth's GitHub door that is
-  still after the remote repository is created, so a refused name ends in
-  the door's rollback, as a failed render did (coolbress/plinth#964).
+  earlier than the render. coolbress/plinth's GitHub door now renders
+  before it creates the remote repository (coolbress/plinth#964), so a
+  refused name creates nothing there either.
 - **A project's own test renders whatever its name**
   (coolbress/plinth-template#258). A `cli` project named `access` rendered
   without `tests/test_access.py`: the `_exclude` line that leaves out the
