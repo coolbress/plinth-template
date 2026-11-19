@@ -5050,6 +5050,60 @@ def test_a_ready_bug_gains_acceptance_criteria_below_the_forms_fields(
     ) in row
 
 
+def _where_records_go(tracker: str) -> str:
+    """The section of `issue-tracker.md` that says where each kind of record goes."""
+    assert "## Where each record goes" in tracker, "issue-tracker.md has no table of places"
+    return tracker.split("## Where each record goes", 1)[1].split("\n## ", 1)[0]
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_issue_tracker_says_the_map_is_not_the_log(tmp_path: Path, host: str) -> None:
+    """A project's map took one dated line per merge, decision and note until its
+    body passed GitHub's 65,536-character limit, and a refused proposal was made
+    again by a session that could not find the refusal (#269). One table says
+    where each kind of record goes, and two sentences say what the map is not
+    for, on both hosts, next to the map's section."""
+    out = render(tmp_path / host, host=host)
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    section = _where_records_go(tracker)
+    assert tracker.index("## Where each record goes") < tracker.index("## Wayfinding operations")
+    (row,) = [line for line in section.splitlines() if line.startswith("| What is still to do")]
+    assert row == "| What is still to do, and a rule across tickets | the map |", row
+    prose = " ".join(section.split())
+    request = "pull request" if host == "github" else "merge request"
+    for sentence in (
+        f"A merge is not noted anywhere else: the {request}, the issue's `## Outcome` "
+        "and `git log` record it.",
+        "The map holds only what is still in force: a rule that holds across tickets, "
+        "a note for a ticket not cut yet, or a change to the map or to a milestone's "
+        "status. A note leaves the map when its ticket is cut.",
+    ):
+        assert sentence in prose, f"issue-tracker.md lacks: {sentence}"
+    # The wayfinding steps' Resolve added a map line for every closed child,
+    # the growth the table is there to stop.
+    (resolve,) = [line for line in tracker.splitlines() if line.startswith("- **Resolve**")]
+    assert "then one line (gist + link) under the map's Decisions-so-far" not in resolve
+    assert (
+        "The map gains one line (gist + link) under its Decisions-so-far only when the "
+        "answer is a rule that holds across tickets; a closed ticket is not noted there."
+    ) in resolve, resolve
+    assert "the table under Four kinds of issue" in resolve, resolve
+
+
+@pytest.mark.parametrize("answers", _every_agents_md_render(), ids=lambda a: "-".join(a.values()))
+def test_every_render_says_where_eight_kinds_of_record_go(
+    tmp_path: Path, answers: dict[str, str]
+) -> None:
+    """Every archetype on each host renders the page with the whole table (#269)."""
+    tracker = (render(tmp_path, **answers) / "docs" / "agents" / "issue-tracker.md").read_text(
+        encoding="utf-8"
+    )
+    rows = [line for line in _where_records_go(tracker).splitlines() if line.startswith("| ")]
+    assert rows[0] == "| What a reader asks | Where it is |", rows[0]
+    assert rows[1] == "| --- | --- |", rows[1]
+    assert len(rows[2:]) == 8, rows
+
+
 @pytest.mark.parametrize("name", ["feature", "task"])
 def test_change_forms_ask_what_should_happen_and_what_is_not_decided(
     rendered: Path, name: str

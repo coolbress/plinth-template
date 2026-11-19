@@ -6,6 +6,24 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/agents/issue-tracker.md` says in one place where each kind of
+  record goes, so the map does not become the log** (#269). A real
+  project's map took a dated line for every merge, decision and note; after
+  18 days its `## Decisions` held 109 lines, past GitHub's 65,536-character
+  limit for an issue body, and a refused proposal was made again by a session
+  that could not find the refusal. On both hosts, next to the map's section,
+  a table of eight rows names where each record is (the pull or merge
+  request, an issue's `## Outcome` or `## Decisions`, a record issue, an
+  ADR, the spec, the map), and two sentences say a merge is noted nowhere
+  else and the map holds only what is still in force, a note leaving it when
+  its ticket is cut. The rows restate `AGENTS.md`, `CONTRIBUTING.md` and this
+  page side by side. The wayfinding steps' Resolve no longer adds a map line
+  for every closed child: only an answer that holds across tickets gets one.
+  An existing project gets it through `/plinth:template-update`; a map that
+  already holds a log is left as it is.
+
 ## [1.46.1] - 2026-11-19
 
 **A new `backend`, `data-ml` or `web` project's image scan no longer fails on `apt` 3.0.3.** The run stage's `python:3.12-slim` digest moves from an image built 2026-10-28, whose `apt` 3.0.3 the `image` job's scan refused from 2026-11-19, to one built 2026-11-05 with `apt` 3.0.4. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands, except for a project whose digest Dependabot already raised, which sees a conflict on that one line and keeps its own. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
