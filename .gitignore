@@ -10,6 +10,19 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
+# The rest of what an instance ignores, inside `template/`: its own copy is
+# `template/.gitignore.jinja`, which git does not read
+# (coolbress/plinth-template#260).
+/template/**/build/
+/template/**/htmlcov/
+/template/**/staticfiles/
+/template/**/.ipynb_checkpoints/
+/template/**/.coverage
+/template/**/coverage.xml
+/template/**/db.sqlite3
+/template/.claude/settings.local.json
+/template/.claude/worktrees/
+
 # Real values are never committed; only .env.example is.
 .env
 .env.*

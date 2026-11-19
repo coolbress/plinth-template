@@ -1,9 +1,15 @@
-# Python
+# Python{#
+  A bare `dist/` matches at any depth, so a package named `dist` was never
+  committed and hatchling left it out of the wheel. The four lines below that
+  name a folder a package could share are anchored for that package's name only:
+  every other project's file stays as it was, so `copier update` changes nothing
+  in it (coolbress/plinth-template#260).
+#}
 __pycache__/
 *.py[cod]
 .venv/
-dist/
-build/
+{% if package_name == "dist" %}/{% endif %}dist/
+{% if package_name == "build" %}/{% endif %}build/
 *.egg-info/
 
 # Tool caches
@@ -16,7 +22,7 @@ build/
 # Coverage reports, from a local run or CI
 .coverage
 coverage.xml
-htmlcov/
+{% if package_name == "htmlcov" %}/{% endif %}htmlcov/
 
 # Real values are never committed; only .env.example is.
 .env
@@ -26,7 +32,7 @@ htmlcov/
 # Django's local database (the web archetype, when DATABASE_URL is unset) and
 # its collected static files
 db.sqlite3
-staticfiles/
+{% if package_name == "staticfiles" %}src/*/{% endif %}staticfiles/
 
 # OS
 .DS_Store

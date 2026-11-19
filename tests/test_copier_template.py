@@ -5862,6 +5862,49 @@ def test_a_name_another_archetypes_test_takes_still_renders_its_own_test(
     assert not missing, f"{archetype} projects rendered without their own test: {missing}"
 
 
+@pytest.mark.parametrize("archetype", sorted(SERVABLE))
+@pytest.mark.parametrize("name", ["dist", "data"])
+def test_a_package_named_like_an_excluded_root_folder_still_renders(
+    tmp_path: Path, name: str, archetype: str
+) -> None:
+    """`_exclude` matches like `.gitignore`: an unanchored `dist` or `data` also
+    matched `src/dist/` and `src/data/`, and the project rendered with an empty
+    `src/` (coolbress/plinth-template#260). The root folder is still left out
+    where it was: `data/` ships with `data-ml` only, `dist/` never."""
+    proj = render(tmp_path, project_name=name, archetype=archetype)
+    assert (proj / "src" / name / "__init__.py").is_file(), sorted(
+        str(p.relative_to(proj)) for p in (proj / "src").rglob("*")
+    )
+    assert not (proj / "dist").exists()
+    assert (proj / "data").is_dir() == (archetype == "data-ml")
+
+
+@pytest.mark.parametrize("name", ["dist", "build", "htmlcov", "staticfiles"])
+def test_a_package_named_like_an_ignored_folder_is_committed(tmp_path: Path, name: str) -> None:
+    """The project's `.gitignore` ignored `dist/` at any depth, so a project named
+    `dist` never committed `src/dist/`, and hatchling, which follows
+    `.gitignore`, built a wheel without it (coolbress/plinth-template#260).
+    The folders the tools write are still ignored where the tools write them."""
+    proj = render(tmp_path, project_name=name)
+    _git(proj, "init", "-q")
+    ignored = _git_in(proj, "check-ignore", "-v", f"src/{name}/__init__.py")
+    assert ignored.returncode == 1, ignored.stdout
+    for written in ("dist/x.whl", "build/x", "htmlcov/index.html", f"src/{name}/staticfiles/x.css"):
+        assert _git_in(proj, "check-ignore", "-q", written).returncode == 0, written
+
+
+def test_another_name_keeps_its_gitignore_lines_as_they_were(rendered: Path) -> None:
+    """The anchored lines are rendered for the four names only: changing every
+    project's `.gitignore` gave `copier update` a conflict wherever an owner had
+    edited a line next to them (coolbress/plinth-template#260)."""
+    lines = (rendered / ".gitignore").read_text(encoding="utf-8").splitlines()
+    for line in ("dist/", "build/", "htmlcov/", "staticfiles/"):
+        assert line in lines, line
+    for line in ("/dist/", "/build/", "/htmlcov/", "src/*/staticfiles/"):
+        assert line not in lines, line
+    assert lines[0] == "# Python"
+
+
 def test_an_existing_project_whose_name_does_not_collide_still_updates(tmp_path: Path) -> None:
     """`copier update` validates the recorded answers again and drops one that
     fails, then stops on `--defaults`: refusing `access` for every archetype stopped

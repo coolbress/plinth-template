@@ -62,9 +62,7 @@ means `copier update` on an instance needs hands.
   together. Tested in `tests/`, with copier 9.19.1, for a `cli` project
   named `access` with and without a hand-written test and a `cli` project
   named `probe` receiving a later change to its test; another copier
-  version was not run. Not changed here: a project named `dist`, or `data`
-  outside `data-ml`, renders with an empty `src/`, since those `_exclude`
-  entries match the package folder too (coolbress/plinth-template#260).
+  version was not run.
 - **A name no Python package can come from is refused with its reason**
   (coolbress/plinth-template#262). The name question chose its message
   with `is match`, a test copier's Jinja does not have, so a name such as
@@ -74,6 +72,48 @@ means `copier update` on an instance needs hands.
   was written before, and nothing is now. No other test or filter in
   `copier.yml` is missing from copier's Jinja; a test now parses every
   string there and fails on a name copier does not provide.
+- **A project named `dist`, `data`, `build`, `htmlcov` or `staticfiles`
+  keeps its package** (coolbress/plinth-template#260). `_exclude` and
+  `.gitignore` match a bare name at any depth. A project named `dist`
+  under any archetype, or `data` under any but `data-ml`, rendered with an
+  empty `src/`: the entries that leave out the root `dist/` and `data/`
+  matched `src/dist/` and `src/data/` too. Past the render, the project's
+  own `.gitignore` ignored `src/dist/`, `src/build/`, `src/htmlcov/` and
+  `src/staticfiles/`, so the package was never committed, and hatchling,
+  which follows `.gitignore`, built a wheel without it. Nothing warned.
+  Every `_exclude` entry that names a root path now starts with `/`, but
+  `.venv`, left at any depth with the caches; no package can take its
+  name. In
+  `.gitignore`, now rendered from `.gitignore.jinja`, the line that names a
+  package's folder is anchored for that package only: `/dist/`, `/build/`
+  or `/htmlcov/`, or `src/*/staticfiles/` (Django collects into the
+  package). The anchoring is for these names only because changing every
+  project's line gave `copier update` a conflict wherever an owner had
+  edited that line or the one beside it. No other line can match a package
+  folder: each needs a `.` or a leading `_`, which the name question
+  refuses; 22 names nearest those lines rendered and committed whole.
+  Under any other name, every archetype renders byte for byte what it did
+  (five archetypes, on both hosts but `web` on GitHub only, three sets of
+  community-file answers, under `probe` and `my-app`: 54 trees rendered
+  from the previous `main` and from this change, compared whole; only
+  `_commit` in `.copier-answers.yml` differs).
+  On `copier update`, a project under any other name changes nothing but
+  `_commit`, and its `.gitignore` cannot conflict: the template's file is
+  the same before and after. Measured with copier 9.19.1 and 9.18.2 on a
+  `web` project, and with 9.19.1 on a `cli` one, after nine edits to
+  `.gitignore` next to, on and away from those lines (a line added after
+  `dist/`, `staticfiles/` or `*.egg-info/`, before `htmlcov/` or
+  `__pycache__/`; the `dist/` line changed; `htmlcov/` removed; lines
+  appended): each `.gitignore` was left as the owner wrote it.
+  A project named `dist`, `data` or `build` gets its package,
+  `src/<package>/`, added, which its owner commits with the update; `dist`
+  and `build` also get their `.gitignore` line anchored. That line can
+  conflict: a `dist` project whose owner changed `dist/` or added a line
+  right after it got one conflict block in `.gitignore` (the other seven
+  edits merged, copier 9.19.1), and `src/dist/` stays ignored until the
+  block is resolved to `/dist/`. Measured with copier 9.19.1 and 9.18.2
+  for `cli` projects named `dist`, `data` and `build`; a project named
+  `htmlcov` or `staticfiles` was rendered, not updated.
 
 ## [1.45.1] - 2026-11-18
 
