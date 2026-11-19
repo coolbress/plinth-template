@@ -1283,12 +1283,20 @@ UPDATE_LINE = (
     "--vcs-ref 0123456789abcdef0123456789abcdef01234567 --data plinth_sha=" + "a" * 40
 )
 MARKER = "<!-- plinth:template-reminder -->"
+ISSUE_URL = "https://github.com/someone/probe/issues/12"
 GH_STUB = """#!/bin/bash
 printf '%s\\n' "$*" >> "$GH_LOG"
 case "$1 $2" in
   "issue list") cat "$GH_ISSUES" ;;
   "issue create"|"issue edit")
-    while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cat "$2" > "$GH_BODY"; shift; done ;;
+    [ "$1 $2" = "issue create" ] && echo "https://github.com/someone/probe/issues/12"
+    while [ $# -gt 0 ]; do
+      [ "$1" = --body-file ] && cat "$2" > "$GH_BODY"
+      if [ "$1" = --add-label ] && grep -qxF -- "$2" <<<"${GH_MISSING_LABELS:-}"; then
+        echo "could not add label: '$2' not found" >&2; exit 1
+      fi
+      shift
+    done ;;
 esac
 """
 FLOOR_CHECK_STUB = """import os, sys
@@ -1336,6 +1344,7 @@ def _remind(
     issues: list[dict[str, Any]] | None = None,
     fetched: bool = True,
     checker: bool = True,
+    missing_labels: tuple[str, ...] = (),
 ) -> tuple[subprocess.CompletedProcess[str], list[str], str, str]:
     """The step that decides, against a stand-in for plinth's checker (its
     exit code, stdout and stderr given: nothing here recomputes the
@@ -1372,6 +1381,7 @@ def _remind(
         "CHECKER_OUT": out,
         "CHECKER_ERR": err,
         "CHECKER_RC": str(rc),
+        "GH_MISSING_LABELS": "\n".join(missing_labels),
     }
     run = _bash_step(rendered, "Open or update the reminder issue", tmp_path, {"gh": GH_STUB}, env)
     calls = _text(tmp_path / "gh.log").splitlines()
@@ -1386,7 +1396,10 @@ def test_behind_opens_one_issue_with_both_tags_the_notes_and_the_command(
     assert args == f"--root {tmp_path / 'project'} --repo someone/probe --print-update-command"
     created = [c for c in calls if c.startswith("issue create")]
     assert len(created) == 1, calls
-    assert not [c for c in calls if c.startswith("issue edit")]
+    assert [c for c in calls if c.startswith("issue edit")] == [
+        f"issue edit {ISSUE_URL} --repo someone/probe --add-label {label}"
+        for label in REMINDER_LABELS
+    ], calls
     assert "--repo someone/probe" in created[0]
     assert "--title Template update available: v1.37.0 to v1.38.0" in created[0]
     assert body.startswith(MARKER + "\n")
@@ -1439,6 +1452,45 @@ def test_the_reminder_gives_the_updates_in_order_and_says_where_the_pin_pull_req
     # "ahead" leaves the issue open: the body cannot promise it always closes.
     assert "A newer plinth from step 1 can move this repository past the tag named here" in flat
     assert "close it by hand" in flat
+
+
+REMINDER_LABELS = ("task", "ready-for-human")
+
+
+@pytest.mark.parametrize("missing", ["task", "ready-for-human"])
+def test_the_reminder_opens_with_its_kind_and_triage_labels_even_when_one_is_missing(
+    rendered: Path, tmp_path: Path, missing: str
+) -> None:
+    """Every issue carries a kind label by the template's own rule, and the
+    reminder opened with none (plinth #957). It opens as a `task` that is
+    `ready-for-human`, both made by `/plinth:new-project`'s label set; each
+    label is added after the issue exists, one at a time, so a repository
+    without one still gets the issue and the other label, and the log says
+    which label was missing."""
+    run, calls, body, _ = _remind(
+        rendered, tmp_path, rc=0, out=UPDATE_LINE, missing_labels=(missing,)
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert len([c for c in calls if c.startswith("issue create")]) == 1, calls
+    assert body.startswith(MARKER + "\n")
+    added = [c.rsplit(" ", 1)[1] for c in calls if "--add-label" in c]
+    assert added == list(REMINDER_LABELS), calls
+    assert f"could not add the label {missing}" in run.stdout + run.stderr
+
+
+def test_the_reminder_adds_labels_on_the_gh_issue_create_path_only(rendered: Path) -> None:
+    """The step's own text: one `gh issue create`, then `--add-label` for
+    `task` and `ready-for-human`, never on the edit of an open reminder
+    (a person may have relabelled it). The reminder is not rendered on
+    GitLab, so there is no `glab issue create` to read (see
+    test_the_reminder_is_not_rendered_on_gitlab)."""
+    steps = {s.get("name"): s for s in _reminder(rendered)["jobs"]["remind"]["steps"]}
+    run = steps["Open or update the reminder issue"]["run"]
+    assert run.count("gh issue create") == 1
+    assert "glab" not in run
+    for label in REMINDER_LABELS:
+        assert label in run.split("gh issue create", 1)[1], label
+    assert "--add-label" not in run.split("gh issue create", 1)[0]
 
 
 def test_an_open_reminder_is_updated_and_no_second_one_opened(
@@ -4954,9 +5006,19 @@ def test_issue_tracker_says_how_to_pick_a_kind_before_the_table(tmp_path: Path, 
     tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
     section = tracker.split("## Four kinds of issue", 1)[1].split("## ", 1)[0]
     before_table = " ".join(section.split("| Kind |", 1)[0].split())
-    assert "A bug report or a feature request takes its own label (`bug`, `enhancement`)" in (
-        before_table
-    )
+    form = "form" if host == "github" else "template"
+    body = "body" if host == "github" else "description"
+    assert before_table.startswith(
+        f"Name the kind, and the {form} you write it in, before you write the {body}."
+    ), before_table
+    # A defect is a bug whoever finds it (plinth #957): an agent that
+    # reproduced one wrote it as a task, and seven of ten defects in a real
+    # project carried no `bug` label.
+    assert "A defect is a `bug`, whoever finds it" in before_table
+    assert "an agent that reproduced it" in before_table
+    assert "A feature request is an `enhancement`" in before_table
+    assert "Any other issue takes its kind from its result" in before_table
+    assert "bug report" not in before_table
     assert "When the result is a decision, an answer or a map, the issue is a record" in (
         before_table
     )
@@ -4967,6 +5029,25 @@ def test_issue_tracker_says_how_to_pick_a_kind_before_the_table(tmp_path: Path, 
     read_back = "`gh issue view <n> --json labels`" if host == "github" else "`glab issue view <n>`"
     assert f"read it back with {read_back}" in before_table
     assert "add the label if it is missing" in before_table
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_ready_bug_gains_acceptance_criteria_below_the_forms_fields(
+    tmp_path: Path, host: str
+) -> None:
+    """The Bug form has no acceptance criteria, which `/implement` reads. The
+    form stays a reporter's form; a `bug` made `ready-for-agent` gains them
+    below its fields, in the same issue (plinth #957), on both hosts."""
+    out = render(tmp_path / host, host=host)
+    tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
+    (row,) = [line for line in tracker.splitlines() if "Bug (`bug`)" in line]
+    assert row.startswith("| A defect, reported by anyone"), row
+    assert "A request from anyone" not in tracker
+    fields = "the form's fields" if host == "github" else "the template's headings"
+    assert (
+        "A `bug` made `ready-for-agent` gains `## Acceptance criteria` (and `## Not building` "
+        f"when it helps) below {fields}, in the same issue: `/implement` reads them"
+    ) in row
 
 
 @pytest.mark.parametrize("name", ["feature", "task"])
