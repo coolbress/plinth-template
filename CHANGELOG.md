@@ -36,6 +36,14 @@ means `copier update` on an instance needs hands.
   An existing project gets it through `/plinth:template-update`; a map that
   already holds a log is left as it is.
 
+### Changed
+
+- **The README's Railway section no longer says a trial is planned.** A
+  project that chose Railway read "A trial of Railway is planned in plinth's
+  #680", which stops being true once that issue closes. It now says whether
+  plinth has tried Railway, and what it found, is recorded in that issue, a
+  sentence that stays true whatever the issue's state.
+
 ## [1.46.1] - 2026-11-19
 
 **A new `backend`, `data-ml` or `web` project's image scan no longer fails on `apt` 3.0.3.** The run stage's `python:3.12-slim` digest moves from an image built 2026-10-28, whose `apt` 3.0.3 the `image` job's scan refused from 2026-11-19, to one built 2026-11-05 with `apt` 3.0.4. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands, except for a project whose digest Dependabot already raised, which sees a conflict on that one line and keeps its own. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
