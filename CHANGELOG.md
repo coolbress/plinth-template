@@ -6,6 +6,19 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `backend` and `web` image's run stage starts from `python:3.12-slim`
+  at a digest built 2026-11-05 (`5e2bdb1`), not 2026-10-28 (`b18b261`). The
+  old image carries `apt` and `libapt-pkg7.0` 3.0.3, whose high
+  CVE-2026-109518 has had a fix (3.0.4) since 2026-11-04. From 2026-11-19,
+  14 days later, the `image` job's scan failed on every new project of
+  either archetype, at its first commit. The new digest carries 3.0.4, read
+  from the image's own package list. An existing project gets it through
+  `/plinth:template-update`, or sooner through Dependabot's `docker` pull
+  request (by hand on GitLab); a project whose digest Dependabot already
+  raised sees a conflict on that one line, where it keeps its own.
+
 ## [1.46.0] - 2026-11-19
 
 **A project name is refused or kept whole wherever it used to break, and a defect is a `bug` whoever finds it.** A name that wrote two files to one path, or that is no distribution name, is refused before a file is written. A project's own test renders whatever its name. A project named `dist`, `data`, `build`, `htmlcov` or `staticfiles` keeps its package. A refused name says why instead of failing on an unknown Jinja test. `docs/agents/issue-tracker.md` says a defect is a `bug` whoever finds it and where a ready `bug`'s acceptance criteria go, and the template reminder opens as a `task` that is `ready-for-human`. MINOR: `copier update` needs no hands, except for a project whose name never worked (`_demo` and the like, which uv refused to read, and a `dist` or `build` project whose package was never committed, if its owner edited `.gitignore` beside that line); each case is in its entry below. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check or action changes, so the Actions allowlist is unchanged. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
