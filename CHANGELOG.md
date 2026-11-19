@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.46.1] - 2026-11-19
+
+**A new `backend`, `data-ml` or `web` project's image scan no longer fails on `apt` 3.0.3.** The run stage's `python:3.12-slim` digest moves from an image built 2026-10-28, whose `apt` 3.0.3 the `image` job's scan refused from 2026-11-19, to one built 2026-11-05 with `apt` 3.0.4. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands, except for a project whose digest Dependabot already raised, which sees a conflict on that one line and keeps its own. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
+
 ### Fixed
 
 - The `backend`, `data-ml` and `web` image's run stage starts from `python:3.12-slim`
