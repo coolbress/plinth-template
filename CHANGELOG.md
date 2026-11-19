@@ -28,7 +28,11 @@ means `copier update` on an instance needs hands.
   "later" with no open follow-up. The rows restate `AGENTS.md`,
   `CONTRIBUTING.md` and this page side by side. The wayfinding steps'
   Resolve no longer adds a map line for every closed child: only an answer
-  that holds across tickets gets one.
+  that holds across tickets gets one. Beside the rule that a decision made in
+  a comment moves into the body, a decision made in a pull or merge request
+  description or a comment goes into the issue's `## Decisions` too, since
+  the issue is where the next session looks: about 15 of the same project's
+  341 pull requests held an owner's answer only in the description.
   An existing project gets it through `/plinth:template-update`; a map that
   already holds a log is left as it is.
 
