@@ -5068,7 +5068,13 @@ def test_issue_tracker_says_the_map_is_not_the_log(tmp_path: Path, host: str) ->
     section = _where_records_go(tracker)
     assert tracker.index("## Where each record goes") < tracker.index("## Wayfinding operations")
     (row,) = [line for line in section.splitlines() if line.startswith("| What is still to do")]
-    assert row == "| What is still to do, and a rule across tickets | the map |", row
+    # Eight closed issues in a real project said "later" with no open follow-up:
+    # what is still to do is an open issue the Outcome links, or a map note.
+    assert row == (
+        "| What is still to do, and a rule across tickets | the open issue a closed ticket's "
+        "`## Outcome` links, or a map note for a ticket not cut yet; a rule across tickets "
+        "in the map |"
+    ), row
     prose = " ".join(section.split())
     request = "pull request" if host == "github" else "merge request"
     for sentence in (
@@ -5077,6 +5083,11 @@ def test_issue_tracker_says_the_map_is_not_the_log(tmp_path: Path, host: str) ->
         "The map holds only what is still in force: a rule that holds across tickets, "
         "a note for a ticket not cut yet, or a change to the map or to a milestone's "
         "status. A note leaves the map when its ticket is cut.",
+        # 83 of 85 status rows in a real project's requirements table went stale.
+        "A document states the rule; whether it is done is the issue's to say.",
+        # 57 pointers to a dated map line died when the map was tidied.
+        "Point at another record by its issue and section or rule name, never at a "
+        "dated line of the map: the map's lines move or leave.",
     ):
         assert sentence in prose, f"issue-tracker.md lacks: {sentence}"
     # The wayfinding steps' Resolve added a map line for every closed child,

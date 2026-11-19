@@ -16,11 +16,19 @@ means `copier update` on an instance needs hands.
   that could not find the refusal. On both hosts, next to the map's section,
   a table of eight rows names where each record is (the pull or merge
   request, an issue's `## Outcome` or `## Decisions`, a record issue, an
-  ADR, the spec, the map), and two sentences say a merge is noted nowhere
-  else and the map holds only what is still in force, a note leaving it when
-  its ticket is cut. The rows restate `AGENTS.md`, `CONTRIBUTING.md` and this
-  page side by side. The wayfinding steps' Resolve no longer adds a map line
-  for every closed child: only an answer that holds across tickets gets one.
+  ADR, the spec, and for what is still to do the open issue a closed
+  ticket's Outcome links or a map note for a ticket not cut yet). Four
+  sentences go with it: a document states the rule and the issue says
+  whether it is done; a merge is noted nowhere else; the map holds only what
+  is still in force, a note leaving it when its ticket is cut; and a pointer
+  names an issue and its section or rule, never a dated line of the map.
+  The same project's audit of 259 issues and 341 pull requests found 57
+  pointers to a dated map line dead after the map was tidied, 83 of 85
+  status rows in a requirements table stale, and 8 closed issues that said
+  "later" with no open follow-up. The rows restate `AGENTS.md`,
+  `CONTRIBUTING.md` and this page side by side. The wayfinding steps'
+  Resolve no longer adds a map line for every closed child: only an answer
+  that holds across tickets gets one.
   An existing project gets it through `/plinth:template-update`; a map that
   already holds a log is left as it is.
 
