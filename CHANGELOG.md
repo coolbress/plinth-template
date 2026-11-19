@@ -26,10 +26,118 @@ means `copier update` on an instance needs hands.
   added after the issue is created, one at a time: a repository without one of
   them still gets the issue, and the run's log names the label it could not
   add. An open reminder that is updated keeps the labels it has. The reminder
-  is GitHub only, as before.
+  is GitHub only, as before. An existing project gets both
+  through `/plinth:template-update`. Issues already open or closed are not
+  relabelled: a closed body is the record.
 
-An existing project gets both through `/plinth:template-update`. Issues
-already open or closed are not relabelled: a closed body is the record.
+### Fixed
+
+- **A project name that would write one path twice, or that is no
+  distribution name, is refused before a file is written**
+  (coolbress/plinth-template#256). The project's own test is
+  `tests/test_<package>.py`, beside the tests the template ships: a `web`
+  project named `access`, a `data-ml` one named `train`, a `cli` one named
+  `entry-point` or a `library` one named `built-wheel` wrote one path twice,
+  and copier stopped with `Interactive session required`. The `archetype`
+  question now refuses every pair that collides (these four, `tree-hygiene`
+  under any archetype, `pages` and `passwords` under `web`, and the rest of
+  the 14), naming the test and suggesting another name; the same name under
+  an archetype that ships no such test is accepted, as before. Renaming the
+  project's test instead would move a file in every existing project on
+  update. The package name is also `pyproject.toml`'s
+  distribution name, which starts and ends with a letter or digit: `_demo`
+  rendered and uv refused to read the project. The name question now refuses
+  a name that starts or ends with `-`, `_` or `.`.
+  An existing project is unaffected by the first refusal: its pair never
+  rendered, and an update of a project whose name does not collide runs as
+  before (a `cli` project named `access`, tested). The second reaches a
+  project already named that way: `copier update` validates the recorded
+  name again and stops at it (measured with copier 9.19.1; an update with
+  another copier version was not run). Such a project never ran a check:
+  rendered before this change as `_demo`, `demo_`, `demo-`, `-demo` and
+  `.demo`, each one's `uv sync --locked` exited 2 with uv's "Not a valid
+  package or extra name" (uv 0.9.27). It needs a new name before it can
+  update. New names are refused at the question,
+  earlier than the render; through coolbress/plinth's GitHub door that is
+  still after the remote repository is created, so a refused name ends in
+  the door's rollback, as a failed render did (coolbress/plinth#964).
+- **A project's own test renders whatever its name**
+  (coolbress/plinth-template#258). A `cli` project named `access` rendered
+  without `tests/test_access.py`: the `_exclude` line that leaves out the
+  `web` archetype's shipped test matched the rendered path, so it left out
+  the project's own test too, and nothing said so. The same held for 21
+  pairs in all: `access`, `pages` and `passwords` outside `web`, `train`
+  outside `data-ml`, `entry-point` under `library` and `web`, and
+  `built-wheel` under `backend`, `data-ml` and `web`. The six shipped tests
+  now have source names that render empty outside the archetypes that ship
+  them, as the release workflows do, and their `_exclude` lines are gone.
+  Every archetype's render is otherwise byte for byte what it was (the five
+  archetypes under `probe` and the six names, compared with the previous
+  `main`).
+  For those six names only, `copier.yml` lists the project's own
+  test in `_skip_if_exists`. On `copier update`, such a project gets the
+  missing test, which imports the package and checks `greet`, with no
+  questions; one whose owner already wrote a file at that path keeps it as
+  written, with no conflict markers; a new render writes the test as
+  before. `copier update` needs no hands. The cost is theirs alone: a later
+  template change to their own test reaches new renders, not them, and
+  `copier recopy` keeps their file too. Every other project's own test
+  still follows the template, so a change to the code and its test arrive
+  together. Tested in `tests/`, with copier 9.19.1, for a `cli` project
+  named `access` with and without a hand-written test and a `cli` project
+  named `probe` receiving a later change to its test; another copier
+  version was not run.
+- **A name no Python package can come from is refused with its reason**
+  (coolbress/plinth-template#262). The name question chose its message
+  with `is match`, a test copier's Jinja does not have, so a name such as
+  `9lives` or `my+app` was refused with copier's
+  `No test named 'match' found` instead of saying why. It now says the name
+  starts with a digit, or holds a character an identifier cannot. Nothing
+  was written before, and nothing is now. No other test or filter in
+  `copier.yml` is missing from copier's Jinja; a test now parses every
+  string there and fails on a name copier does not provide.
+- **A project named `dist`, `data`, `build`, `htmlcov` or `staticfiles`
+  keeps its package** (coolbress/plinth-template#260). `_exclude` and
+  `.gitignore` match a bare name at any depth. A project named `dist`
+  under any archetype, or `data` under any but `data-ml`, rendered with an
+  empty `src/`: the entries that leave out the root `dist/` and `data/`
+  matched `src/dist/` and `src/data/` too. Past the render, the project's
+  own `.gitignore` ignored `src/dist/`, `src/build/`, `src/htmlcov/` and
+  `src/staticfiles/`, so the package was never committed, and hatchling,
+  which follows `.gitignore`, built a wheel without it. Nothing warned.
+  Every `_exclude` entry that names a root path now starts with `/`, but
+  `.venv`, left at any depth with the caches; no package can take its
+  name. In
+  `.gitignore`, now rendered from `.gitignore.jinja`, the line that names a
+  package's folder is anchored for that package only: `/dist/`, `/build/`
+  or `/htmlcov/`, or `src/*/staticfiles/` (Django collects into the
+  package). The anchoring is for these names only because changing every
+  project's line gave `copier update` a conflict wherever an owner had
+  edited that line or the one beside it. No other line can match a package
+  folder: each needs a `.` or a leading `_`, which the name question
+  refuses; 22 names nearest those lines rendered and committed whole.
+  Under any other name, every archetype renders byte for byte what it did
+  (five archetypes, on both hosts but `web` on GitHub only, three sets of
+  community-file answers, under `probe` and `my-app`: 54 trees rendered
+  from the previous `main` and from this change, compared whole; only
+  `_commit` in `.copier-answers.yml` differs).
+  On `copier update`, a project under any other name changes nothing but
+  `_commit`, and its `.gitignore` cannot conflict: the template's file is
+  the same before and after. Measured with copier 9.19.1 and 9.18.2 on a
+  `web` project, and with 9.19.1 on a `cli` one, after nine edits to
+  `.gitignore` next to, on and away from those lines (a line added after
+  `dist/`, `staticfiles/` or `*.egg-info/`, before `htmlcov/` or
+  `__pycache__/`; the `dist/` line changed; `htmlcov/` removed; lines
+  appended): each `.gitignore` was left as the owner wrote it.
+  A project named `dist`, `data` or `build` gets its package,
+  `src/<package>/`, added, which its owner commits with the update; `dist`
+  and `build` also get their `.gitignore` line anchored. That line can
+  conflict: a `dist` project whose owner changed `dist/` or added a line
+  right after it got one conflict block in `.gitignore` (the other seven
+  edits merged, copier 9.19.1), and `src/dist/` stays ignored until the
+  block is resolved to `/dist/`. Measured with copier 9.19.1 and 9.18.2
+  for `cli` projects named `dist`, `data` and `build`; a project named
+  `htmlcov` or `staticfiles` was rendered, not updated.
 
 ## [1.45.1] - 2026-11-18
 
