@@ -71,17 +71,22 @@ means `copier update` on an instance needs hands.
   images are rebuilt on their own schedule. Right after its `FROM`, the run
   stage now runs `apt-get update`, `apt-get upgrade -y
   --no-install-recommends` and removes the package lists in the same `RUN`.
-  The build stage is not upgraded: it is not in the shipped image. Two
-  things change for a project: building the image now needs network access
-  to Debian's mirrors, and two builds of one digest can differ in those
-  packages, by whatever Debian published between them. An existing project
-  gets the line through `/plinth:template-update`; a project that edited the
-  run stage right after its `FROM` may get a conflict there, where it keeps
-  both. A project that pins a Debian package itself (`apt-get install
-  name=version`) to a version older than the upgraded one now fails its
-  build, since apt refuses a downgrade without `--allow-downgrades`: hold the
-  package with `apt-mark hold name` in the same `RUN`, before the upgrade, or
-  raise the pin.
+  The build stage is not upgraded: it is not in the shipped image. A GitLab
+  project, whose `docker-image` job scans nothing, gets the same line and
+  the same fixes. Two things change for a project: building the image now
+  needs network access to Debian's mirrors, and two builds of one digest can
+  differ in those packages, by whatever Debian published between them (a
+  local build that reuses a cached layer keeps the packages it fetched
+  first; `docker build --no-cache` fetches again). An existing project gets
+  the line through `/plinth:template-update`; a project that edited the run
+  stage right after its `FROM` may get a conflict there, where it keeps
+  both. The upgrade changes only packages the base image already carries. A
+  project that also installs one of those at a pinned version (`apt-get
+  install name=version`) older than the upgraded one now fails its build:
+  apt does not downgrade by default, and Debian's mirrors usually no longer
+  serve a superseded version. Raise the pin to the version the upgrade
+  installs; holding the old one would keep the vulnerability the scan
+  fails on.
 
 ## [1.46.1] - 2026-11-19
 
