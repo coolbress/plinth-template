@@ -2065,8 +2065,9 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
     assert page.startswith("# Keep this project current")
     # GitHub adds one section after the steps: Dependabot's other pull
-    # requests (plinth #949). GitLab has no Dependabot.
-    assert page.count("\n## ") == (4 if host == "github" else 3), "three steps, then on GitHub one"
+    # requests (plinth #949). GitLab has no Dependabot. Both end with what to
+    # read before asking plinth for a feature (#279).
+    assert page.count("\n## ") == (5 if host == "github" else 4), "three steps, then one or two"
     sections = re.split(r"\n(?=## )", page)[1:4]
     for section, (heading, phrases) in zip(sections, _KEEP_STEPS[host], strict=True):
         flat = " ".join(section.split())
@@ -2088,6 +2089,63 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
         "[docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
     )
     assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
+
+
+_LATEST_RELEASE_RULE = (
+    "Before saying plinth does not do something, or asking plinth for it, read plinth's "
+    "latest `CHANGELOG.md`, not the copy at this project's pin; if the feature is there, "
+    "the answer is raising the pin"
+)
+_LATEST_RELEASE_SECTION = "## Before saying plinth lacks something"
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_session_reads_plinths_latest_release_before_asking_plinth(
+    tmp_path: Path, host: str
+) -> None:
+    """A session read plinth's `python-ci.yml` at a pin 28 commits behind,
+    found no time-limit input and asked plinth for one; the input had been
+    released since v2.34.0, and raising the pin was the whole fix
+    (coolbress/nexusbt#625, #279). `AGENTS.md` says to read the latest release
+    first, beside the update line, and the how-to page says where it is, how
+    to read the pinned version and what to raise."""
+    out = render(tmp_path, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    rule = [ln for ln in agents if _LATEST_RELEASE_RULE in ln]
+    assert len(rule) == 1, "AGENTS.md does not say to read plinth's latest release first"
+    assert rule[0].startswith("- Starting something new"), "not beside the update line"
+    assert "keep-this-project-current.md" in rule[0]
+
+    page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
+    assert _LATEST_RELEASE_SECTION in page
+    section = page.split(_LATEST_RELEASE_SECTION, 1)[1]
+    assert "\n## " not in section, "the section is not the page's last"
+    flat = " ".join(section.split())
+    for phrase in (
+        "https://github.com/coolbress/plinth/blob/main/CHANGELOG.md",
+        "https://github.com/coolbress/plinth/releases",
+        "work not yet released does not reach this project",
+        "git ls-remote --tags https://github.com/coolbress/plinth | grep <commit>",
+        "`refs/tags/vX.Y.Z^{}`",
+        "not `[Unreleased]`",
+        "the answer is raising the pin",
+        "step 3",
+    ):
+        assert phrase in flat, f"the section lacks: {phrase}"
+    if host == "github":
+        for phrase in (
+            "`coolbress/plinth` `uses:` line",
+            "`ci.yml` and `label.yml` together",
+            "git ls-remote https://github.com/coolbress/plinth 'refs/tags/<tag>^{}'",
+        ):
+            assert phrase in flat, f"the section lacks: {phrase}"
+        assert ".gitlab-ci.yml" not in flat
+    else:
+        for phrase in ("`remote:` line of `.gitlab-ci.yml`", "`remote:` and `integrity:` lines"):
+            assert phrase in flat, f"the section lacks: {phrase}"
+        assert "dependabot" not in flat.lower()
+        assert "uses:" not in flat
 
 
 _DEPENDENCY_SECTION = "## Other dependency pull requests"
