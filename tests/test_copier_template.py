@@ -4236,7 +4236,7 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, headi
 
 
 #: A command the documents tell the agent to run starts with one of these.
-_TOLD = re.compile(r"^(?:git|gh|glab|uv) [a-z]")
+_TOLD = re.compile(r"^(?:git|gh|glab|uv|scripts/heavy\.sh) [a-z]")
 
 
 def _told_commands(text: str) -> list[str]:
@@ -4699,6 +4699,30 @@ def test_web_verify_is_the_checks_alone(tmp_path: Path) -> None:
     body = _project_skill_body(out, "verify")
     assert body.count("\n## ") == 2, "web's verify gained a step"
     assert "runs the checks, not the app" in " ".join(body.split())
+
+
+@pytest.mark.parametrize(("host", "request_"), [("github", "pull"), ("gitlab", "merge")])
+def test_touched_tests_while_working_the_whole_block_once(
+    tmp_path: Path, host: str, request_: str
+) -> None:
+    """Every session ran the whole block on every change: on one laptop eleven
+    full suites ran at once, and a 7-minute run took 52 (#284). While working,
+    the tests of what changed; the block once before the pull request, with
+    CI as the gate; a check not run is named, not passed over."""
+    out = render(tmp_path / host, host=host)
+    agents = " ".join((out / "AGENTS.md").read_text(encoding="utf-8").split())
+    skill = " ".join(_project_skill_body(out, "verify").split())
+    for text in (agents, skill):
+        for phrase in (
+            "run the tests of what changed",
+            "tests/test_<module>.py`, or `-k`",
+            f"once, before the {request_} request",
+            "is the gate",
+            'named under "Not verified" in the description',
+        ):
+            assert phrase in text, f"does not say: {phrase}"
+    gate = "the pipeline" if host == "gitlab" else "CI"
+    assert f"{request_} request, and {gate} is the gate" in agents
 
 
 # ── the document set ──────────────────────────────────────────────────────
@@ -6528,6 +6552,46 @@ def test_dockerfile_comment_says_what_the_image_runs(tmp_path: Path, backend: Pa
     assert "Django" in cmd, cmd
     assert "uvicorn" in cmd, cmd
     assert "No framework is chosen here." in (backend / "Dockerfile").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("archetype", "host"),
+    # `web` is GitHub only: the template refuses it on GitLab.
+    [
+        ("backend", "github"),
+        ("data-ml", "github"),
+        ("web", "github"),
+        ("backend", "gitlab"),
+        ("data-ml", "gitlab"),
+    ],
+)
+def test_dockerfile_run_stage_applies_debian_updates(
+    tmp_path: Path, archetype: str, host: str
+) -> None:
+    """The official Python image can lag a Debian fix by more than the
+    `image` job's 14 days, so the run stage upgrades its packages at build;
+    the build stage, which the shipped image does not carry, does not (#281).
+    GitLab's `docker-image` job scans nothing, so its comment names no gate."""
+    out = render(tmp_path, archetype=archetype, host=host)
+    text = (out / "Dockerfile").read_text(encoding="utf-8")
+    build, run = text.split("# ── run stage", 1)
+    upgrade = (
+        "RUN apt-get update \\\n"
+        " && apt-get upgrade -y --no-install-recommends \\\n"
+        " && rm -rf /var/lib/apt/lists/*\n"
+    )
+    assert "apt-get" not in build
+    assert run.count(upgrade) == 1, run
+    after_from = run.split("\nFROM python:3.12-slim@sha256:", 1)[1]
+    assert after_from.index(upgrade) < after_from.index("\nUSER app\n")
+    # Right after FROM: nothing but the comment that says why comes between.
+    between = after_from.split("\n", 1)[1].split(upgrade, 1)[0]
+    assert all(line == "" or line.startswith("#") for line in between.splitlines()), between
+    if host == "gitlab":
+        assert "`image` job" not in between, between
+        assert "14 days" not in between, between
+    else:
+        assert "`image` job fails a fix older than 14 days" in between, between
 
 
 def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path) -> None:
