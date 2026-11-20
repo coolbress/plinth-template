@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import time
@@ -155,3 +156,39 @@ def test_a_live_holder_the_caller_cannot_signal_keeps_its_slot(
     _, err = refused.communicate(timeout=30)
     assert refused.returncode == BUSY, err
     assert not ran.exists(), "pid 1's slot was taken as a dead one's"
+
+
+def test_a_queue_directory_that_is_a_link_is_refused(start: Start, tmp_path: Path) -> None:
+    """On a shared machine another user can make the queue's path first and
+    fill it with links to the caller's files, which the entry's write would
+    then overwrite. The script writes only into a directory it owns that is
+    not a link; a link stands in for another user's directory here."""
+    env = _env(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir(mode=0o700)
+    (tmp_path / "tmp" / f"plinth-heavy-{os.getuid()}").symlink_to(elsewhere)
+    ran = tmp_path / "ran"
+    refused = start(env, f"touch {ran}")
+    _, err = refused.communicate(timeout=30)
+    assert refused.returncode == 2, err
+    assert "plinth-heavy" in err, err
+    assert not ran.exists()
+    assert not any(elsewhere.iterdir()), "an entry was written through the link"
+
+
+def test_without_ps_it_says_so_instead_of_running_unqueued(start: Start, tmp_path: Path) -> None:
+    """Every entry, the caller's own included, would read as gone, and the
+    command would run with no limit and no word."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for tool in ("id", "mkdir", "rm", "tr", "grep", "sleep", "sh", "touch"):
+        found = shutil.which(tool)
+        assert found, tool
+        (bin_ / tool).symlink_to(found)
+    env = {**_env(tmp_path), "PATH": str(bin_)}
+    ran = tmp_path / "ran"
+    refused = start(env, f"touch {ran}")
+    _, err = refused.communicate(timeout=30)
+    assert refused.returncode == 2, err
+    assert "ps" in err, err
+    assert not ran.exists()

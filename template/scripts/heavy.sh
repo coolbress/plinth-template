@@ -40,6 +40,17 @@ esac
 tmp=${TMPDIR:-/tmp}
 queue="${tmp%/}/plinth-heavy-$(id -u)"
 mkdir -p -m 700 "$queue" || exit 2
+# Another user can make this path first, on a shared /tmp, and fill it with
+# links to this user's files for the entry's write to overwrite.
+if [ -L "$queue" ] || [ ! -O "$queue" ]; then
+  echo "heavy.sh: $queue is a link or not this user's; remove it, then run again" >&2
+  exit 2
+fi
+# Without ps every entry, this one's too, reads as gone: no limit, no word.
+if ! ps -p $$ >/dev/null 2>&1; then
+  echo "heavy.sh: ps cannot see this process here, so the slots cannot be counted; run the command without scripts/heavy.sh" >&2
+  exit 2
+fi
 
 # The pids of the commands running now; a dead one's entry is removed.
 # `ps -p`, not `kill -0`: a live process the caller may not signal, as a
