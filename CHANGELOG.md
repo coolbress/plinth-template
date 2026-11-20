@@ -65,6 +65,38 @@ means `copier update` on an instance needs hands.
   plinth has tried Railway, and what it found, is recorded in that issue, a
   sentence that stays true whatever the issue's state.
 
+### Fixed
+
+- **The image's run stage applies Debian's published updates at build, so a
+  new project's `image` job no longer fails on a fix the official Python
+  image has not picked up yet** (#281). The `backend`, `data-ml` and `web`
+  run stage's `python:3.12-slim` digest (`5e2bdb1`, built 2026-11-05) carries
+  `zlib1g 1:1.3.dfsg+really1.3.1-1+b1`, fixed in Debian as `…-1+deb13u1` on
+  2026-11-07 (CVE-2026-85091), and from 2026-11-22 the `image` job would fail
+  every new project on it. Raising the digest does not help: no official
+  image has been rebuilt since the fix, so Dependabot has none to offer. It
+  was the second such failure in two days (`apt` 3.0.3 on 2026-11-19), with
+  one cause: the scan counts 14 days from Debian's fix, and the official
+  images are rebuilt on their own schedule. Right after its `FROM`, the run
+  stage now runs `apt-get update`, `apt-get upgrade -y
+  --no-install-recommends` and removes the package lists in the same `RUN`.
+  The build stage is not upgraded: it is not in the shipped image. A GitLab
+  project, whose `docker-image` job scans nothing, gets the same line and
+  the same fixes. Two things change for a project: building the image now
+  needs network access to Debian's mirrors, and two builds of one digest can
+  differ in those packages, by whatever Debian published between them (a
+  local build that reuses a cached layer keeps the packages it fetched
+  first; `docker build --no-cache` fetches again). An existing project gets
+  the line through `/plinth:template-update`; a project that edited the run
+  stage right after its `FROM` may get a conflict there, where it keeps
+  both. The upgrade changes only packages the base image already carries. A
+  project that also installs one of those at a pinned version (`apt-get
+  install name=version`) older than the upgraded one now fails its build:
+  apt does not downgrade by default, and Debian's mirrors usually no longer
+  serve a superseded version. Raise the pin to the version the upgrade
+  installs; holding the old one would keep the vulnerability the scan
+  fails on.
+
 ## [1.46.1] - 2026-11-19
 
 **A new `backend`, `data-ml` or `web` project's image scan no longer fails on `apt` 3.0.3.** The run stage's `python:3.12-slim` digest moves from an image built 2026-10-28, whose `apt` 3.0.3 the `image` job's scan refused from 2026-11-19, to one built 2026-11-05 with `apt` 3.0.4. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands, except for a project whose digest Dependabot already raised, which sees a conflict on that one line and keeps its own. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
