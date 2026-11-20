@@ -3,18 +3,21 @@
 The pinned base images in `template/Dockerfile.jinja` age, and a new
 project's `image` job fails once a high or critical fix is more than 14 days
 older than the image. The weekly watch runs that render's own `image` job
-steps in order, the verdict included; this module is the part that runs
-them.
+steps in order, the verdict included, with its grace shortened; this module
+runs them and writes the issue body that says what to raise.
 
 The verdict logic is never copied here: the steps are read from the rendered
-`.github/workflows/ci.yml`. The runner knows the few things those steps use
-(a checkout, `run:` in bash or Python, `continue-on-error`, `$GITHUB_PATH`,
-three expressions); anything else stops it, because a step run differently
-from GitHub would pass or fail for a reason the instance does not have.
+`.github/workflows/ci.yml`, and only the one `GRACE_DAYS` value changes. The
+runner knows the few things those steps use (a checkout, `run:` in bash or
+Python, `continue-on-error`, `$GITHUB_PATH`, three expressions); anything else
+stops it, because a step run differently from GitHub would pass or fail for a
+reason the instance does not have.
 """
 
 from __future__ import annotations
 
+import copy
+import datetime
 import os
 import re
 import subprocess
@@ -26,12 +29,18 @@ from typing import Any
 #: Where the rendered job's steps come from, relative to the rendered project.
 CI = Path(".github") / "workflows" / "ci.yml"
 JOB = "image"
+GRACE_KEY = "GRACE_DAYS"
 CHECKOUT = "actions/checkout@"
 JOB_KEYS = frozenset({"name", "runs-on", "timeout-minutes", "permissions", "steps"})
 KNOWN_KEYS = frozenset({"name", "id", "run", "shell", "env", "continue-on-error", "uses", "with"})
 EXPRESSION = re.compile(r"\$\{\{\s*(.*?)\s*\}\}")
 STEP_OUTCOME = re.compile(r"steps\.([A-Za-z_][\w-]*)\.outcome")
-#: Every annotation the steps print.
+#: One finding as the verdict names it: `apt 3.0.3 (fixed in 3.0.4, since
+#: 2026-11-04: CVE-2026-109518)`, after `: ` or `; `.
+FINDING = re.compile(
+    r"(?:: |; )(?P<finding>\S+ \S+ \(fixed in [^,()]*, since (?P<since>\d{4}-\d{2}-\d{2}): [^)]*\))"
+)
+#: Every annotation the steps print, kept for the issue.
 ANNOTATION = re.compile(r"^::(error|warning)::(.*)$")
 
 
@@ -50,6 +59,8 @@ class JobRun:
     errors: list[str]
     warnings: list[str]
     output: str
+    #: The grace the rendered project has, which the issue counts days to.
+    project_grace: int = 0
 
     @property
     def ok(self) -> bool:
@@ -107,6 +118,19 @@ def check_supported(steps: list[dict[str, Any]]) -> None:
             for expr in EXPRESSION.findall(str(value)):
                 if expr not in ("github.token", "runner.temp") and not STEP_OUTCOME.fullmatch(expr):
                     raise UnsupportedStepError(f"step {label!r} reads ${{{{ {expr} }}}}")
+
+
+def set_grace(steps: list[dict[str, Any]], days: int) -> tuple[list[dict[str, Any]], int]:
+    """A copy of `steps` whose one `GRACE_DAYS` is `days`, and the rendered value."""
+    changed = copy.deepcopy(steps)
+    graced = [s for s in changed if GRACE_KEY in (s.get("env") or {})]
+    if len(graced) != 1:
+        raise UnsupportedStepError(
+            f"the rendered `{JOB}` job sets {GRACE_KEY} in {len(graced)} steps, not one"
+        )
+    rendered = int(graced[0]["env"][GRACE_KEY])
+    graced[0]["env"][GRACE_KEY] = str(days)
+    return changed, rendered
 
 
 def _resolve(value: Any, context: dict[str, str]) -> str:
@@ -183,3 +207,73 @@ def run_steps(steps: list[dict[str, Any]], *, cwd: Path, token: str, temp: Path)
             failed_step = label
             break
     return JobRun(failed_step, soft_failed, errors, warnings, "".join(output))
+
+
+def findings_due(
+    errors: list[str], *, project_grace: int, today: datetime.date
+) -> list[tuple[str, datetime.date]]:
+    """Each finding the verdict named, with the first day a new project fails on it."""
+    due = []
+    for line in errors:
+        for m in FINDING.finditer(line):
+            since = datetime.date.fromisoformat(m.group("since"))
+            due.append((m.group("finding"), since + datetime.timedelta(days=project_grace + 1)))
+    return due
+
+
+def issue_body(
+    runs: dict[str, JobRun], *, ref: str, run_url: str, watch_grace: int, today: datetime.date
+) -> str:
+    grace = next((r.project_grace for r in runs.values() if r.project_grace), 14)
+    out = [
+        f"The weekly base-image watch failed: {run_url}",
+        "",
+        f"It rendered plinth-template `{ref}` and ran each instance's own `image` job with a"
+        f" grace of {watch_grace} days. A new project's job fails at {grace}.",
+    ]
+    named = False
+    for archetype, run in runs.items():
+        if run.ok:
+            continue
+        out += ["", f"### {archetype}", ""]
+        due = findings_due(run.errors, project_grace=run.project_grace or grace, today=today)
+        named = named or bool(due)
+        for finding, day in due:
+            left = (day - today).days
+            when = (
+                "new projects fail on it now"
+                if left <= 0
+                else f"{left} days left: new projects fail on it from {day.isoformat()}"
+            )
+            out.append(f"- {finding}: {when}")
+        if run.failed_step and not due:
+            out.append(f"- The job stopped at `{run.failed_step}`; the run's log says why.")
+        for step in run.soft_failed:
+            out.append(
+                f"- `{step}` did not finish, so nothing was scanned; the run's log says why."
+                " A later run that finishes confirms the image."
+            )
+        if run.errors and not due:
+            out += [f"- {line}" for line in run.errors]
+    out += ["", "### What to do", ""]
+    if named:
+        out += [
+            "1. Raise the digest in `template/Dockerfile.jinja`: merge Dependabot's `docker`"
+            " pull request for `/template` if one is open, or raise it by hand. A Python package"
+            " is raised in `template/uv.lock.jinja` instead.",
+            "2. Release the template (CONTRIBUTING.md, Cut a release).",
+            "3. Raise coolbress/plinth's template pin and release plinth, so that"
+            " `/plinth:new-project` renders the new tag.",
+        ]
+    else:
+        out.append(
+            "No finding is named above, so nothing says yet whether the image needs raising:"
+            " read the run's log. When the rendered `image` job changed shape, the watch"
+            " (`src/template_render/image_watch.py`) changes with it."
+        )
+    out += [
+        "",
+        "Close this issue once a run of the watch passes. While it is open, a later failure"
+        " comments here instead of opening another.",
+    ]
+    return "\n".join(out) + "\n"
