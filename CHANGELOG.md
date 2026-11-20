@@ -99,6 +99,22 @@ means `copier update` on an instance needs hands.
   stays. An existing project gets all of it through
   `/plinth:template-update`; a project that edited those lines resolves them
   by hand. `AGENTS.md` changed, so plinth's pin raise owes an eval suite run.
+- **`license` offers `Proprietary`, for a project nobody else may use**
+  (#289). `MIT` and `Apache-2.0` both grant everyone the right to use, copy
+  and change the code, and were the only choices: a private project made on
+  2026-11-20 was told to render MIT and then rewrite three files by hand.
+  `Proprietary` renders, on both hosts and in every archetype, a `LICENSE`
+  that is a short all-rights-reserved notice naming the owner (or "the
+  <project> authors") with the year, and no grant; `pyproject.toml` with
+  `license = "LicenseRef-Proprietary"` (PEP 639's form for a license with no
+  SPDX identifier), `license-files = ["LICENSE"]` kept, and the
+  `Private :: Do Not Upload` classifier, which PyPI refuses, so the package
+  is never uploaded by mistake; and a `## License` section in the README
+  saying the code is not licensed for use by others. `MIT` stays the
+  default, and `MIT` and `Apache-2.0` render exactly as before. An existing
+  project keeps its answer; to move one to `Proprietary`, run
+  `copier update --data license=Proprietary`, then review `LICENSE`, `pyproject.toml` and
+  `README.md` before merging: the update rewrites all three.
 
 ### Changed
 

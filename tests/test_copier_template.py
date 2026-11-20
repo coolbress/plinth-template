@@ -6055,6 +6055,91 @@ def test_license_answer_reaches_pyproject_and_the_license_file(
     assert "coolbress" not in apache + mit
 
 
+def _license_question() -> dict[str, Any]:
+    block = CONFIG.read_text(encoding="utf-8").split("\nlicense:", 1)[1].split("\n\n", 1)[0]
+    question: dict[str, Any] = yaml.safe_load("license:" + block)["license"]
+    return question
+
+
+#: What each license choice renders: the line `LICENSE` must carry and the
+#: `license` field of `pyproject.toml`. A choice copier.yml offers without a
+#: row here fails the test below.
+LICENSE_RENDERS = {
+    "MIT": ("MIT License", "MIT"),
+    "Apache-2.0": ("Apache License", "Apache-2.0"),
+    "Proprietary": ("All rights reserved.", "LicenseRef-Proprietary"),
+}
+
+
+def test_license_offers_proprietary_beside_the_two_grants() -> None:
+    """A project nobody else may use had no fitting choice (#289)."""
+    question = _license_question()
+    assert question["default"] == "MIT"
+    assert set(question["choices"].values()) == set(LICENSE_RENDERS)
+
+
+@pytest.mark.parametrize("choice", [*sorted(_license_question()["choices"].values()), None])
+def test_each_license_choice_renders_its_own_license(tmp_path: Path, choice: str | None) -> None:
+    """Each choice copier.yml offers, and no answer at all, rendered for real:
+    a choice listed but broken in `LICENSE.jinja` fails here, not in an
+    instance (#289). `None` leaves the question unanswered: MIT, the default."""
+    import tomllib
+
+    out = render(tmp_path / "lic", license=choice)
+    answered = choice or "MIT"
+    line, field = LICENSE_RENDERS[answered]
+    notice = (out / "LICENSE").read_text(encoding="utf-8")
+    assert line in notice, notice[:200]
+    others = [other for name, (other, _) in LICENSE_RENDERS.items() if name != answered]
+    assert not [other for other in others if other in notice], notice[:200]
+    project = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert project["license"] == field
+    answers = yaml.safe_load((out / ".copier-answers.yml").read_text(encoding="utf-8"))
+    assert answers["license"] == answered
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize(
+    ("archetype", "host"),
+    [(a, "github") for a in ("cli", "library", "backend", "data-ml", "web")]
+    + [(a, "gitlab") for a in ("cli", "library", "backend", "data-ml")],
+)
+def test_proprietary_grants_nothing_and_cannot_be_uploaded(
+    tmp_path: Path, archetype: str, host: str
+) -> None:
+    """`Proprietary`: an all-rights-reserved notice and no grant in `LICENSE`,
+    a PEP 639 `LicenseRef-` expression, and the classifier PyPI refuses, so
+    an upload by mistake fails (#289). `uv build` checks the metadata."""
+    import tomllib
+
+    out = render(tmp_path / "p", archetype=archetype, host=host, license="Proprietary")
+    year = time.strftime("%Y")
+    notice = (out / "LICENSE").read_text(encoding="utf-8")
+    assert f"Copyright (c) {year} the probe authors. All rights reserved." in notice, notice
+    for grant in ("Permission is hereby granted", "Apache License", "MIT"):
+        assert grant not in notice, f"{grant!r} in a proprietary LICENSE"
+    project = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert project["license"] == "LicenseRef-Proprietary"
+    assert project["license-files"] == ["LICENSE"]
+    assert "Private :: Do Not Upload" in project["classifiers"], project.get("classifiers")
+    typed = "Typing :: Typed" in project["classifiers"]
+    assert typed is (archetype in ("cli", "library")), project["classifiers"]
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "## License\n\nThis code is not licensed for use by others" in readme
+    subprocess.run(  # noqa: S603
+        ["uv", "build", "--quiet", "--out-dir", str(tmp_path / "dist"), str(out)],  # noqa: S607
+        check=True,
+    )
+    assert sorted(p.suffix for p in (tmp_path / "dist").glob("[!.]*")) == [".gz", ".whl"]
+
+
+def test_proprietary_names_the_owner(tmp_path: Path) -> None:
+    out = render(tmp_path / "owned", license="Proprietary", owner="someone")
+    year = time.strftime("%Y")
+    notice = (out / "LICENSE").read_text(encoding="utf-8")
+    assert f"Copyright (c) {year} someone. All rights reserved." in notice, notice
+
+
 def test_lockfile_carries_the_package_name(tmp_path: Path) -> None:
     """A mismatch fails `uv sync --locked` on the new repository's first pull request."""
     out = render(tmp_path / "locked", project_name="my.app")

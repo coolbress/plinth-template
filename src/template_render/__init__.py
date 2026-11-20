@@ -28,12 +28,16 @@ def render(dest: Path, *, vcs_ref: str = "HEAD", **answers: Any) -> Path:
     `vcs_ref="HEAD"`: even for a local path, copier picks the latest tag of a
     git repository, which would test the last release instead of the working
     tree. The weekly image watch passes a released tag instead.
+
+    An answer given as `None` is not passed at all, so copier's default
+    applies: that is how a test renders a question nobody answered.
     """
     import copier
     from copier.errors import DirtyLocalWarning, ShallowCloneWarning
 
     data = dict(DEFAULT_ANSWERS)
     data.update(answers)
+    data = {key: value for key, value in data.items() if value is not None}
     # Under `filterwarnings = ["error"]` exactly two warnings are let through:
     # DirtyLocalWarning (a dirty working tree is rendered as is, which is the
     # point: the template being edited is the one under test) and

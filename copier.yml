@@ -194,11 +194,14 @@ owner:
 
 license:
   type: str
-  help: SPDX license identifier
+  help: |
+    SPDX license identifier, or Proprietary: all rights reserved, no grant to
+    anyone, and a classifier PyPI refuses so the package is never uploaded.
   default: MIT
   choices:
     MIT: MIT
     Apache-2.0: Apache-2.0
+    Proprietary (nobody else may use it): Proprietary
 
 # This generator produces a Python package (pyproject, hatchling, uv.lock,
 # src/<package>/, plinth's python-ci). The choices are only what it can
