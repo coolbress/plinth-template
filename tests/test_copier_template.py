@@ -7017,8 +7017,48 @@ def _release_pin_problem(
     )
 
 
-def _template_tags() -> set[str]:
-    """The tags on GitHub: the test job's checkout carries none.
+def _behind_plinth_problem(
+    changelog: str,
+    read_tags: Callable[[], set[str]],
+    read_releases: Callable[[], dict[str, str]],
+    default: str,
+    head_branch: str,
+) -> str | None:
+    """Why this release would start new projects behind plinth, or None.
+
+    A new project calls plinth at `plinth_sha`'s default, so a release whose
+    default is an older plinth release starts every project made from it
+    behind (#288). Compared in the window `_release_pin_problem` compares in,
+    for the same reasons: between releases plinth moves on and nothing here
+    has to follow, and Dependabot's pull request is left to `main`'s run.
+    """
+    if head_branch.startswith("dependabot/"):
+        return None
+    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
+    assert newest, "CHANGELOG.md has no version section"
+    version = f"v{newest.group(1)}"
+    if version in read_tags():
+        return None
+    releases = read_releases()
+    assert releases, "coolbress/plinth has no release tag (vX.Y.Z) to compare with"
+    latest = max(releases, key=lambda tag: tuple(int(n) for n in tag[1:].split(".")))
+    if releases[latest] == default:
+        return None
+    named = [tag for tag, commit in releases.items() if commit == default]
+    at = f"plinth {named[0]}" if named else "no plinth release"
+    return (
+        f"CHANGELOG.md's newest section {version} has no tag yet, so a release is "
+        f"being cut, and copier.yml's plinth_sha default {default} ({at}) is behind "
+        f"coolbress/plinth's latest release {latest} ({releases[latest]}). A project "
+        f"made from this release would start at {at}. Raise the coolbress/plinth pins in "
+        ".github/workflows and plinth_sha to that commit, plinth_gitlab_integrity to "
+        "its checksum (CONTRIBUTING.md, Cut a release)."
+    )
+
+
+def _ls_remote_tags(repository: str) -> str:
+    """`git ls-remote --tags` of a GitHub repository: the test job's checkout
+    carries no tags, and plinth's are in another repository.
 
     Tried three times, briefly: a read has hung past a minute, and an unread
     tag list must stop the test rather than pass it.
@@ -7026,13 +7066,12 @@ def _template_tags() -> set[str]:
     why = ""
     for _ in range(3):
         try:
-            listed = subprocess.run(
+            listed = subprocess.run(  # noqa: S603 - the two callers name the repository
                 [  # noqa: S607
                     "git",
                     "ls-remote",
                     "--tags",
-                    "--refs",
-                    "https://github.com/coolbress/plinth-template.git",
+                    f"https://github.com/{repository}.git",
                 ],
                 capture_output=True,
                 text=True,
@@ -7044,9 +7083,32 @@ def _template_tags() -> set[str]:
             why = str(error)
             continue
         if listed.returncode == 0:
-            return {line.rsplit("refs/tags/", 1)[1] for line in listed.stdout.splitlines()}
+            return listed.stdout
         why = listed.stderr
-    raise AssertionError(f"could not read the tags: {why}")
+    raise AssertionError(f"could not read {repository}'s tags: {why}")
+
+
+def _template_tags() -> set[str]:
+    """This repository's tags on GitHub."""
+    listed = _ls_remote_tags("coolbress/plinth-template")
+    return {line.rsplit("refs/tags/", 1)[1].removesuffix("^{}") for line in listed.splitlines()}
+
+
+def _release_commits(listed: str) -> dict[str, str]:
+    """Each `vX.Y.Z` tag in `git ls-remote --tags` output and the commit it
+    names: an annotated tag's `^{}` line, else the tag's own."""
+    commits: dict[str, str] = {}
+    for line in listed.splitlines():
+        sha, ref = line.split("\t", 1)
+        found = re.fullmatch(r"refs/tags/(v\d+\.\d+\.\d+)(\^\{\})?", ref)
+        if found and (found.group(2) or found.group(1) not in commits):
+            commits[found.group(1)] = sha
+    return commits
+
+
+def _plinth_releases() -> dict[str, str]:
+    """coolbress/plinth's release tags and their commits."""
+    return _release_commits(_ls_remote_tags("coolbress/plinth"))
 
 
 def _own_workflow_pins() -> set[str]:
@@ -7089,6 +7151,19 @@ def test_a_release_carries_the_plinth_pin_its_own_ci_calls() -> None:
     assert problem is None, problem
 
 
+def test_a_release_starts_new_projects_at_plinths_latest_release() -> None:
+    """A new project calls plinth at the `plinth_sha` default; a release made
+    with an older one starts every project behind (#288)."""
+    problem = _behind_plinth_problem(
+        (TEMPLATE_ROOT / "CHANGELOG.md").read_text(encoding="utf-8"),
+        _template_tags,
+        _plinth_releases,
+        _default("plinth_sha"),
+        _pull_request_head(),
+    )
+    assert problem is None, problem
+
+
 _RELEASED = "## [Unreleased]\n\n## [1.2.0] - 2026-01-02\n\n## [1.1.0] - 2026-01-01\n"
 _DEFAULT_PIN, _RAISED_PIN = "a" * 40, "b" * 40
 
@@ -7124,6 +7199,67 @@ def test_a_dependabot_raise_is_not_failed_by_reading_the_tags() -> None:
     head = "dependabot/github_actions/actions-1"
     assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_RAISED_PIN}, head) is None
     assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_DEFAULT_PIN}, "") is None
+
+
+_PLINTH_RELEASES = {"v2.9.0": "c" * 40, "v2.10.0": _DEFAULT_PIN}
+
+
+@pytest.mark.parametrize(
+    ("tags", "releases", "head", "stopped"),
+    [
+        # A release being cut whose default is an older plinth release.
+        ({"v1.1.0"}, {**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN}, "docs/changelog", True),
+        # On `main` after the release pull request's merge, before the tag.
+        ({"v1.1.0"}, {**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN}, "", True),
+        # A default that is no plinth release at all, `main`'s head say.
+        ({"v1.1.0"}, {"v2.9.0": "c" * 40}, "docs/changelog", True),
+        # Current: the default is the latest release, by version, not by text.
+        ({"v1.1.0"}, _PLINTH_RELEASES, "docs/changelog", False),
+        # Between releases nothing is compared, however far plinth moved.
+        ({"v1.1.0", "v1.2.0"}, {"v2.11.0": _RAISED_PIN}, "ci/raise", False),
+        ({"v1.1.0"}, {"v2.11.0": _RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+    ],
+)
+def test_a_release_is_stopped_while_its_plinth_pin_is_behind_the_latest_release(
+    tags: set[str], releases: dict[str, str], head: str, stopped: bool
+) -> None:
+    problem = _behind_plinth_problem(_RELEASED, lambda: tags, lambda: releases, _DEFAULT_PIN, head)
+    assert (problem is not None) is stopped, problem
+    if stopped:
+        assert problem is not None
+        assert _DEFAULT_PIN in problem
+        latest = max(releases, key=lambda tag: tuple(int(n) for n in tag[1:].split(".")))
+        assert latest in problem
+        assert releases[latest] in problem
+
+
+def test_unread_plinth_releases_stop_a_release_rather_than_pass_it() -> None:
+    def unreadable() -> dict[str, str]:
+        raise AssertionError("could not read coolbress/plinth's tags")
+
+    with pytest.raises(AssertionError, match="coolbress/plinth"):
+        _behind_plinth_problem(_RELEASED, lambda: {"v1.1.0"}, unreadable, _DEFAULT_PIN, "")
+    with pytest.raises(AssertionError, match="no release"):
+        _behind_plinth_problem(_RELEASED, lambda: {"v1.1.0"}, dict, _DEFAULT_PIN, "")
+
+
+def test_between_releases_plinth_is_not_read() -> None:
+    def unreadable() -> dict[str, str]:
+        raise AssertionError("plinth's tags were read")
+
+    tagged = {"v1.1.0", "v1.2.0"}
+    assert _behind_plinth_problem(_RELEASED, lambda: tagged, unreadable, _DEFAULT_PIN, "") is None
+
+
+def test_release_tags_are_read_as_the_commits_they_point_at() -> None:
+    """An annotated tag's own object is not the commit a workflow pin names."""
+    listed = (
+        f"{'1' * 40}\trefs/tags/v2.10.0\n"
+        f"{_DEFAULT_PIN}\trefs/tags/v2.10.0^{{}}\n"
+        f"{'c' * 40}\trefs/tags/v2.9.0\n"
+        f"{'d' * 40}\trefs/tags/v2.11.0-rc.1\n"
+    )
+    assert _release_commits(listed) == {"v2.10.0": _DEFAULT_PIN, "v2.9.0": "c" * 40}
 
 
 @pytest.mark.parametrize(

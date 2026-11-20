@@ -50,6 +50,19 @@ means `copier update` on an instance needs hands.
   still has no `branches:` filter. An existing project gets the two changed
   passages through `/plinth:template-update`; a project that edited either
   keeps its own on conflict.
+- **A release raises its plinth pin to plinth's latest release first** (#288).
+  A new project calls plinth at `plinth_sha`'s default, and that default
+  followed only this repository's own workflow pins, which nothing had
+  raised since v1.45.0: v1.45.0 to v1.47.0 started every new project at
+  plinth v2.32.0 while plinth reached v2.38.0, and a project made on
+  2026-11-20 was told on its first day that its pin was 28 commits behind.
+  `CONTRIBUTING.md`'s "Cut a release" now raises the three `coolbress/plinth`
+  workflow pins to the latest release before the release section, then
+  `plinth_sha` to that commit; a new test stops a release whose default is
+  behind the latest `coolbress/plinth` release tag, naming both, and fails
+  when the tags cannot be read. Between releases it compares nothing. This
+  repository only: an instance receives nothing from this entry, and an
+  existing project keeps its own pin on `copier update` (#22).
 
 ## [1.47.0] - 2026-11-20
 

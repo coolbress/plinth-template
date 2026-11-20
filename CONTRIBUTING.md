@@ -91,9 +91,28 @@ docs) is filed in coolbress/plinth, and the pull request here ends with
 A change that reaches an instance needs a tag; copier picks the latest tag
 and plinth pins one.
 
-1. In the pull request that adds the version's `CHANGELOG.md` section, raise
-   `plinth_sha` in `copier.yml` to the commit `.github/workflows` calls, and
-   `plinth_gitlab_integrity` to that commit's checksum:
+1. Before writing the release section, raise the three `coolbress/plinth`
+   pins in `.github/workflows` (`ci.yml`, `label.yml`, `third-party.yml`) to
+   plinth's latest release, and merge that once its CI is green on them.
+   Dependabot's `actions` pull request does it when it names that release;
+   its three-day cooldown and weekly schedule often leave it a release or more
+   behind (#278 named v2.35.0 when v2.38.0 was out), and then the raise is by
+   hand. The latest release's commit:
+
+   ```bash
+   git ls-remote --tags https://github.com/coolbress/plinth.git 'v*^{}' |
+     sort -t/ -k3 -V | tail -1
+   ```
+
+   Why: a new project calls plinth at `plinth_sha`'s default, so it starts at
+   whatever this release carries. Releases v1.45.0 to v1.47.0 carried v2.32.0
+   while plinth reached v2.38.0, and a project made on 2026-11-20 was told on
+   its first day that its pin was 28 commits behind (#288). An existing
+   project keeps its own pin on `copier update` (#22); its Dependabot raises
+   it.
+2. In the pull request that adds the version's `CHANGELOG.md` section, raise
+   `plinth_sha` in `copier.yml` to that same commit, and
+   `plinth_gitlab_integrity` to its checksum:
 
    ```bash
    curl -fsSL https://raw.githubusercontent.com/coolbress/plinth/<sha>/gitlab/python-ci.yml |
@@ -101,15 +120,20 @@ and plinth pins one.
    ```
 
    coolbress/plinth reads the default at a tag as what that tag was tested
-   with. `test_a_release_carries_the_plinth_pin_its_own_ci_calls` fails while
-   the newest section has no tag and the two differ. Between releases they may
-   differ: Dependabot raises the workflows' pins and the default waits for the
-   release, so the test compares nothing then.
-2. Tag from the merged `main` once its CI is green, `vX.Y.Z`, MAJOR when
+   with. While the newest section has no tag, two tests stop the release:
+   `test_a_release_carries_the_plinth_pin_its_own_ci_calls` when the default
+   is not what `.github/workflows` calls, and
+   `test_a_release_starts_new_projects_at_plinths_latest_release` when it is
+   not plinth's latest release, naming both; an unread tag list fails it too.
+   The section says what a new project's pin moves to. Between releases
+   neither compares anything: Dependabot raises the workflows' pins, plinth
+   releases again, and the default waits for the next release.
+3. Tag from the merged `main` once its CI is green, `vX.Y.Z`, MAJOR when
    `copier update` on an instance needs hands. A Dependabot pull request is
-   not failed by that test even in this window; merging one here turns `main`
-   red, and step 1 is repeated before the tag.
-3. Write the release note as the "why" for a consumer, then tell plinth: its
+   not failed by those tests even in this window; merging one here turns
+   `main` red, and step 2 is repeated before the tag. So does a plinth
+   release in this window: raise to it, or tag before it lands.
+4. Write the release note as the "why" for a consumer, then tell plinth: its
    `scripts/new-project.sh` pins the tested tag and its next release names it.
 
 ## When the base-image watch opens an issue

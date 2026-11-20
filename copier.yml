@@ -254,8 +254,9 @@ archetype:
 # the one this template release was tested with. It is the only pin the
 # template carries, and the instance's Dependabot raises it afterwards.
 # coolbress/plinth reads this default at a tag as what that tag was tested with,
-# so each release raises it to the commit this repository's own workflows call
-# (CONTRIBUTING.md, Cut a release); between releases it stays there.
+# so each release raises it, with this repository's own workflow pins, to
+# plinth's latest release (CONTRIBUTING.md, Cut a release); between releases it
+# stays there. A new project starts at this default (#288).
 #
 # Recorded, not computed, and that is the whole point of the question. While
 # it was `when: false` copier neither wrote it to the answers file nor let
