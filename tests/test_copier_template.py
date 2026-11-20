@@ -4942,14 +4942,14 @@ _ONE_AT_A_TIME = {
         "pull request",
         "`gh pr update-branch <n>`",
         "`gh pr view <n> --json headRefOid --jq .headRefOid`",
-        "`--match-head-commit` on that head",
+        "`--match-head-commit` on that new head",
         "`ci.yml` runs on `pull_request: edited`",
     ),
     "gitlab": (
         "merge request",
         "`glab mr rebase <n>`",
         "`glab mr view <n> -F json --jq .sha`",
-        "`--sha` on that head",
+        "`--sha` on that new head",
         "GitLab starts no pipeline when a description is edited",
     ),
 }
@@ -4981,8 +4981,8 @@ def test_several_open_requests_merge_one_at_a_time(tmp_path: Path, host: str) ->
     step7 = contributing.split("7. Merge when", 1)[1].split("## ", 1)[0]
     for must in (
         f"When several {noun}s are open",
-        f"bring only the next one up to date ({update})",
-        f"read its new head ({head})",
+        f"read the next one's head ({head}), bring only that one up to date ({update})",
+        "read its head again until it differs from the head before the update",
         pin,
         "about N(N-1)/2 CI runs instead of N",
         "Leave the description alone while waiting",

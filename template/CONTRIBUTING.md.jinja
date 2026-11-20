@@ -147,10 +147,12 @@ one narrow ignore in `pyproject.toml`, with its reason.
    merges now or refuses, instead of queueing a merge for later.
 
    When several merge requests are open, only the session the person names,
-   or the person, merges them, one at a time: bring only the next one up to
-   date (`glab mr rebase <n>`), read its new head (`glab mr view <n> -F json
-   --jq .sha`), wait for its pipeline, merge it with the command above and
-   `--sha` on that head, then take the next. Each merge leaves every other
+   or the person, merges them, one at a time: read the next one's head
+   (`glab mr view <n> -F json --jq .sha`), bring only that one up to date
+   (`glab mr rebase <n>`), read its head again until it differs from the
+   head before the update (GitLab runs the rebase on the host, and it can
+   finish after the command returns), wait for its pipeline, merge it with
+   the command above and `--sha` on that new head, then take the next. Each merge leaves every other
    merge request behind `main`, so bringing them all up to date after each
    merge costs about N(N-1)/2 CI runs instead of N. A session not told to
    merge leaves its own merge request behind. Leave the description alone
@@ -174,10 +176,12 @@ one narrow ignore in `pyproject.toml`, with its reason.
    description is read when the command runs, so finish editing it first.
 
    When several pull requests are open, only the session the person names,
-   or the person, merges them, one at a time: bring only the next one up to
-   date (`gh pr update-branch <n>`), read its new head (`gh pr view <n> --json
-   headRefOid --jq .headRefOid`), wait for its required checks, merge it with
-   the command above and `--match-head-commit` on that head, then take the
+   or the person, merges them, one at a time: read the next one's head
+   (`gh pr view <n> --json headRefOid --jq .headRefOid`), bring only that
+   one up to date (`gh pr update-branch <n>`), read its head again until it
+   differs from the head before the update (the command can return before
+   the new head shows), wait for its required checks, merge it with the
+   command above and `--match-head-commit` on that new head, then take the
    next. Each merge leaves every other pull request behind `main`, so
    bringing them all up to date after each merge costs about N(N-1)/2 CI runs
    instead of N. A session not told to merge leaves its own pull request
