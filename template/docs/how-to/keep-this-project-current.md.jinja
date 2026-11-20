@@ -155,3 +155,40 @@ project's to change. `/plinth:floor-check` checks only that the file exists,
 and `/plinth:template-update` keeps this project's lines unless the template
 changed the same ones, which it then shows as a conflict.
 {%- endif %}
+
+## Before saying plinth lacks something
+
+This project calls plinth at one fixed commit, the pin, which can be many
+releases behind. A feature missing from plinth's files at the pin may already
+be released. Before saying plinth does not do something, or asking plinth for
+it, read the latest release's notes: plinth's
+[`CHANGELOG.md` on `main`](https://github.com/coolbress/plinth/blob/main/CHANGELOG.md),
+where the first section after `[Unreleased]` is the latest release, or
+<https://github.com/coolbress/plinth/releases>. Not plinth's code on `main`:
+work not yet released does not reach this project.
+
+To see which version this project calls, take the commit from {% if host == 'gitlab' -%}
+the `remote:` line of `.gitlab-ci.yml`, between `coolbress/plinth/` and
+`/gitlab/`,
+{%- else -%}
+the `coolbress/plinth` `uses:` line in `.github/workflows/ci.yml`, after `@`,
+{%- endif %} and look it up among plinth's tags:
+
+```bash
+git ls-remote --tags https://github.com/coolbress/plinth | grep <commit>
+```
+
+It prints the version as `refs/tags/vX.Y.Z^{}`; when it prints nothing, the
+pin is not a release. The release sections above that version, not
+`[Unreleased]`, are what this project does not have yet.
+
+When the feature is in one of them, the answer is raising the pin, not a
+request to plinth: step 3 above.
+{%- if host == 'gitlab' %} It moves the `remote:` and `integrity:` lines
+together, in one merge request.
+{%- else %} Its pull request moves `ci.yml` and `label.yml` together
+{%- if third_party_review %}, with `third-party.yml`{% endif %}. When
+Dependabot has not opened one yet, put the latest release's commit, the one
+`git ls-remote https://github.com/coolbress/plinth 'refs/tags/<tag>^{}'`
+prints, in every `coolbress/plinth` `uses:` line, in one pull request.
+{%- endif %}
