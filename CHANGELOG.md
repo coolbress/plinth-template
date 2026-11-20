@@ -38,6 +38,15 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **A weekly workflow, `Base-image watch`, says when a pinned base image is
+  close to failing new projects** (#266). It renders `backend` and `web` at
+  the latest release, runs each render's own `image` job with a grace of 7
+  days instead of 14, and opens one issue when that fails, about a week
+  before new projects would: the time a template release and plinth's pin
+  raise take. The issue names each finding, the day new projects start
+  failing on it, and what to raise. It runs in this repository only; a
+  project's own job and its 14 days are unchanged.
+
 - **Dependabot now raises the base-image digests in `Dockerfile`, here
   first, before new projects' `image` job fails on them** (#266). On
   2026-11-19 the run stage's `python:3.12-slim` digest, built 2026-10-28,

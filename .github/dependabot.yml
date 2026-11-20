@@ -31,7 +31,8 @@ updates:
   # `FROM` lines, so the Jinja around them does not stop it. Digests and
   # patches only, as in the rendered `dependabot.yml.jinja`: a Python minor
   # moves both stages, `.python-version` and mypy's target together, which is
-  # a decision, not an update.
+  # a decision, not an update. A digest that ages anyway is what the weekly
+  # `.github/workflows/image-watch.yml` reports.
   - package-ecosystem: "docker"
     directory: "/template"
     schedule:
