@@ -4199,7 +4199,7 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, headi
 
 
 #: A command the documents tell the agent to run starts with one of these.
-_TOLD = re.compile(r"^(?:git|gh|glab|uv) [a-z]")
+_TOLD = re.compile(r"^(?:git|gh|glab|uv|scripts/heavy\.sh) [a-z]")
 
 
 def _told_commands(text: str) -> list[str]:

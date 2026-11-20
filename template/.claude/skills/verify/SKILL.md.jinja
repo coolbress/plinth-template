@@ -29,11 +29,13 @@ fix touches: the diff the reviewer read is not reshuffled under them.
 ## 2. Run the checks
 
 While the work goes on, run the tests of what changed: the pytest command in
-`AGENTS.md`'s code block with the file after it (`tests/test_<module>.py`, or
-`-k`). Run the commands in the code block at the top of `AGENTS.md`, in that
+`AGENTS.md`'s code block without `scripts/heavy.sh`, with the file after it
+(`tests/test_<module>.py`, or `-k`). Run the commands in the code block at the top of `AGENTS.md`, in that
 order, once, before the {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %}. That block is the only list: do
-not keep a second copy of the commands here or anywhere else. A check not run
-is named under "Not verified" in the description, never reported as passed.
+not keep a second copy of the commands here or anywhere else. A check not run,
+such as one `scripts/heavy.sh` gave up on with "did not run" because the
+machine's slots stayed busy, is named under "Not verified" in the description,
+never reported as passed.
 
 - A command that fails stops the commit. Report it with its output.
 - A check that looks wrong, such as a test of the old behaviour after an
@@ -48,12 +50,12 @@ is named under "Not verified" in the description, never reported as passed.
 
 {% if archetype == 'library' -%}
 Run `tests/test_built_wheel.py` alone: the pytest command in `AGENTS.md`'s
-code block, with the file and `-v` after it. It builds the wheel and calls the
+code block without `scripts/heavy.sh`, with the file and `-v` after it. It builds the wheel and calls the
 package's public name from it, as a person who installs the package does, not
 from the source tree.
 {%- else -%}
 Run `tests/test_entry_point.py` alone: the pytest command in `AGENTS.md`'s
-code block, with the file and `-v` after it. It runs
+code block without `scripts/heavy.sh`, with the file and `-v` after it. It runs
 `python -m {{ package_name }}` as a person does, checks that it exits 0 and
 logs "started" with a greeting, and compares what it prints with
 `tests/entry_point.expected`.

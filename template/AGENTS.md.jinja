@@ -6,11 +6,11 @@
 uv sync --locked          # fails when the lockfile disagrees with pyproject
 uv run ruff check . && uv run ruff format --check .
 uv run mypy .
-uv run pytest
+scripts/heavy.sh uv run pytest  # waits for a free slot on this machine; 75: did not run
 {% if host == 'gitlab' %}uv build                  # `build` is a pipeline job{% else %}uv build                  # `ci / build` is a required check{% endif %}
 ```
 
-While changing code, run the tests of what changed (`uv run pytest tests/test_<module>.py`, or `-k`); the whole block runs once, before the {% if host == 'gitlab' %}merge request, and the pipeline{% else %}pull request, and CI{% endif %} is the gate. A check not run locally is named under "Not verified" in the description.
+While changing code, run the tests of what changed (`uv run pytest tests/test_<module>.py`, or `-k`); the whole block runs once, before the {% if host == 'gitlab' %}merge request, and the pipeline{% else %}pull request, and CI{% endif %} is the gate. A check not run locally, `heavy.sh`'s "did not run" included, is named under "Not verified" in the description.
 
 ## Where you are
 

@@ -6,6 +6,33 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **The sessions on one machine share its slots for the whole test suite,
+  and while working each runs only the tests of what changed** (#284). On
+  2026-11-20 one laptop with 8 GB and 8 cores held 20 Claude Code sessions,
+  and eleven full suites ran at once: load average 33, swap 6.9 of 7.2 GB, a
+  7-minute run taking 52. No session broke a rule; each was told to run the
+  whole block. `AGENTS.md` (both hosts) and the `verify` skill now say:
+  while changing code, run the tests of what changed (`uv run pytest
+  tests/test_<module>.py`, or `-k`); the whole block once, before the pull
+  or merge request, with CI as the gate; a check not run is named under
+  "Not verified". A new `scripts/heavy.sh <command…>`, in every archetype,
+  runs its command when one of the machine's slots is free and waits
+  otherwise, printing once a minute how many run and their pids. The slots
+  are the machine's, shared by every project made with plinth: a directory
+  under `${TMPDIR:-/tmp}` with one entry per running command, and a dead
+  pid's entry is taken back. `PLINTH_HEAVY_SLOTS` sets how many run at once
+  (default 2; 1 on a small machine) and `PLINTH_HEAVY_WAIT` how many
+  minutes to wait (default 20); then the command does not run, the script
+  exits 75 with a line saying so, and the check is reported as not
+  verified. `AGENTS.md`'s block runs `scripts/heavy.sh uv run pytest`, and
+  `.claude/settings.json` allows exactly that prefix; CI is unchanged. An
+  existing project gets all of it through `/plinth:template-update`; a
+  project that edited the block's `pytest` line or `verify`'s step 2
+  resolves that line by hand. `AGENTS.md` changed, so plinth's pin raise
+  owes an eval suite run.
+
 ## [1.47.0] - 2026-11-20
 
 **A new `backend`, `data-ml` or `web` project's image no longer fails its scan on a Debian fix the official Python image has not picked up yet.** The run stage now applies Debian's published updates at build, so `zlib1g`'s CVE-2026-85091, on which every new project's `image` job would fail from 2026-11-22, is fixed in the image though no rebuilt `python:3.12-slim` exists; building the image now needs network access to Debian's mirrors. `docs/agents/issue-tracker.md` gains the table of where each record goes, and this repository gains a weekly watch and Dependabot for the base images, so the next such failure is seen a week ahead. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged, and so are the rendered workflows and the questions, so the Actions allowlist is unchanged. `copier update` needs no hands, except where a project edited the lines named below. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
