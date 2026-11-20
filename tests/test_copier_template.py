@@ -4940,17 +4940,33 @@ def test_agents_md_says_who_merges_and_how(rendered: Path) -> None:
 _ONE_AT_A_TIME = {
     "github": (
         "pull request",
-        "`gh pr update-branch <n>`",
         "`gh pr view <n> --json headRefOid --jq .headRefOid`",
-        "`--match-head-commit` on that new head",
+        "`--match-head-commit` on that head",
         "`ci.yml` runs on `pull_request: edited`",
     ),
     "gitlab": (
         "merge request",
-        "`glab mr rebase <n>`",
         "`glab mr view <n> -F json --jq .sha`",
-        "`--sha` on that new head",
+        "`--sha` on that head",
         "GitLab starts no pipeline when a description is edited",
+    ),
+}
+
+#: How step 7 tells a request that is behind from one that is current, and
+#: what it does with a current one: an update of a current pull request
+#: answers "already up-to-date" and never moves the head, so waiting for the
+#: head to change would wait forever (Codex on plinth-template #296).
+_BEHIND_OR_CURRENT = {
+    "github": (
+        "(`gh pr view <n> --json mergeStateStatus --jq .mergeStateStatus`,"
+        " read again while it says `UNKNOWN`). Only when it says `BEHIND`,"
+        " bring only that one up to date (`gh pr update-branch <n>`)",
+        "Otherwise it is current:",
+    ),
+    "gitlab": (
+        "(`glab mr view <n> -F json --jq .diverged_commits_count`). Only when that"
+        " count is above 0, bring only that one up to date (`glab mr rebase <n>`)",
+        "When the count is 0 it is current:",
     ),
 }
 
@@ -4963,7 +4979,7 @@ def test_several_open_requests_merge_one_at_a_time(tmp_path: Path, host: str) ->
     (plinth-template #293). `AGENTS.md`'s merge bullet holds the three rules on
     its existing line, and step 7 gives the sequence, the reason and what an
     edited description starts on this host."""
-    noun, update, head, pin, edited = _ONE_AT_A_TIME[host]
+    noun, head, pin, edited = _ONE_AT_A_TIME[host]
     out = render(tmp_path / host, host=host)
     agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
     opening = f"- Merge only when the person says so for that {noun}"
@@ -4981,8 +4997,12 @@ def test_several_open_requests_merge_one_at_a_time(tmp_path: Path, host: str) ->
     step7 = contributing.split("7. Merge when", 1)[1].split("## ", 1)[0]
     for must in (
         f"When several {noun}s are open",
-        f"read the next one's head ({head}), bring only that one up to date ({update})",
+        f"Read the next one's head ({head}) and whether it is behind `main`",
+        *_BEHIND_OR_CURRENT[host],
         "read its head again until it differs from the head before the update",
+        "the head does not move, so go on with the head you read"
+        if host == "gitlab"
+        else "the head would not move, so go on with the head you read",
         pin,
         "about N(N-1)/2 CI runs instead of N",
         "Leave the description alone while waiting",

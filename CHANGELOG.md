@@ -85,12 +85,14 @@ means `copier update` on an instance needs hands.
   count: only the session the person names, or the person, merges them, one
   at a time; that session does not edit a description while it waits; a
   session not told to merge does not bring its own pull request up to date.
-  `CONTRIBUTING.md` step 7 gives the sequence (bring only the next one up to
-  date with `gh pr update-branch <n>`, or `glab mr rebase <n>` on GitLab,
-  read its head again until it differs from the one before the update,
-  since the update can finish after the command returns, wait for its
-  checks, merge with `--match-head-commit`, or `--sha`, on that new head,
-  then the next), why (about N(N-1)/2 CI runs
+  `CONTRIBUTING.md` step 7 gives the sequence (read the next one's head
+  and whether it is behind: `mergeStateStatus` is `BEHIND`, or on GitLab
+  `diverged_commits_count` is above 0; only then bring that one up to date
+  with `gh pr update-branch <n>`, or `glab mr rebase <n>`, and read its
+  head again until it differs from the one before, since the update can
+  finish after the command returns; a current one keeps its head, since
+  updating it moves nothing; wait for its checks, merge with
+  `--match-head-commit`, or `--sha`, on that head, then the next), why (about N(N-1)/2 CI runs
   instead of N), and why the description is left alone: on GitHub `ci.yml`
   runs on `pull_request: edited`, so an edit restarts the whole workflow and
   cancels the run in progress; on GitLab no pipeline starts on an edit, so
