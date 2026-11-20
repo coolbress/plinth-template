@@ -10,6 +10,8 @@ uv run pytest
 {% if host == 'gitlab' %}uv build                  # `build` is a pipeline job{% else %}uv build                  # `ci / build` is a required check{% endif %}
 ```
 
+While changing code, run the tests of what changed (`uv run pytest tests/test_<module>.py`, or `-k`); the whole block runs once, before the {% if host == 'gitlab' %}merge request, and the pipeline{% else %}pull request, and CI{% endif %} is the gate. A check not run locally is named under "Not verified" in the description.
+
 ## Where you are
 
 - Asked what to do next, or where the project is: tell the person to type `/plinth:guide`, which reads the project and names the one command to type next; only the person can start it.

@@ -28,9 +28,12 @@ fix touches: the diff the reviewer read is not reshuffled under them.
 
 ## 2. Run the checks
 
-Run the commands in the code block at the top of `AGENTS.md`, in that order.
-That block is the only list: do not keep a second copy of the commands here or
-anywhere else.
+While the work goes on, run the tests of what changed: the pytest command in
+`AGENTS.md`'s code block with the file after it (`tests/test_<module>.py`, or
+`-k`). Run the commands in the code block at the top of `AGENTS.md`, in that
+order, once, before the {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %}. That block is the only list: do
+not keep a second copy of the commands here or anywhere else. A check not run
+is named under "Not verified" in the description, never reported as passed.
 
 - A command that fails stops the commit. Report it with its output.
 - A check that looks wrong, such as a test of the old behaviour after an
