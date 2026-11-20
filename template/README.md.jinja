@@ -576,7 +576,12 @@ changed.
 
 [`CONTRIBUTING.md`](CONTRIBUTING.md), in particular the test policy. `main` is
 {% if host == 'gitlab' %}protected; a change lands as a merge request with a passing pipeline.{% else %}protected; a change lands as a pull request with green checks.{% endif %}
+{% if license == 'Proprietary' %}
+## License
 
+This code is not licensed for use by others: all rights reserved, as
+[`LICENSE`](LICENSE) says.
+{% endif %}
 ## About this repository
 
 Created from [`coolbress/plinth-template`](https://github.com/coolbress/plinth-template).
