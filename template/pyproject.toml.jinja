@@ -4,12 +4,27 @@ version = "0.1.0"
 description = "One line saying what this is"
 readme = "README.md"
 requires-python = ">=3.12"
+{%- if license == 'Proprietary' %}
+# No SPDX identifier names "all rights reserved"; PEP 639 takes a
+# `LicenseRef-` name with the text in `license-files`.
+license = "LicenseRef-Proprietary"
+{%- else %}
 license = "{{ license }}"
+{%- endif %}
 license-files = ["LICENSE"]
 {%- if owner %}
 authors = [{ name = "{{ owner }}" }]
 {%- endif %}
+{%- if license == 'Proprietary' %}
+# PyPI refuses any upload carrying a `Private ::` classifier, so a publish by
+# mistake fails instead of making the code public.
 {%- if archetype in ['cli', 'library'] %}
+# The package ships `py.typed`: a type checker reads its annotations.
+classifiers = ["Private :: Do Not Upload", "Typing :: Typed"]
+{%- else %}
+classifiers = ["Private :: Do Not Upload"]
+{%- endif %}
+{%- elif archetype in ['cli', 'library'] %}
 # The package ships `py.typed`: a type checker reads its annotations.
 classifiers = ["Typing :: Typed"]
 {%- endif %}

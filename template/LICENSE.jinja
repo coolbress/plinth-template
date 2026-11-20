@@ -1,6 +1,13 @@
 {%- set year = '%Y' | strftime -%}
 {%- set holder = owner if owner else 'the ' ~ project_name ~ ' authors' -%}
-{%- if license == 'Apache-2.0' %}                                 Apache License
+{%- if license == 'Proprietary' -%}
+Copyright (c) {{ year }} {{ holder }}. All rights reserved.
+
+This software and its source code are proprietary and confidential. No
+license or right to use, copy, modify, merge, publish, distribute,
+sublicense or sell it is granted to anyone, except by written permission of
+the copyright holder.
+{%- elif license == 'Apache-2.0' %}                                 Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
 

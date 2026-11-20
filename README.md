@@ -23,7 +23,7 @@ become a Python package is refused before any file is written.
 On GitHub copier asks thirteen questions, and Enter takes the default for all
 but the first:
 
-- the repository name, the owner, the license (MIT or Apache-2.0);
+- the repository name, the owner, the license (MIT, Apache-2.0, or Proprietary: all rights reserved);
 - the kind of project, one of five: `cli`, `library`, `backend`, `data-ml`,
   or `web`, a server-rendered Django app with Postgres, GitHub only;
 - `plinth_sha`, the commit of coolbress/plinth the CI calls; Enter takes the

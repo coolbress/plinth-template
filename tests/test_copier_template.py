@@ -5896,6 +5896,56 @@ def test_license_answer_reaches_pyproject_and_the_license_file(
     assert "coolbress" not in apache + mit
 
 
+def test_license_offers_proprietary_beside_the_two_grants() -> None:
+    """A project nobody else may use had no fitting choice (#289)."""
+    block = CONFIG.read_text(encoding="utf-8").split("\nlicense:", 1)[1].split("\n\n", 1)[0]
+    choices = yaml.safe_load("license:" + block)["license"]
+    assert choices["default"] == "MIT"
+    assert set(choices["choices"].values()) == {"MIT", "Apache-2.0", "Proprietary"}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize(
+    ("archetype", "host"),
+    [(a, "github") for a in ("cli", "library", "backend", "data-ml", "web")]
+    + [(a, "gitlab") for a in ("cli", "library", "backend", "data-ml")],
+)
+def test_proprietary_grants_nothing_and_cannot_be_uploaded(
+    tmp_path: Path, archetype: str, host: str
+) -> None:
+    """`Proprietary`: an all-rights-reserved notice and no grant in `LICENSE`,
+    a PEP 639 `LicenseRef-` expression, and the classifier PyPI refuses, so
+    an upload by mistake fails (#289). `uv build` checks the metadata."""
+    import tomllib
+
+    out = render(tmp_path / "p", archetype=archetype, host=host, license="Proprietary")
+    year = time.strftime("%Y")
+    notice = (out / "LICENSE").read_text(encoding="utf-8")
+    assert f"Copyright (c) {year} the probe authors. All rights reserved." in notice, notice
+    for grant in ("Permission is hereby granted", "Apache License", "MIT"):
+        assert grant not in notice, f"{grant!r} in a proprietary LICENSE"
+    project = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert project["license"] == "LicenseRef-Proprietary"
+    assert project["license-files"] == ["LICENSE"]
+    assert "Private :: Do Not Upload" in project["classifiers"], project.get("classifiers")
+    typed = "Typing :: Typed" in project["classifiers"]
+    assert typed is (archetype in ("cli", "library")), project["classifiers"]
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "## License\n\nThis code is not licensed for use by others" in readme
+    subprocess.run(  # noqa: S603
+        ["uv", "build", "--quiet", "--out-dir", str(tmp_path / "dist"), str(out)],  # noqa: S607
+        check=True,
+    )
+    assert sorted(p.suffix for p in (tmp_path / "dist").glob("[!.]*")) == [".gz", ".whl"]
+
+
+def test_proprietary_names_the_owner(tmp_path: Path) -> None:
+    out = render(tmp_path / "owned", license="Proprietary", owner="someone")
+    year = time.strftime("%Y")
+    notice = (out / "LICENSE").read_text(encoding="utf-8")
+    assert f"Copyright (c) {year} someone. All rights reserved." in notice, notice
+
+
 def test_lockfile_carries_the_package_name(tmp_path: Path) -> None:
     """A mismatch fails `uv sync --locked` on the new repository's first pull request."""
     out = render(tmp_path / "locked", project_name="my.app")
