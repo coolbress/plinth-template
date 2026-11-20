@@ -170,7 +170,15 @@ Aim at 200 changed lines and stay under 400; `ci / diff-size` blocks above.{% en
 The figure comes from the largest published code-review case study (Cisco,
 one team): review effect falls off around 200 lines and 400 is its ceiling.
 Documentation and lockfiles are not counted. A bigger change is split into
-{% if host == 'gitlab' %}stacked merge requests; the pipeline runs on each against its own target branch.{% else %}stacked pull requests; CI runs on each against its own base.{% endif %}
+{% if host == 'gitlab' %}merge requests{% else %}pull requests{% endif %} that land one after another, each branched from `main` after the
+one before it is merged. A stack, each branched from the one below, costs
+more under squash merges: the lower one lands as one new commit, so the upper
+{% if host == 'gitlab' %}one needs `glab mr rebase <n>`, and when the lower one changed after the upper
+one branched, that rebase stops on a conflict: resolve it by merging
+`origin/main` into the branch locally and pushing, since the force push a local
+rebase would need is denied.{% else %}one needs `main` merged in, and when the lower one changed after the upper one
+branched, a local merge of `origin/main` to resolve the conflict and a normal
+push.{% endif %}
 
 ## Tests
 
