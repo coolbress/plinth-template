@@ -144,7 +144,18 @@ one narrow ignore in `pyproject.toml`, with its reason.
    `--sha` names the head the description was read against: a commit pushed
    after it stops the merge. It pins the commits only; the description is read
    when the command runs, so finish editing it first. `--auto-merge=false`
-   merges now or refuses, instead of queueing a merge for later.{% else %}7. Merge when every required check is green, on the word of the person the
+   merges now or refuses, instead of queueing a merge for later.
+
+   When several merge requests are open, only the session the person names,
+   or the person, merges them, one at a time: bring only the next one up to
+   date (`glab mr rebase <n>`), read its new head (`glab mr view <n> -F json
+   --jq .sha`), wait for its pipeline, merge it with the command above and
+   `--sha` on that head, then take the next. Each merge leaves every other
+   merge request behind `main`, so bringing them all up to date after each
+   merge costs about N(N-1)/2 CI runs instead of N. A session not told to
+   merge leaves its own merge request behind. Leave the description alone
+   while waiting: GitLab starts no pipeline when a description is edited, so
+   an edit made then is merged without `pr-title` having read it.{% else %}7. Merge when every required check is green, on the word of the person the
    change is for: an agent merges only on their word for that pull request.
    Squash is the only merge method; the commit is the pull request title and
    description, and the branch is deleted on merge. The description is the commit only when the merge passes
@@ -160,7 +171,20 @@ one narrow ignore in `pyproject.toml`, with its reason.
    empty body, and no file is left in the checkout to be committed later.
    `--match-head-commit` names the head the description was read against: a
    commit pushed after it stops the merge. It pins the commits only; the
-   description is read when the command runs, so finish editing it first.{% endif %}
+   description is read when the command runs, so finish editing it first.
+
+   When several pull requests are open, only the session the person names,
+   or the person, merges them, one at a time: bring only the next one up to
+   date (`gh pr update-branch <n>`), read its new head (`gh pr view <n> --json
+   headRefOid --jq .headRefOid`), wait for its required checks, merge it with
+   the command above and `--match-head-commit` on that head, then take the
+   next. Each merge leaves every other pull request behind `main`, so
+   bringing them all up to date after each merge costs about N(N-1)/2 CI runs
+   instead of N. A session not told to merge leaves its own pull request
+   behind. Leave the description alone while waiting: `ci.yml` runs on
+   `pull_request: edited`, so an edit starts the whole workflow again and
+   cancels the run in progress, `ci / test` included, and `label.yml` runs
+   on it too.{% endif %}
 
 {% if host == 'gitlab' %}## Merge request size
 

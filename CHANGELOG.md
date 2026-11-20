@@ -75,6 +75,28 @@ means `copier update` on an instance needs hands.
   existing project gets both through `/plinth:template-update`; a project
   that edited those lines resolves them by hand. `AGENTS.md` changed, so
   plinth's pin raise owes an eval suite run.
+- **When several pull requests (merge requests) wait, one session merges
+  them one at a time** (#293). `main` requires a branch to be up to date and
+  `ci / test` takes about 11 minutes, so every merge leaves every other open
+  pull request behind. On 2026-11-20 a real project merged 23 pull requests
+  with up to nine sessions; one was brought up to date three times in an
+  hour and lost each time, until merging one at a time ended it. `AGENTS.md`
+  (both hosts), on its existing merge line, so the file keeps its line
+  count: only the session the person names, or the person, merges them, one
+  at a time; that session does not edit a description while it waits; a
+  session not told to merge does not bring its own pull request up to date.
+  `CONTRIBUTING.md` step 7 gives the sequence (bring only the next one up to
+  date with `gh pr update-branch <n>`, or `glab mr rebase <n>` on GitLab,
+  read its new head, wait for its checks, merge with `--match-head-commit`,
+  or `--sha`, on that head, then the next), why (about N(N-1)/2 CI runs
+  instead of N), and why the description is left alone: on GitHub `ci.yml`
+  runs on `pull_request: edited`, so an edit restarts the whole workflow and
+  cancels the run in progress; on GitLab no pipeline starts on an edit, so
+  the edit merges unchecked. `.claude/permissions.md` (GitHub) lists
+  `gh pr update-branch` as asking on purpose. The up-to-date requirement
+  stays. An existing project gets all of it through
+  `/plinth:template-update`; a project that edited those lines resolves them
+  by hand. `AGENTS.md` changed, so plinth's pin raise owes an eval suite run.
 
 ### Changed
 
