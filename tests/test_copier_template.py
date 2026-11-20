@@ -5896,12 +5896,47 @@ def test_license_answer_reaches_pyproject_and_the_license_file(
     assert "coolbress" not in apache + mit
 
 
+def _license_question() -> dict[str, Any]:
+    block = CONFIG.read_text(encoding="utf-8").split("\nlicense:", 1)[1].split("\n\n", 1)[0]
+    question: dict[str, Any] = yaml.safe_load("license:" + block)["license"]
+    return question
+
+
+#: What each license choice renders: the line `LICENSE` must carry and the
+#: `license` field of `pyproject.toml`. A choice copier.yml offers without a
+#: row here fails the test below.
+LICENSE_RENDERS = {
+    "MIT": ("MIT License", "MIT"),
+    "Apache-2.0": ("Apache License", "Apache-2.0"),
+    "Proprietary": ("All rights reserved.", "LicenseRef-Proprietary"),
+}
+
+
 def test_license_offers_proprietary_beside_the_two_grants() -> None:
     """A project nobody else may use had no fitting choice (#289)."""
-    block = CONFIG.read_text(encoding="utf-8").split("\nlicense:", 1)[1].split("\n\n", 1)[0]
-    choices = yaml.safe_load("license:" + block)["license"]
-    assert choices["default"] == "MIT"
-    assert set(choices["choices"].values()) == {"MIT", "Apache-2.0", "Proprietary"}
+    question = _license_question()
+    assert question["default"] == "MIT"
+    assert set(question["choices"].values()) == set(LICENSE_RENDERS)
+
+
+@pytest.mark.parametrize("choice", [*sorted(_license_question()["choices"].values()), None])
+def test_each_license_choice_renders_its_own_license(tmp_path: Path, choice: str | None) -> None:
+    """Each choice copier.yml offers, and no answer at all, rendered for real:
+    a choice listed but broken in `LICENSE.jinja` fails here, not in an
+    instance (#289). `None` leaves the question unanswered: MIT, the default."""
+    import tomllib
+
+    out = render(tmp_path / "lic", license=choice)
+    answered = choice or "MIT"
+    line, field = LICENSE_RENDERS[answered]
+    notice = (out / "LICENSE").read_text(encoding="utf-8")
+    assert line in notice, notice[:200]
+    others = [other for name, (other, _) in LICENSE_RENDERS.items() if name != answered]
+    assert not [other for other in others if other in notice], notice[:200]
+    project = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert project["license"] == field
+    answers = yaml.safe_load((out / ".copier-answers.yml").read_text(encoding="utf-8"))
+    assert answers["license"] == answered
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
