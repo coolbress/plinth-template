@@ -5,7 +5,7 @@
 #   scripts/heavy.sh uv run pytest
 #
 # The slots are the machine's, not this repository's: every project made
-# with plinth, and plinth itself, share one directory under ${TMPDIR:-/tmp}.
+# with plinth shares one directory under ${TMPDIR:-/tmp}.
 # It holds one entry per running command, named by its pid; an entry whose
 # pid is gone is taken back. No flock: macOS has none. Written for bash 3.2.
 #
@@ -42,11 +42,13 @@ queue="${tmp%/}/plinth-heavy-$(id -u)"
 mkdir -p -m 700 "$queue" || exit 2
 
 # The pids of the commands running now; a dead one's entry is removed.
+# `ps -p`, not `kill -0`: a live process the caller may not signal, as a
+# sandbox can make another session's be, fails `kill -0` like a dead one.
 running() {
   for entry in "$queue"/*; do
     [ -e "$entry" ] || continue
     pid=${entry##*/}
-    if kill -0 "$pid" 2>/dev/null; then
+    if ps -p "$pid" >/dev/null 2>&1; then
       printf '%s ' "$pid"
     else
       rm -f "$entry"

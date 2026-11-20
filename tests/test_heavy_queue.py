@@ -138,3 +138,20 @@ def test_agents_md_runs_the_whole_suite_through_the_queue(tmp_path: Path, host: 
     assert not any(a.startswith("Bash(scripts/heavy.sh:") for a in settings["permissions"]["allow"])
     skill = " ".join((out / ".claude/skills/verify/SKILL.md").read_text(encoding="utf-8").split())
     assert "without `scripts/heavy.sh`" in skill, "verify queues a single test file"
+
+
+def test_a_live_holder_the_caller_cannot_signal_keeps_its_slot(
+    start: Start, tmp_path: Path
+) -> None:
+    """`kill -0` fails on a live process it may not signal, as a sandbox can
+    make every other session's be; read as gone, its slot would be taken and
+    the slots overrun. Pid 1 is always alive and never the caller's to signal."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1", PLINTH_HEAVY_WAIT="0")
+    queue = tmp_path / "tmp" / f"plinth-heavy-{os.getuid()}"
+    queue.mkdir(mode=0o700)
+    (queue / "1").write_text("1\n")
+    ran = tmp_path / "ran"
+    refused = start(env, f"touch {ran}")
+    _, err = refused.communicate(timeout=30)
+    assert refused.returncode == BUSY, err
+    assert not ran.exists(), "pid 1's slot was taken as a dead one's"

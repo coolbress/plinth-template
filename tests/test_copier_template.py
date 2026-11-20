@@ -4684,6 +4684,8 @@ def test_touched_tests_while_working_the_whole_block_once(
             'named under "Not verified" in the description',
         ):
             assert phrase in text, f"does not say: {phrase}"
+    gate = "the pipeline" if host == "gitlab" else "CI"
+    assert f"{request_} request, and {gate} is the gate" in agents
 
 
 # ── the document set ──────────────────────────────────────────────────────
