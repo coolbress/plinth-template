@@ -1,0 +1,139 @@
+# The weekly base-image watch (#266). Not a check: no ruleset requires it, and
+# no `ci / *` name is used here.
+#
+# `template/Dockerfile.jinja` pins its base images by digest, and every new
+# `backend`, `data-ml` and `web` project scans its image in the `image` job:
+# a high or critical finding is a warning while its fix is 14 days old or
+# less, and fails the job after that. Nothing in this repository's own CI
+# scans the image, so on 2026-11-19 the first sign of an old digest was a red
+# first commit in every new project (#266).
+#
+# This renders `backend` and `web` at the latest release, runs each render's
+# own `image` job steps (read from its `ci.yml`, never copied) with a grace of
+# 7 days, and opens one issue when that fails: about a week before new
+# projects fail, which is the time a template release and plinth's pin raise
+# take. Dependabot's `docker` entry for `/template` raises the digests; this
+# says when that has not been enough.
+#
+# A scheduled run's failure e-mail goes only to whoever last edited the cron
+# line, which is why it opens an issue.
+
+name: Base-image watch
+
+on:
+  schedule:
+    # Mondays at 05:37 UTC: off the hour, when fewer scheduled runs queue.
+    - cron: "37 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Template tag to render, such as v1.46.0 (empty: the latest release)"
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: base-image-watch
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    # Two image builds and two scans; each rendered `image` job allows 15.
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    outputs:
+      failed: ${{ steps.watch.outputs.failed }}
+      body: ${{ steps.watch.outputs.body }}
+      ref: ${{ steps.ref.outputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # copier renders a tag, which needs the history
+          persist-credentials: false
+      - name: Install uv (official release, SHA256 verified)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          UV_VERSION: "0.13.7"
+          UV_SHA256: "c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/uv"; mkdir -p "$d"
+          f="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} -o "$d/$f" \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/$f"
+          echo "${UV_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
+          echo "$d" >> "$GITHUB_PATH"
+      - run: uv sync --locked --no-dev
+      - name: Choose the template ref
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASKED: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ASKED" ]; then
+            ref="$ASKED"
+          else
+            ref="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          fi
+          # A tag only: copier clones this checkout, and the clone carries its
+          # tags but not the other branches.
+          git rev-parse --verify --quiet "refs/tags/$ref" >/dev/null || {
+            echo "::error::no tag named $ref"; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Run backend's and web's own image job at a 7-day grace
+        id: watch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REF: ${{ steps.ref.outputs.ref }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          uv run --no-sync python -m template_render.image_watch
+          --ref "$REF" --grace 7 --archetype backend --archetype web
+          --run-url "$RUN_URL" --github-output "$GITHUB_OUTPUT"
+
+  # Its own job, so that only these steps hold `issues: write`; the scan job
+  # builds and runs images with a read-only token. It runs after every
+  # outcome of `scan` and opens nothing on a pass.
+  alarm:
+    needs: scan
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open the issue, or comment on the one already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.scan.result }}
+          BODY: ${{ needs.scan.outputs.body }}
+          REF: ${{ needs.scan.outputs.ref }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: "Base-image watch: a pinned base image is near the new-project image gate"
+        run: |
+          set -euo pipefail
+          # Anything but success is reported: a scan job that ran past its
+          # time limit ends `cancelled`, and a silent watch is the failure
+          # this workflow exists to prevent.
+          if [ "$RESULT" = success ]; then
+            echo "The watch passed; nothing to open."; exit 0
+          fi
+          if [ -z "$BODY" ]; then
+            BODY="The weekly base-image watch failed before it wrote a report (scan job: $RESULT, template ref: ${REF:-not chosen}). Read the run: $RUN_URL"
+          fi
+          printf '%s\n' "$BODY" > "$RUNNER_TEMP/body.md"
+          n="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --search "in:title \"$TITLE\"" --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty')"
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+            echo "::error::the watch failed; commented on #$n"
+          else
+            url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md")"
+            echo "::error::the watch failed; opened $url"
+          fi
