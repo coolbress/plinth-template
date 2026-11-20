@@ -6986,6 +6986,29 @@ def test_the_default_checksum_is_the_file_at_the_default_pin() -> None:
 # ── what a release says it was tested with ────────────────────────────────
 
 
+def _release_being_cut(
+    changelog: str, read_tags: Callable[[], set[str]], head_branch: str
+) -> str | None:
+    """The version being released, `vX.Y.Z`, or None between releases.
+
+    A release is being cut while CHANGELOG.md's newest section has no tag yet.
+    Dependabot's own pull request is left out of that window: `main` runs the
+    release checks after its merge, which still stops the tag.
+    """
+    if head_branch.startswith("dependabot/"):
+        return None
+    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
+    assert newest, "CHANGELOG.md has no version section"
+    version = f"v{newest.group(1)}"
+    return None if version in read_tags() else version
+
+
+def _latest_release(releases: dict[str, str]) -> str:
+    """The highest `vX.Y.Z` tag by version, not by text: v2.10.0 after v2.9.0."""
+    assert releases, "coolbress/plinth has no release tag (vX.Y.Z) to compare with"
+    return max(releases, key=lambda tag: tuple(int(n) for n in tag[1:].split(".")))
+
+
 def _release_pin_problem(
     changelog: str,
     read_tags: Callable[[], set[str]],
@@ -6998,16 +7021,12 @@ def _release_pin_problem(
     Compared only while a release is being cut, when CHANGELOG.md's newest
     section has no tag yet. Between releases Dependabot raises the workflows'
     pins and the default rightly stays where the last release left it, so an
-    unconditional comparison would turn every raise red. Dependabot's own
-    pull request is left out in that window too: `main` runs this after its
-    merge, which still stops the tag.
+    unconditional comparison would turn every raise red.
     """
-    if pins == {default} or head_branch.startswith("dependabot/"):
+    if pins == {default}:
         return None
-    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
-    assert newest, "CHANGELOG.md has no version section"
-    version = f"v{newest.group(1)}"
-    if version in read_tags():
+    version = _release_being_cut(changelog, read_tags, head_branch)
+    if version is None:
         return None
     return (
         f"CHANGELOG.md's newest section {version} has no tag yet, so a release is "
@@ -7032,27 +7051,22 @@ def _behind_plinth_problem(
     for the same reasons: between releases plinth moves on and nothing here
     has to follow, and Dependabot's pull request is left to `main`'s run.
     """
-    if head_branch.startswith("dependabot/"):
-        return None
-    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
-    assert newest, "CHANGELOG.md has no version section"
-    version = f"v{newest.group(1)}"
-    if version in read_tags():
+    version = _release_being_cut(changelog, read_tags, head_branch)
+    if version is None:
         return None
     releases = read_releases()
-    assert releases, "coolbress/plinth has no release tag (vX.Y.Z) to compare with"
-    latest = max(releases, key=lambda tag: tuple(int(n) for n in tag[1:].split(".")))
+    latest = _latest_release(releases)
     if releases[latest] == default:
         return None
     named = [tag for tag, commit in releases.items() if commit == default]
-    at = f"plinth {named[0]}" if named else "no plinth release"
+    default_release = f"plinth {named[0]}" if named else "no plinth release"
     return (
         f"CHANGELOG.md's newest section {version} has no tag yet, so a release is "
-        f"being cut, and copier.yml's plinth_sha default {default} ({at}) is behind "
-        f"coolbress/plinth's latest release {latest} ({releases[latest]}). A project "
-        f"made from this release would start at {at}. Raise the coolbress/plinth pins in "
-        ".github/workflows and plinth_sha to that commit, plinth_gitlab_integrity to "
-        "its checksum (CONTRIBUTING.md, Cut a release)."
+        f"being cut, and copier.yml's plinth_sha default {default} ({default_release}) "
+        f"is behind coolbress/plinth's latest release {latest} ({releases[latest]}). "
+        f"A project made from this release would start at {default_release}. Raise the "
+        "coolbress/plinth pins in .github/workflows and plinth_sha to that commit, "
+        "plinth_gitlab_integrity to its checksum (CONTRIBUTING.md, Cut a release)."
     )
 
 
@@ -7205,32 +7219,34 @@ _PLINTH_RELEASES = {"v2.9.0": "c" * 40, "v2.10.0": _DEFAULT_PIN}
 
 
 @pytest.mark.parametrize(
-    ("tags", "releases", "head", "stopped"),
+    ("tags", "releases", "head", "named"),
     [
         # A release being cut whose default is an older plinth release.
-        ({"v1.1.0"}, {**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN}, "docs/changelog", True),
+        (
+            {"v1.1.0"},
+            {**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN},
+            "docs/changelog",
+            ["v2.10.0", "v2.11.0", _RAISED_PIN],
+        ),
         # On `main` after the release pull request's merge, before the tag.
-        ({"v1.1.0"}, {**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN}, "", True),
+        ({"v1.1.0"}, {**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN}, "", ["v2.11.0", _RAISED_PIN]),
         # A default that is no plinth release at all, `main`'s head say.
-        ({"v1.1.0"}, {"v2.9.0": "c" * 40}, "docs/changelog", True),
+        ({"v1.1.0"}, {"v2.9.0": "c" * 40}, "docs/changelog", ["no plinth release", "v2.9.0"]),
         # Current: the default is the latest release, by version, not by text.
-        ({"v1.1.0"}, _PLINTH_RELEASES, "docs/changelog", False),
+        ({"v1.1.0"}, _PLINTH_RELEASES, "docs/changelog", None),
         # Between releases nothing is compared, however far plinth moved.
-        ({"v1.1.0", "v1.2.0"}, {"v2.11.0": _RAISED_PIN}, "ci/raise", False),
-        ({"v1.1.0"}, {"v2.11.0": _RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+        ({"v1.1.0", "v1.2.0"}, {"v2.11.0": _RAISED_PIN}, "ci/raise", None),
+        ({"v1.1.0"}, {"v2.11.0": _RAISED_PIN}, "dependabot/github_actions/actions-1", None),
     ],
 )
 def test_a_release_is_stopped_while_its_plinth_pin_is_behind_the_latest_release(
-    tags: set[str], releases: dict[str, str], head: str, stopped: bool
+    tags: set[str], releases: dict[str, str], head: str, named: list[str] | None
 ) -> None:
     problem = _behind_plinth_problem(_RELEASED, lambda: tags, lambda: releases, _DEFAULT_PIN, head)
-    assert (problem is not None) is stopped, problem
-    if stopped:
-        assert problem is not None
-        assert _DEFAULT_PIN in problem
-        latest = max(releases, key=lambda tag: tuple(int(n) for n in tag[1:].split(".")))
-        assert latest in problem
-        assert releases[latest] in problem
+    assert (problem is not None) is (named is not None), problem
+    if problem is not None:
+        for word in [_DEFAULT_PIN, "v1.2.0", *(named or [])]:
+            assert word in problem, (word, problem)
 
 
 def test_unread_plinth_releases_stop_a_release_rather_than_pass_it() -> None:

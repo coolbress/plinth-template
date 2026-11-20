@@ -100,8 +100,8 @@ and plinth pins one.
    hand. The latest release's commit:
 
    ```bash
-   git ls-remote --tags https://github.com/coolbress/plinth.git 'v*^{}' |
-     sort -t/ -k3 -V | tail -1
+   git ls-remote --tags https://github.com/coolbress/plinth.git |
+     grep -E 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\^\{\}$' | sort -t/ -k3 -V | tail -1
    ```
 
    Why: a new project calls plinth at `plinth_sha`'s default, so it starts at
