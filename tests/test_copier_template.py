@@ -4937,6 +4937,80 @@ def test_agents_md_says_who_merges_and_how(rendered: Path) -> None:
     assert "an agent merges only on their word for that pull request" in contributing
 
 
+_ONE_AT_A_TIME = {
+    "github": (
+        "pull request",
+        "`gh pr view <n> --json headRefOid --jq .headRefOid`",
+        "`--match-head-commit` on that head",
+        "`ci.yml` runs on `pull_request: edited`",
+    ),
+    "gitlab": (
+        "merge request",
+        "`glab mr view <n> -F json --jq .sha`",
+        "`--sha` on that head",
+        "GitLab starts no pipeline when a description is edited",
+    ),
+}
+
+#: How step 7 tells a request that is behind from one that is current, and
+#: what it does with a current one: an update of a current pull request
+#: answers "already up-to-date" and never moves the head, so waiting for the
+#: head to change would wait forever (Codex on plinth-template #296).
+_BEHIND_OR_CURRENT = {
+    "github": (
+        "(`gh pr view <n> --json mergeStateStatus --jq .mergeStateStatus`,"
+        " read again while it says `UNKNOWN`). Only when it says `BEHIND`,"
+        " bring only that one up to date (`gh pr update-branch <n>`)",
+        "Otherwise it is current:",
+    ),
+    "gitlab": (
+        "(`glab mr view <n> -F json --jq .diverged_commits_count`). Only when that"
+        " count is above 0, bring only that one up to date (`glab mr rebase <n>`)",
+        "When the count is 0 it is current:",
+    ),
+}
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_several_open_requests_merge_one_at_a_time(tmp_path: Path, host: str) -> None:
+    """Every merge leaves every other open request behind `main`; nine sessions
+    each bringing their own up to date pushed each other behind, one three
+    times in an hour, until one session merged them one at a time
+    (plinth-template #293). `AGENTS.md`'s merge bullet holds the three rules on
+    its existing line, and step 7 gives the sequence, the reason and what an
+    edited description starts on this host."""
+    noun, head, pin, edited = _ONE_AT_A_TIME[host]
+    out = render(tmp_path / host, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    opening = f"- Merge only when the person says so for that {noun}"
+    bullet = [line for line in agents if line.startswith(opening)]
+    assert len(bullet) == 1, "AGENTS.md has no one merge bullet"
+    for rule in (
+        f"When several {noun}s are open, only the session the person names, or the person,"
+        " merges them, one at a time",
+        "does not edit a description while it waits",
+        f"A session not told to merge does not bring its own {noun} up to date,"
+        " even when it is behind",
+    ):
+        assert rule in bullet[0], f"the merge bullet does not say: {rule}"
+    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    step7 = contributing.split("7. Merge when", 1)[1].split("## ", 1)[0]
+    for must in (
+        f"When several {noun}s are open",
+        f"Read the next one's head ({head}) and whether it is behind `main`",
+        *_BEHIND_OR_CURRENT[host],
+        "read its head again until it differs from the head before the update",
+        "the head does not move, so go on with the head you read"
+        if host == "gitlab"
+        else "the head would not move, so go on with the head you read",
+        pin,
+        "about N(N-1)/2 CI runs instead of N",
+        "Leave the description alone while waiting",
+        edited,
+    ):
+        assert must in step7, f"CONTRIBUTING.md step 7 does not say: {must}"
+
+
 def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     """A tool's default AI lines are dropped, a person's trailers kept (#34):
     an agent kept Claude Code's `Co-Authored-By` and generated-with line next

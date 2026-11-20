@@ -18,7 +18,8 @@ other, so a new command in either document changes this file or the list.
 {% if host == 'gitlab' %}| `glab mr create` | The same: it publishes a title and a description to the host. |
 | `glab mr merge` | It runs only on the person's word for that merge request, as `AGENTS.md` says; a rule would let a yes for one carry to the next. |
 | `glab mr rebase` | It rewrites the merge request's branch on the host. |{% else %}| `gh pr create` | The same: it publishes a title and a description to the host. |
-| `gh pr merge` | It runs only on the person's word for that pull request, as `AGENTS.md` says; a rule would let a yes for one carry to the next. |{% endif %}
+| `gh pr merge` | It runs only on the person's word for that pull request, as `AGENTS.md` says; a rule would let a yes for one carry to the next. |
+| `gh pr update-branch` | It pushes a merge commit to the pull request's branch on the host and starts its checks again; only the session merging the open pull requests runs it, one at a time, as `CONTRIBUTING.md` step 7 says. |{% endif %}
 
 ## Named only as what not to do
 
