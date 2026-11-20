@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.47.0] - 2026-11-20
+
+**A new `backend`, `data-ml` or `web` project's image no longer fails its scan on a Debian fix the official Python image has not picked up yet.** The run stage now applies Debian's published updates at build, so `zlib1g`'s CVE-2026-85091, on which every new project's `image` job would fail from 2026-11-22, is fixed in the image though no rebuilt `python:3.12-slim` exists; building the image now needs network access to Debian's mirrors. `docs/agents/issue-tracker.md` gains the table of where each record goes, and this repository gains a weekly watch and Dependabot for the base images, so the next such failure is seen a week ahead. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged, and so are the rendered workflows and the questions, so the Actions allowlist is unchanged. `copier update` needs no hands, except where a project edited the lines named below. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
+
 ### Added
 
 - **`docs/agents/issue-tracker.md` says in one place where each kind of
