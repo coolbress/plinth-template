@@ -7149,39 +7149,88 @@ def test_the_default_checksum_is_the_file_at_the_default_pin() -> None:
 # ── what a release says it was tested with ────────────────────────────────
 
 
-def _release_pin_problem(
-    changelog: str,
-    read_tags: Callable[[], set[str]],
-    default: str,
-    pins: set[str],
-    head_branch: str,
-) -> str | None:
-    """Why this state may not be released, or None.
-
-    Compared only while a release is being cut, when CHANGELOG.md's newest
-    section has no tag yet. Between releases Dependabot raises the workflows'
-    pins and the default rightly stays where the last release left it, so an
-    unconditional comparison would turn every raise red. Dependabot's own
-    pull request is left out in that window too: `main` runs this after its
-    merge, which still stops the tag.
-    """
-    if pins == {default} or head_branch.startswith("dependabot/"):
-        return None
+def _newest_section(changelog: str) -> str:
+    """CHANGELOG.md's newest version section, `vX.Y.Z`."""
     newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
     assert newest, "CHANGELOG.md has no version section"
-    version = f"v{newest.group(1)}"
-    if version in read_tags():
+    return f"v{newest.group(1)}"
+
+
+_RELEASE_SUBJECT = re.compile(r"docs\(changelog\): the \d+\.\d+\.\d+ section\b")
+
+
+def _release_being_cut(
+    changelog: str, subject: str | None, local_tags: Callable[[], set[str]]
+) -> str | None:
+    """The version being released, `vX.Y.Z`, or None outside a release window.
+
+    Decided without the network, so a pull request that is no release never
+    goes red on a blip (#288). In CI the event decides: the release pull
+    request's title, or on `main` its squash commit's subject, is
+    `docs(changelog): the X.Y.Z section` (CONTRIBUTING.md, Cut a release); the
+    job's shallow checkout carries no tags to ask. Run by hand, with no event,
+    the window is open while the newest section has no tag in this clone.
+    """
+    version = _newest_section(changelog)
+    if subject is not None:
+        return version if _RELEASE_SUBJECT.match(subject) else None
+    return None if version in local_tags() else version
+
+
+def _latest_release(releases: dict[str, str]) -> str:
+    """The highest `vX.Y.Z` tag by version, not by text: v2.10.0 after v2.9.0."""
+    assert releases, "coolbress/plinth has no release tag (vX.Y.Z) to compare with"
+    return max(releases, key=lambda tag: tuple(int(n) for n in tag[1:].split(".")))
+
+
+def _release_pin_problem(version: str | None, default: str, pins: set[str]) -> str | None:
+    """Why this release may not be cut, or None.
+
+    Compared only inside a release window. Between releases Dependabot raises
+    the workflows' pins and the default rightly stays where the last release
+    left it, so an unconditional comparison would turn every raise red.
+    """
+    if version is None or pins == {default}:
         return None
     return (
-        f"CHANGELOG.md's newest section {version} has no tag yet, so a release is "
-        f"being cut, and copier.yml's plinth_sha default {default} is not what "
-        f".github/workflows calls: {sorted(pins)}. Raise plinth_sha to that pin and "
-        "plinth_gitlab_integrity to that commit's checksum (CONTRIBUTING.md, Cut a release)."
+        f"{version} is being released, and copier.yml's plinth_sha default {default} "
+        f"is not what .github/workflows calls: {sorted(pins)}. Raise plinth_sha to that "
+        "pin and plinth_gitlab_integrity to that commit's checksum (CONTRIBUTING.md, "
+        "Cut a release)."
     )
 
 
-def _template_tags() -> set[str]:
-    """The tags on GitHub: the test job's checkout carries none.
+def _behind_plinth_problem(
+    version: str | None, read_releases: Callable[[], dict[str, str]], default: str
+) -> str | None:
+    """Why this release would start new projects behind plinth, or None.
+
+    A new project calls plinth at `plinth_sha`'s default, so a release whose
+    default is an older plinth release starts every project made from it
+    behind (#288). Outside a release window plinth's tags are not read: plinth
+    moves on between releases and nothing here has to follow. Inside one, an
+    unread tag list fails rather than passes.
+    """
+    if version is None:
+        return None
+    releases = read_releases()
+    latest = _latest_release(releases)
+    if releases[latest] == default:
+        return None
+    named = [tag for tag, commit in releases.items() if commit == default]
+    default_release = f"plinth {named[0]}" if named else "no plinth release"
+    return (
+        f"{version} is being released, and copier.yml's plinth_sha default {default} "
+        f"({default_release}) is behind coolbress/plinth's latest release {latest} "
+        f"({releases[latest]}). A project made from this release would start at "
+        f"{default_release}. Raise the coolbress/plinth pins in .github/workflows and "
+        "plinth_sha to that commit, plinth_gitlab_integrity to its checksum "
+        "(CONTRIBUTING.md, Cut a release)."
+    )
+
+
+def _ls_remote_tags(repository: str) -> str:
+    """`git ls-remote --tags` of a GitHub repository.
 
     Tried three times, briefly: a read has hung past a minute, and an unread
     tag list must stop the test rather than pass it.
@@ -7189,13 +7238,12 @@ def _template_tags() -> set[str]:
     why = ""
     for _ in range(3):
         try:
-            listed = subprocess.run(
+            listed = subprocess.run(  # noqa: S603 - the caller names the repository
                 [  # noqa: S607
                     "git",
                     "ls-remote",
                     "--tags",
-                    "--refs",
-                    "https://github.com/coolbress/plinth-template.git",
+                    f"https://github.com/{repository}.git",
                 ],
                 capture_output=True,
                 text=True,
@@ -7207,9 +7255,39 @@ def _template_tags() -> set[str]:
             why = str(error)
             continue
         if listed.returncode == 0:
-            return {line.rsplit("refs/tags/", 1)[1] for line in listed.stdout.splitlines()}
+            return listed.stdout
         why = listed.stderr
-    raise AssertionError(f"could not read the tags: {why}")
+    raise AssertionError(f"could not read {repository}'s tags: {why}")
+
+
+def _release_commits(listed: str) -> dict[str, str]:
+    """Each `vX.Y.Z` tag in `git ls-remote --tags` output and the commit it
+    names: an annotated tag's `^{}` line, else the tag's own."""
+    commits: dict[str, str] = {}
+    for line in listed.splitlines():
+        sha, ref = line.split("\t", 1)
+        found = re.fullmatch(r"refs/tags/(v\d+\.\d+\.\d+)(\^\{\})?", ref)
+        if found and (found.group(2) or found.group(1) not in commits):
+            commits[found.group(1)] = sha
+    return commits
+
+
+def _plinth_releases() -> dict[str, str]:
+    """coolbress/plinth's release tags and their commits."""
+    return _release_commits(_ls_remote_tags("coolbress/plinth"))
+
+
+def _local_tags() -> set[str]:
+    """This clone's tags, without the network: a run by hand has no event."""
+    listed = subprocess.run(
+        ["git", "tag", "--list", "v*"],  # noqa: S607
+        cwd=TEMPLATE_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert listed.returncode == 0, f"could not list this clone's tags: {listed.stderr}"
+    return set(listed.stdout.split())
 
 
 def _own_workflow_pins() -> set[str]:
@@ -7225,30 +7303,41 @@ def _own_workflow_pins() -> set[str]:
     }
 
 
-def _pull_request_head() -> str:
-    """The head branch of the pull request this run is for, "" when there is none.
-
-    Read from the event, not `GITHUB_HEAD_REF`: CI also runs on a review, and
-    that variable is set only for `pull_request` events.
-    """
+def _event_subject() -> str | None:
+    """The run's event in one line: a pull request's title (a review carries
+    it too), a push's head commit subject, "" for any other event, and None
+    when there is no event at all, as in a run by hand."""
     path = os.environ.get("GITHUB_EVENT_PATH")
     if not path:
-        return ""
-    pull_request = json.loads(Path(path).read_text(encoding="utf-8")).get("pull_request")
-    return str(pull_request["head"]["ref"]) if pull_request else ""
+        return None
+    event = json.loads(Path(path).read_text(encoding="utf-8"))
+    if event.get("pull_request"):
+        return str(event["pull_request"].get("title") or "")
+    if event.get("head_commit"):
+        return str(event["head_commit"].get("message") or "").partition("\n")[0]
+    return ""
+
+
+def _release_window() -> str | None:
+    return _release_being_cut(
+        (TEMPLATE_ROOT / "CHANGELOG.md").read_text(encoding="utf-8"),
+        _event_subject(),
+        _local_tags,
+    )
 
 
 def test_a_release_carries_the_plinth_pin_its_own_ci_calls() -> None:
     """coolbress/plinth reads the `plinth_sha` default at a tag as the commit
     that tag was tested with, and offers it to a project. The default's own
     checksum is held at every commit by the test above."""
-    problem = _release_pin_problem(
-        (TEMPLATE_ROOT / "CHANGELOG.md").read_text(encoding="utf-8"),
-        _template_tags,
-        _default("plinth_sha"),
-        _own_workflow_pins(),
-        _pull_request_head(),
-    )
+    problem = _release_pin_problem(_release_window(), _default("plinth_sha"), _own_workflow_pins())
+    assert problem is None, problem
+
+
+def test_a_release_starts_new_projects_at_plinths_latest_release() -> None:
+    """A new project calls plinth at the `plinth_sha` default; a release made
+    with an older one starts every project behind (#288)."""
+    problem = _behind_plinth_problem(_release_window(), _plinth_releases, _default("plinth_sha"))
     assert problem is None, problem
 
 
@@ -7256,59 +7345,148 @@ _RELEASED = "## [Unreleased]\n\n## [1.2.0] - 2026-01-02\n\n## [1.1.0] - 2026-01-
 _DEFAULT_PIN, _RAISED_PIN = "a" * 40, "b" * 40
 
 
+def _untouched() -> set[str]:
+    raise AssertionError("the local tags were read although the event decides")
+
+
 @pytest.mark.parametrize(
-    ("tags", "pins", "head", "stopped"),
+    ("subject", "tags", "window"),
     [
-        ({"v1.1.0"}, {_RAISED_PIN}, "docs/changelog", True),
-        ({"v1.1.0"}, {_RAISED_PIN}, "", True),
-        ({"v1.1.0"}, {_DEFAULT_PIN, _RAISED_PIN}, "docs/changelog", True),
-        ({"v1.1.0"}, set(), "docs/changelog", True),
-        ({"v1.1.0"}, {_DEFAULT_PIN}, "docs/changelog", False),
-        ({"v1.1.0", "v1.2.0"}, {_RAISED_PIN}, "ci/raise", False),
-        ({"v1.1.0", "v1.2.0"}, {_RAISED_PIN}, "dependabot/github_actions/actions-1", False),
-        ({"v1.1.0"}, {_RAISED_PIN}, "dependabot/github_actions/actions-1", False),
+        ("docs(changelog): the 1.2.0 section", _untouched, "v1.2.0"),
+        ("docs(changelog): the 1.2.0 section (#9)", _untouched, "v1.2.0"),
+        ("docs(changelog): the 1.2.0 section, and plinth_sha's default", _untouched, "v1.2.0"),
+        ("build(deps): Bump the actions group", _untouched, None),
+        ("fix(ci): a docs(changelog): the 1.2.0 section mention", _untouched, None),
+        ("", _untouched, None),
+        (None, lambda: {"v1.1.0"}, "v1.2.0"),
+        (None, lambda: {"v1.1.0", "v1.2.0"}, None),
+    ],
+)
+def test_the_release_window_is_decided_without_the_network(
+    subject: str | None, tags: Callable[[], set[str]], window: str | None
+) -> None:
+    assert _release_being_cut(_RELEASED, subject, tags) == window
+
+
+@pytest.mark.parametrize(
+    ("version", "pins", "stopped"),
+    [
+        ("v1.2.0", {_RAISED_PIN}, True),
+        ("v1.2.0", {_DEFAULT_PIN, _RAISED_PIN}, True),
+        ("v1.2.0", set(), True),
+        ("v1.2.0", {_DEFAULT_PIN}, False),
+        (None, {_RAISED_PIN}, False),
     ],
 )
 def test_the_release_check_stops_only_a_release_whose_pins_differ(
-    tags: set[str], pins: set[str], head: str, stopped: bool
+    version: str | None, pins: set[str], stopped: bool
 ) -> None:
-    problem = _release_pin_problem(_RELEASED, lambda: tags, _DEFAULT_PIN, pins, head)
+    problem = _release_pin_problem(version, _DEFAULT_PIN, pins)
     assert (problem is not None) is stopped, problem
-    if stopped:
-        assert "v1.2.0" in problem  # type: ignore[operator]
+    if problem is not None:
+        assert "v1.2.0" in problem
 
 
-def test_a_dependabot_raise_is_not_failed_by_reading_the_tags() -> None:
-    """Nor by the network: its pull request and agreeing pins never read them."""
-
-    def unreadable() -> set[str]:
-        raise AssertionError("the tags were read")
-
-    head = "dependabot/github_actions/actions-1"
-    assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_RAISED_PIN}, head) is None
-    assert _release_pin_problem(_RELEASED, unreadable, _DEFAULT_PIN, {_DEFAULT_PIN}, "") is None
+_PLINTH_RELEASES = {"v2.9.0": "c" * 40, "v2.10.0": _DEFAULT_PIN}
 
 
 @pytest.mark.parametrize(
-    ("event", "head"),
+    ("releases", "named"),
     [
-        ({"pull_request": {"head": {"ref": "dependabot/x"}}, "action": "opened"}, "dependabot/x"),
-        ({"pull_request": {"head": {"ref": "dependabot/x"}}, "review": {}}, "dependabot/x"),
+        # Behind: the default is an older plinth release.
+        ({**_PLINTH_RELEASES, "v2.11.0": _RAISED_PIN}, ["v2.10.0", "v2.11.0", _RAISED_PIN]),
+        # A default that is no plinth release at all, `main`'s head say.
+        ({"v2.9.0": "c" * 40}, ["no plinth release", "v2.9.0"]),
+        # Current: the default is the latest release, by version, not by text.
+        (_PLINTH_RELEASES, None),
+    ],
+)
+def test_a_release_is_stopped_while_its_plinth_pin_is_behind_the_latest_release(
+    releases: dict[str, str], named: list[str] | None
+) -> None:
+    problem = _behind_plinth_problem("v1.2.0", lambda: releases, _DEFAULT_PIN)
+    assert (problem is not None) is (named is not None), problem
+    if problem is not None:
+        for word in [_DEFAULT_PIN, "v1.2.0", *(named or [])]:
+            assert word in problem, (word, problem)
+
+
+def test_unread_plinth_releases_stop_a_release_rather_than_pass_it() -> None:
+    def unreadable() -> dict[str, str]:
+        raise AssertionError("could not read coolbress/plinth's tags")
+
+    with pytest.raises(AssertionError, match="coolbress/plinth"):
+        _behind_plinth_problem("v1.2.0", unreadable, _DEFAULT_PIN)
+    with pytest.raises(AssertionError, match="no release"):
+        _behind_plinth_problem("v1.2.0", dict, _DEFAULT_PIN)
+
+
+def test_outside_a_release_window_plinth_is_not_read() -> None:
+    def unreadable() -> dict[str, str]:
+        raise AssertionError("plinth's tags were read")
+
+    assert _behind_plinth_problem(None, unreadable, _DEFAULT_PIN) is None
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"pull_request": {"title": "fix(ci): something else", "head": {"ref": "fix/x"}}},
+        {"pull_request": {"title": "build(deps): Bump the actions group"}, "review": {}},
+        {"ref": "refs/heads/main", "head_commit": {"message": "feat: something (#1)\n\nbody"}},
+    ],
+)
+def test_outside_a_release_window_nothing_is_read_from_the_network(
+    event: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unrelated pull request or push never goes red on a network blip."""
+    path = tmp_path / "event.json"
+    path.write_text(json.dumps(event), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+
+    def no_network(repository: str) -> str:
+        raise AssertionError(f"{repository}'s tags were read outside a release window")
+
+    monkeypatch.setattr(sys.modules[__name__], "_ls_remote_tags", no_network)
+    test_a_release_carries_the_plinth_pin_its_own_ci_calls()
+    test_a_release_starts_new_projects_at_plinths_latest_release()
+
+
+def test_release_tags_are_read_as_the_commits_they_point_at() -> None:
+    """An annotated tag's own object is not the commit a workflow pin names."""
+    listed = (
+        f"{'1' * 40}\trefs/tags/v2.10.0\n"
+        f"{_DEFAULT_PIN}\trefs/tags/v2.10.0^{{}}\n"
+        f"{'c' * 40}\trefs/tags/v2.9.0\n"
+        f"{'d' * 40}\trefs/tags/v2.11.0-rc.1\n"
+    )
+    assert _release_commits(listed) == {"v2.10.0": _DEFAULT_PIN, "v2.9.0": "c" * 40}
+
+
+@pytest.mark.parametrize(
+    ("event", "subject"),
+    [
+        (
+            {"pull_request": {"title": "docs(changelog): the 1.2.0 section"}},
+            "docs(changelog): the 1.2.0 section",
+        ),
+        ({"pull_request": {"title": "t"}, "review": {}}, "t"),
+        ({"ref": "refs/heads/main", "head_commit": {"message": "s (#3)\n\nbody"}}, "s (#3)"),
         ({"ref": "refs/heads/main"}, ""),
     ],
 )
-def test_the_head_branch_comes_from_the_event(
-    event: dict[str, Any], head: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_the_subject_comes_from_the_event(
+    event: dict[str, Any], subject: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "event.json"
     path.write_text(json.dumps(event), encoding="utf-8")
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
-    assert _pull_request_head() == head
+    assert _event_subject() == subject
 
 
-def test_no_event_is_no_head_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_event_is_no_subject(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
-    assert _pull_request_head() == ""
+    assert _event_subject() is None
 
 
 def test_a_pin_and_its_checksum_are_rendered_and_recorded(tmp_path: Path) -> None:
