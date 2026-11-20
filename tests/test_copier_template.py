@@ -5243,6 +5243,111 @@ def test_every_render_says_where_eight_kinds_of_record_go(
     assert len(rows[2:]) == 8, rows
 
 
+_RECORDS_LANGUAGE = (
+    "are written in English unless this line names another language for the project; "
+    "the person's language is for answering them. Before proposing to write one in "
+    "another language, name this convention and ask."
+)
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_agents_md_states_the_records_language(tmp_path: Path, host: str) -> None:
+    """A session wrote a map and 31 child records in the person's language: the
+    only sentence on it named no issues and stated no convention (#290)."""
+    lines = (render(tmp_path, host=host) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(lines) <= 60, "AGENTS.md is past its cap"
+    request = "pull requests" if host == "github" else "merge requests"
+    found = [ln for ln in lines if _RECORDS_LANGUAGE in ln]
+    assert len(found) == 1, "AGENTS.md does not state the records' language"
+    line = found[0]
+    assert line.startswith("- Answer the person in the language they write in"), line
+    assert f"Issues, {request}, commits, code and documents" in line, line
+    assert "research notes under `docs/` included" in line, line
+    assert lines.index(line) > lines.index("## Always"), "not under Always"
+
+
+# Each record kind's label and its English title prefix.
+_SKELETONS = {
+    "wayfinder:map": "Map:",
+    "wayfinder:research": "Research:",
+    "wayfinder:grilling": "Decision:",
+    "wayfinder:prototype": "Prototype:",
+}
+
+
+def _table_sections(tracker: str) -> dict[str, list[str]]:
+    """The sections the kinds table's record row names, per record kind."""
+    (row,) = [ln for ln in tracker.splitlines() if ln.startswith("| A record: research")]
+    shape = row.rstrip(" |").rsplit(" | ", 1)[1]
+    child = re.search(r"Research, grilling and prototype: ([^.]+)\.", shape)
+    the_map = re.search(r"The map: ([^.]+)\.", shape)
+    assert child, f"the table does not name a child record's sections: {shape}"
+    assert the_map, f"the table does not name the map's sections: {shape}"
+    names = {
+        key: re.findall(r"`(## [^`]+)`", m.group(1)) for key, m in (("c", child), ("m", the_map))
+    }
+    return {label: names["m" if label == "wayfinder:map" else "c"] for label in _SKELETONS}
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_issue_tracker_has_a_skeleton_per_record_kind(tmp_path: Path, host: str) -> None:
+    """None of 31 child records had a record's sections, and their titles took
+    the kind word in translation (#290). Each kind has a fenced skeleton under
+    its own heading: its label, its English title prefix in the create command,
+    and exactly the sections the kinds table names for it."""
+    tracker = (render(tmp_path, host=host) / "docs/agents/issue-tracker.md").read_text(
+        encoding="utf-8"
+    )
+    assert "\n## Record skeletons\n" in tracker, "issue-tracker.md has no skeletons"
+    # The page's last section: its blocks hold `## ` lines of their own.
+    section = tracker.split("\n## Record skeletons\n", 1)[1]
+    wanted = _table_sections(tracker)
+    create = "gh issue create" if host == "github" else "glab issue create"
+    body_flag = "--body-file" if host == "github" else "--description-file"
+    kinds = section.split("\n### ")[1:]
+    assert len(kinds) == len(_SKELETONS), [k.splitlines()[0] for k in kinds]
+    for label, prefix in _SKELETONS.items():
+        (kind,) = [k for k in kinds if f"`{label}`" in k.splitlines()[0]]
+        flat = " ".join(kind.split())
+        assert f'{create} --title "{prefix} ' in flat, f"{label} has no {prefix} title"
+        assert f"--label {label}" in flat, flat
+        assert body_flag in flat, flat
+        assert "--label needs-triage" in flat, f"{label} is created without a triage label"
+        (block,) = re.findall(r"```markdown\n(.*?)```", kind, re.S)
+        headings = [ln for ln in block.splitlines() if ln.startswith("## ")]
+        assert headings == wanted[label], f"{label}: {headings} != {wanted[label]}"
+        child = block.startswith("Part of #<map>\n")
+        assert child is (host == "gitlab" and label != "wayfinder:map"), block
+    conventions = " ".join(tracker.split("\n## Conventions\n", 1)[1].split("\n## ", 1)[0].split())
+    assert "A record's title starts with its kind's prefix, in English" in conventions
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_wayfinding_creates_a_child_from_its_skeleton(tmp_path: Path, host: str) -> None:
+    """The `/wayfinder` skill's ticket is `## Question` alone, answered in a
+    comment, with only `wayfinder:` labels; this page's records are not (#290).
+    The wayfinding steps say which wins and how to mend records already written."""
+    tracker = (render(tmp_path, host=host) / "docs/agents/issue-tracker.md").read_text(
+        encoding="utf-8"
+    )
+    section = tracker.split("\n## Wayfinding operations\n", 1)[1].split("\n## ", 1)[0]
+    flat = " ".join(section.split())
+    for sentence in (
+        "start its body from its kind's skeleton under [Record skeletons](#record-skeletons)",
+        "The wayfinder skill's own ticket body, `## Question` alone with the answer as a "
+        "resolution comment, gives way to it: the answer goes into the child's `## Decision`.",
+        "The skill's rule that a map and its tickets carry only `wayfinder:` labels gives "
+        "way to this page's triage labels.",
+        "A skill's example format does not override this page.",
+        "edit each record in place, fetching its body fresh first",
+        "add the missing sections and, where its language departs from `AGENTS.md`'s "
+        "convention, rewrite it in the project's language, keeping every fact.",
+        "Do not close and re-create it: that breaks links, sub-issue links and the map's "
+        "task list. The edit history keeps the old text.",
+    ):
+        assert sentence in flat, f"Wayfinding operations lacks: {sentence}"
+
+
 @pytest.mark.parametrize("name", ["feature", "task"])
 def test_change_forms_ask_what_should_happen_and_what_is_not_decided(
     rendered: Path, name: str

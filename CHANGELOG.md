@@ -52,6 +52,29 @@ means `copier update` on an instance needs hands.
   `/plinth:template-update`; a project that edited `AGENTS.md`'s update line
   resolves that line by hand. `AGENTS.md` changed, so plinth's pin raise owes
   an eval suite run.
+- **`AGENTS.md` states the records' language, and each record kind has a
+  skeleton where a wayfinding session reads** (#290). In a project rendered
+  at v1.46.1 a session wrote a `wayfinder:map` and 31 child records in the
+  person's language, none with a record's sections and with the kind word
+  translated in their titles. `AGENTS.md` (both hosts): issues, pull or
+  merge requests, commits, code and documents (research notes under `docs/`
+  included) are written in English unless that line names another language
+  for the project; the person's language is for answering them, and before
+  proposing another language the agent names the convention and asks. The
+  file stays at 55 lines. `docs/agents/issue-tracker.md` (both hosts): the
+  kinds table names each record kind's sections (the map takes the
+  wayfinder skill's own five, and its labels name `wayfinder:prototype`); a new last section, "Record skeletons",
+  gives a fenced block per kind (map, research, grilling, prototype) with
+  its create command, English title prefix (`Map:`, `Research:`,
+  `Decision:`, `Prototype:`), labels and every section, ready for
+  `--body-file` (`--description-file` on GitLab); the title convention names
+  the prefixes; "Wayfinding operations" says a child is created from its
+  skeleton, that the skill's `## Question`-only body, resolution comment and
+  `wayfinder:`-only labels give way to this page, and that records already
+  written another way are edited in place, never closed and re-created. An
+  existing project gets both through `/plinth:template-update`; a project
+  that edited those lines resolves them by hand. `AGENTS.md` changed, so
+  plinth's pin raise owes an eval suite run.
 
 ### Changed
 
