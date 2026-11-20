@@ -43,7 +43,7 @@ headings and add the label yourself.
 | A defect, reported by anyone; a feature request | Bug (`bug`), Feature (`enhancement`) | The template's headings: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried. A `bug` made `ready-for-agent` gains `## Acceptance criteria` (and `## Not building` when it helps) below the template's headings, in the same issue: `/implement` reads them |
 | A task, one thing to build | Task (`task`) | `## Parent`, `## What to build`, `## Acceptance criteria`, `## Not building`, `## Blocked by`; while open, decisions go under `## Decisions` (dated) and the result under `## Outcome` |
 | The end of the project, or handing it over | End-or-hand-over (`task`) | The steps as a checklist (data, keys, users, package, image and service, repository), `## Not needed` for those that do not apply, and three questions: what went well, what the agent kept getting wrong, which rule or check to add |
-| A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, or `spec`, plus the triage label while open | `## Question`, `## Findings`, `## Decision`, `## Used by` for research; the map and the spec keep their own shape |
+| A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, `wayfinder:prototype`, or `spec`, plus the triage label while open | Research, grilling and prototype: `## Question`, `## Findings`, `## Decision`, `## Used by`. The map: `## Destination`, `## Notes`, `## Decisions so far`, `## Not yet specified`, `## Out of scope`. The spec keeps its own shape. Each starts from its skeleton under [Record skeletons](#record-skeletons) |
 
 The body is the record and stays canonical; comments are conversation, and
 a decision made in a comment is moved into the body. A decision made in a
@@ -99,7 +99,7 @@ description no longer shows it.
 
 - **Another repository's issue or merge request**: A reference to another repository's issue or merge request is `group/project#N` for an issue and `group/project!N` for a merge request; a bare `#N`, or `plinth #N`, links to this repository's own `#N`. That holds in descriptions, comments and the closing line alike.
 - **Create an issue**: `glab issue create --title "..." --description "..." --label "..."`, or `--template Task`. Multi-line bodies via `--description-file`.
-- **Title**: one sentence saying what the issue does, such as "Make the engine spec English canonical with a Korean translation". Not a merge request's `type(scope):` form: nothing reads an issue title but people scanning a list. A record may start with its kind, such as `Research:`.
+- **Title**: one sentence saying what the issue does, such as "Make the engine spec English canonical with a Korean translation". Not a merge request's `type(scope):` form: nothing reads an issue title but people scanning a list. A record's title starts with its kind's prefix, in English: `Map:`, `Research:`, `Decision:` for a grilling, or `Prototype:`, as [Record skeletons](#record-skeletons) shows.
 - **A ticket from a spec or plan**: keep its id (such as `T6.16`) and its original title in `## Parent`, beside the parent's `#N`, so a search for the id still finds it.
 - **Read an issue**: `glab issue view <number> --comments`
 - **List issues**: `glab issue list -O json --jq '[.[] | {iid, title, description, labels}]'` (filter with `--label`; `--closed` or `--all` for more than the open ones)
@@ -160,10 +160,117 @@ the body.
 
 - **Map**: one issue labelled `wayfinder:map`. `glab issue create --label wayfinder:map`
 - **Child ticket**: add it to the map's task list and start the child body with `Part of #<map>`. Label: `wayfinder:<type>` (`research` / `prototype` / `grilling` / `task`). Assign yourself when you claim it.
+- **Create a child**: a `research`, `prototype` or `grilling` child (and the map itself) is a record, so start its body from its kind's skeleton under [Record skeletons](#record-skeletons), with its title prefix and every section; a `task` child starts from the Task template. The wayfinder skill's own ticket body, `## Question` alone with the answer as a resolution comment, gives way to it: the answer goes into the child's `## Decision`. The skill's rule that a map and its tickets carry only `wayfinder:` labels gives way to this page's triage labels. A skill's example format does not override this page.
+- **Already written another way**: edit each record in place, fetching its body fresh first (`glab issue view <n> -F json --jq .description`): add the missing sections and, where its language departs from `AGENTS.md`'s convention, rewrite it in the project's language, keeping every fact. Do not close and re-create it: that breaks links, sub-issue links and the map's task list. The edit history keeps the old text.
 - **Blocking**: start the child body with `Blocked by: #<n>, #<n>`. Unblocked once every blocker is closed.
 - **Frontier query**: open children of the map with no open blocker and no assignee, first in map order.
 - **Claim**: `glab issue update <n> --assignee +<your username>` (`glab auth status` names it), the session's first write.
 - **Resolve**: put the answer in the body — the shape the table under Four kinds of issue gives that child's kind, and the body is the record, a comment is not. A `research`, `prototype` or `grilling` child is a record: `## Findings` and `## Decision`, and `## Decision` is its ending, so it does not also take an `## Outcome`. A `task` child is a task like any other and ends in `## Outcome`. Then `glab issue close <n>`. The map gains one line (gist + link) under its Decisions-so-far only when the answer is a rule that holds across tickets; a closed ticket is not noted there.
+
+## Record skeletons
+
+A record starts from its kind's skeleton: write the block to a file, fill in
+each `<…>` or leave it for the work to fill, and pass the file with `--description-file`.
+Every section stays, empty or not; the title keeps its English prefix. The
+description is written in the language `AGENTS.md` names for records.
+
+### A map (`wayfinder:map`)
+
+`glab issue create --title "Map: <destination>" --label wayfinder:map --label needs-triage --description-file <file>`
+
+```markdown
+## Destination
+
+<what reaching the end of this map looks like, in one or two lines>
+
+## Notes
+
+<the domain, the skills every session reads, standing preferences>
+
+## Decisions so far
+
+<one line (gist + link) per rule that holds across tickets>
+
+## Not yet specified
+
+<questions coming that cannot be stated sharply yet>
+
+## Out of scope
+
+<work ruled out of this map, with the closed issue that ruled it out>
+```
+
+### Research (`wayfinder:research`)
+
+`glab issue create --title "Research: <question>" --label wayfinder:research --label needs-triage --description-file <file>`
+
+```markdown
+Part of #<map>
+
+## Question
+
+<the one question this record answers>
+
+## Findings
+
+<what was read, tried or asked, with links; empty until the work starts>
+
+## Decision
+
+<the answer and its reason; this section is the record's ending>
+
+## Used by
+
+<the issues and merge requests that act on the decision; empty until one does>
+```
+
+### A grilling (`wayfinder:grilling`)
+
+`glab issue create --title "Decision: <question>" --label wayfinder:grilling --label needs-triage --description-file <file>`
+
+```markdown
+Part of #<map>
+
+## Question
+
+<the one question this record answers>
+
+## Findings
+
+<what was read, tried or asked, with links; empty until the work starts>
+
+## Decision
+
+<the answer and its reason; this section is the record's ending>
+
+## Used by
+
+<the issues and merge requests that act on the decision; empty until one does>
+```
+
+### A prototype (`wayfinder:prototype`)
+
+`glab issue create --title "Prototype: <question>" --label wayfinder:prototype --label needs-triage --description-file <file>`
+
+```markdown
+Part of #<map>
+
+## Question
+
+<the one question this record answers>
+
+## Findings
+
+<what was read, tried or asked, with links; empty until the work starts>
+
+## Decision
+
+<the answer and its reason; this section is the record's ending>
+
+## Used by
+
+<the issues and merge requests that act on the decision; empty until one does>
+```
 {% else %}# Issue tracker: GitHub
 
 Issues, specs and tickets for this repository live in its GitHub Issues. Read
@@ -211,7 +318,7 @@ form's label yourself.
 | A defect, reported by anyone; a feature request | Bug (`bug`), Feature request (`enhancement`) | The form's fields: what happened, steps, expected, environment, logs; or what you are blocked on, how you would like it, what you tried. A `bug` made `ready-for-agent` gains `## Acceptance criteria` (and `## Not building` when it helps) below the form's fields, in the same issue: `/implement` reads them |
 | A task, one thing to build | Task (`task`) | `## Parent`, `## What to build`, `## Acceptance criteria`, `## Not building`, `## Blocked by`; while open, decisions go under `## Decisions` (dated) and the result under `## Outcome` |
 | The end of the project, or handing it over | End or hand over this project (`task`) | The steps as a checklist (data, keys, users, package, image and service, repository), `## Not needed` for those that do not apply, and three questions: what went well, what the agent kept getting wrong, which rule or check to add |
-| A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, or `spec` (`/plinth:new-project` creates them), plus the triage label while open | `## Question`, `## Findings`, `## Decision`, `## Used by` for research; the map and the spec keep their own shape |
+| A record: research, a decision, a map, a spec | blank issue; the kind is a label: `wayfinder:map`, `wayfinder:research`, `wayfinder:grilling`, `wayfinder:prototype`, or `spec` (`/plinth:new-project` creates them), plus the triage label while open | Research, grilling and prototype: `## Question`, `## Findings`, `## Decision`, `## Used by`. The map: `## Destination`, `## Notes`, `## Decisions so far`, `## Not yet specified`, `## Out of scope`. The spec keeps its own shape. Each starts from its skeleton under [Record skeletons](#record-skeletons) |
 
 The body is the record and stays canonical; comments are conversation, and
 a decision made in a comment is moved into the body. A decision made in a
@@ -267,7 +374,7 @@ until someone with write access deletes them.
 
 - **Another repository's issue or pull request**: A reference to another repository's issue or pull request is `owner/repo#N`; a bare `#N`, or `plinth #N`, links to this repository's own `#N`. That holds in bodies, comments and the closing line alike.
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Multi-line bodies via heredoc.
-- **Title**: one sentence saying what the issue does, such as "Make the engine spec English canonical with a Korean translation". Not a pull request's `type(scope):` form: nothing reads an issue title but people scanning a list. A record may start with its kind, such as `Research:`.
+- **Title**: one sentence saying what the issue does, such as "Make the engine spec English canonical with a Korean translation". Not a pull request's `type(scope):` form: nothing reads an issue title but people scanning a list. A record's title starts with its kind's prefix, in English: `Map:`, `Research:`, `Decision:` for a grilling, or `Prototype:`, as [Record skeletons](#record-skeletons) shows.
 - **A ticket from a spec or plan**: keep its id (such as `T6.16`) and its original title in `## Parent`, beside the parent's `#N`, so a search for the id still finds it.
 - **Read an issue**: `gh issue view <number> --comments`
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` (filter with `--label`, `--state`)
@@ -326,8 +433,111 @@ it. Without it, follow the steps by hand.
 
 - **Map**: one issue labelled `wayfinder:map`. `gh issue create --label wayfinder:map`
 - **Child ticket**: a sub-issue of the map (`gh api` sub-issues endpoint). If sub-issues are unavailable, add it to the map's task list and start the child body with `Part of #<map>`. Label: `wayfinder:<type>` (`research` / `prototype` / `grilling` / `task`). Assign yourself when you claim it.
+- **Create a child**: a `research`, `prototype` or `grilling` child (and the map itself) is a record, so start its body from its kind's skeleton under [Record skeletons](#record-skeletons), with its title prefix and every section; a `task` child starts from the Task form's headings. The wayfinder skill's own ticket body, `## Question` alone with the answer as a resolution comment, gives way to it: the answer goes into the child's `## Decision`. The skill's rule that a map and its tickets carry only `wayfinder:` labels gives way to this page's triage labels. A skill's example format does not override this page.
+- **Already written another way**: edit each record in place, fetching its body fresh first (`gh issue view <n> --json body --jq .body`): add the missing sections and, where its language departs from `AGENTS.md`'s convention, rewrite it in the project's language, keeping every fact. Do not close and re-create it: that breaks links, sub-issue links and the map's task list. The edit history keeps the old text.
 - **Blocking**: GitHub native issue dependencies. `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`), not `#number` or `node_id`. Fallback: start the child body with `Blocked by: #<n>, #<n>`. Unblocked once every blocker is closed.
 - **Frontier query**: open children of the map with no open blocker and no assignee, first in map order.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: put the answer in the body — the shape the table under Four kinds of issue gives that child's kind, and the body is the record, a comment is not. A `research`, `prototype` or `grilling` child is a record: `## Findings` and `## Decision`, and `## Decision` is its ending, so it does not also take an `## Outcome`. A `task` child is a task like any other and ends in `## Outcome`. Then `gh issue close <n>`. The map gains one line (gist + link) under its Decisions-so-far only when the answer is a rule that holds across tickets; a closed ticket is not noted there.
+
+## Record skeletons
+
+A record starts from its kind's skeleton: write the block to a file, fill in
+each `<…>` or leave it for the work to fill, and pass the file with `--body-file`.
+Every section stays, empty or not; the title keeps its English prefix. The
+body is written in the language `AGENTS.md` names for records.
+
+### A map (`wayfinder:map`)
+
+`gh issue create --title "Map: <destination>" --label wayfinder:map --label needs-triage --body-file <file>`
+
+```markdown
+## Destination
+
+<what reaching the end of this map looks like, in one or two lines>
+
+## Notes
+
+<the domain, the skills every session reads, standing preferences>
+
+## Decisions so far
+
+<one line (gist + link) per rule that holds across tickets>
+
+## Not yet specified
+
+<questions coming that cannot be stated sharply yet>
+
+## Out of scope
+
+<work ruled out of this map, with the closed issue that ruled it out>
+```
+
+### Research (`wayfinder:research`)
+
+`gh issue create --title "Research: <question>" --label wayfinder:research --label needs-triage --body-file <file>`
+
+```markdown
+## Question
+
+<the one question this record answers>
+
+## Findings
+
+<what was read, tried or asked, with links; empty until the work starts>
+
+## Decision
+
+<the answer and its reason; this section is the record's ending>
+
+## Used by
+
+<the issues and pull requests that act on the decision; empty until one does>
+```
+
+### A grilling (`wayfinder:grilling`)
+
+`gh issue create --title "Decision: <question>" --label wayfinder:grilling --label needs-triage --body-file <file>`
+
+```markdown
+## Question
+
+<the one question this record answers>
+
+## Findings
+
+<what was read, tried or asked, with links; empty until the work starts>
+
+## Decision
+
+<the answer and its reason; this section is the record's ending>
+
+## Used by
+
+<the issues and pull requests that act on the decision; empty until one does>
+```
+
+### A prototype (`wayfinder:prototype`)
+
+`gh issue create --title "Prototype: <question>" --label wayfinder:prototype --label needs-triage --body-file <file>`
+
+```markdown
+## Question
+
+<the one question this record answers>
+
+## Findings
+
+<what was read, tried or asked, with links; empty until the work starts>
+
+## Decision
+
+<the answer and its reason; this section is the record's ending>
+
+## Used by
+
+<the issues and pull requests that act on the decision; empty until one does>
+```
+
+A child made a sub-issue needs no `Part of #<map>` line; with the task-list fallback, put it first.
 {% endif %}
