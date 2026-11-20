@@ -1115,15 +1115,52 @@ def test_ci_keeps_the_caller_job_named_ci(rendered: Path) -> None:
     )
 
 
-def test_ci_runs_on_stacked_pull_requests(rendered: Path) -> None:
+def test_ci_runs_on_pull_requests_based_on_another_branch(rendered: Path) -> None:
     """`pull_request: branches: [main]` skips a pull request whose base is another branch."""
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     block = ci.split("pull_request:", 1)
     assert len(block) == 2, "no pull_request trigger"
     first = block[1].lstrip("\n").splitlines()[0]
     assert not first.strip().startswith("branches:"), (
-        "a branches filter on pull_request: stacked PRs get no CI"
+        "a branches filter on pull_request: one based on another branch gets no CI"
     )
+
+
+def test_ci_comment_does_not_push_towards_stacking(rendered: Path) -> None:
+    """The comment keeps why there is no filter without recommending stacks (#282)."""
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    comment = " ".join(
+        ln.strip().lstrip("#").strip()
+        for ln in ci.split("pull_request:", 1)[0].splitlines()
+        if ln.strip().startswith("#")
+    )
+    assert "No `branches:` filter on pull requests" in comment
+    assert "pushes towards stacking" not in comment
+
+
+@pytest.mark.parametrize(
+    ("host", "unit", "update"),
+    [
+        ("github", "pull requests", "the upper one needs `main` merged in"),
+        ("gitlab", "merge requests", "the upper one needs `glab mr rebase <n>`"),
+    ],
+)
+def test_contributing_lands_a_big_change_one_after_another(
+    tmp_path: Path, host: str, unit: str, update: str
+) -> None:
+    """Under squash merges a stack conflicts once the lower piece changes (#282):
+    the default is sequential, and the cost of stacking is named."""
+    text = " ".join(
+        (render(tmp_path / host, host=host) / "CONTRIBUTING.md").read_text(encoding="utf-8").split()
+    )
+    assert (
+        f"A bigger change is split into {unit} that land one after another, each "
+        "branched from `main` after the one before it is merged."
+    ) in text, f"{host}: CONTRIBUTING does not say to land a big change sequentially"
+    assert update in text, (
+        f"{host}: CONTRIBUTING does not say what stacking costs under squash merges"
+    )
+    assert f"stacked {unit};" not in text, f"{host}: CONTRIBUTING still recommends a stack"
 
 
 def test_third_party_review_is_offered_but_off(rendered: Path) -> None:
