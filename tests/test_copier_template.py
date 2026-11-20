@@ -4199,7 +4199,7 @@ def test_settings_allow_the_style_s_run_reading(tmp_path: Path, host: str, headi
 
 
 #: A command the documents tell the agent to run starts with one of these.
-_TOLD = re.compile(r"^(?:git|gh|glab|uv) [a-z]")
+_TOLD = re.compile(r"^(?:git|gh|glab|uv|scripts/heavy\.sh) [a-z]")
 
 
 def _told_commands(text: str) -> list[str]:
@@ -4662,6 +4662,30 @@ def test_web_verify_is_the_checks_alone(tmp_path: Path) -> None:
     body = _project_skill_body(out, "verify")
     assert body.count("\n## ") == 2, "web's verify gained a step"
     assert "runs the checks, not the app" in " ".join(body.split())
+
+
+@pytest.mark.parametrize(("host", "request_"), [("github", "pull"), ("gitlab", "merge")])
+def test_touched_tests_while_working_the_whole_block_once(
+    tmp_path: Path, host: str, request_: str
+) -> None:
+    """Every session ran the whole block on every change: on one laptop eleven
+    full suites ran at once, and a 7-minute run took 52 (#284). While working,
+    the tests of what changed; the block once before the pull request, with
+    CI as the gate; a check not run is named, not passed over."""
+    out = render(tmp_path / host, host=host)
+    agents = " ".join((out / "AGENTS.md").read_text(encoding="utf-8").split())
+    skill = " ".join(_project_skill_body(out, "verify").split())
+    for text in (agents, skill):
+        for phrase in (
+            "run the tests of what changed",
+            "tests/test_<module>.py`, or `-k`",
+            f"once, before the {request_} request",
+            "is the gate",
+            'named under "Not verified" in the description',
+        ):
+            assert phrase in text, f"does not say: {phrase}"
+    gate = "the pipeline" if host == "gitlab" else "CI"
+    assert f"{request_} request, and {gate} is the gate" in agents
 
 
 # ── the document set ──────────────────────────────────────────────────────
