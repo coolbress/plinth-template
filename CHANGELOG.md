@@ -32,6 +32,26 @@ means `copier update` on an instance needs hands.
   project that edited the block's `pytest` line or `verify`'s step 2
   resolves that line by hand. `AGENTS.md` changed, so plinth's pin raise
   owes an eval suite run.
+- **A session reads plinth's latest release before it says plinth lacks
+  something or asks plinth for it** (#279). A real project called plinth at
+  a commit 28 behind the latest release; a session read `python-ci.yml` at
+  that pin, found no input for `ci / test`'s time limit and asked plinth for
+  one, though `test-timeout-minutes` had been released since plinth v2.34.0,
+  and raising the pin was the whole fix. `AGENTS.md` (both hosts) says so in
+  one sentence on the update line, which keeps the file at 55 lines.
+  `docs/how-to/keep-this-project-current.md` gains a last section, "Before
+  saying plinth lacks something": the latest release's notes are plinth's
+  `CHANGELOG.md` on `main` or its releases page, not its code on `main`; the
+  pinned version is the commit in the `coolbress/plinth` `uses:` line (on
+  GitLab, the include's `remote:` line) looked up with `git ls-remote --tags`;
+  a feature found in a release section (not `[Unreleased]`) means raising
+  the pin, which on GitHub moves `ci.yml` and `label.yml` together (and
+  `third-party.yml` where it exists), by Dependabot's pull request or by
+  hand to the release's commit, and on GitLab the `remote:` and
+  `integrity:` lines. An existing project gets both through
+  `/plinth:template-update`; a project that edited `AGENTS.md`'s update line
+  resolves that line by hand. `AGENTS.md` changed, so plinth's pin raise owes
+  an eval suite run.
 
 ### Changed
 
