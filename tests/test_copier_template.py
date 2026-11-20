@@ -6493,6 +6493,28 @@ def test_dockerfile_comment_says_what_the_image_runs(tmp_path: Path, backend: Pa
     assert "No framework is chosen here." in (backend / "Dockerfile").read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("archetype", ["backend", "data-ml", "web"])
+def test_dockerfile_run_stage_applies_debian_updates(tmp_path: Path, archetype: str) -> None:
+    """The official Python image can lag a Debian fix by more than the
+    `image` job's 14 days, so the run stage upgrades its packages at build;
+    the build stage, which the shipped image does not carry, does not (#281)."""
+    text = (render(tmp_path, archetype=archetype) / "Dockerfile").read_text(encoding="utf-8")
+    build, run = text.split("# ── run stage", 1)
+    upgrade = (
+        "RUN apt-get update \\\n"
+        " && apt-get upgrade -y --no-install-recommends \\\n"
+        " && rm -rf /var/lib/apt/lists/*\n"
+    )
+    assert "apt-get" not in build
+    assert run.count(upgrade) == 1, run
+    after_from = run.split("\nFROM python:3.12-slim@sha256:", 1)[1]
+    assert after_from.index(upgrade) < after_from.index("\nUSER app\n")
+    # Right after FROM: nothing but the comment that says why comes between.
+    between = after_from.split("\n", 1)[1].split(upgrade, 1)[0]
+    assert all(line == "" or line.startswith("#") for line in between.splitlines()), between
+    assert "14 days" in between, between
+
+
 def test_web_readme_says_first_account_and_restore(tmp_path: Path, backend: Path) -> None:
     """What the first live deploy had to find out by hand (#105): the first
     account, the restore and its window, the wait and the real host."""
