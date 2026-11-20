@@ -33,6 +33,24 @@ means `copier update` on an instance needs hands.
   resolves that line by hand. `AGENTS.md` changed, so plinth's pin raise
   owes an eval suite run.
 
+### Changed
+
+- **`CONTRIBUTING.md` says to land a big change as pull requests (merge
+  requests) one after another, not as a stack** (#282). Each piece is
+  branched from `main` after the one before it is merged. Under the
+  template's squash merges a stack costs more: the lower one lands as one
+  new commit, so the upper one needs `main` merged in (on GitLab,
+  `glab mr rebase`), and when the lower one changed after the upper one
+  branched, a local merge of `origin/main` to resolve the conflict, since
+  the force push a local rebase would need is denied. This
+  repository's stack of four for #266 conflicted twice that way, and a real
+  project that switched to sequential pieces has split every large ticket
+  since without a conflict. `ci.yml`'s comment on the `pull_request` trigger
+  no longer says the diff-size limit pushes towards stacking; the trigger
+  still has no `branches:` filter. An existing project gets the two changed
+  passages through `/plinth:template-update`; a project that edited either
+  keeps its own on conflict.
+
 ## [1.47.0] - 2026-11-20
 
 **A new `backend`, `data-ml` or `web` project's image no longer fails its scan on a Debian fix the official Python image has not picked up yet.** The run stage now applies Debian's published updates at build, so `zlib1g`'s CVE-2026-85091, on which every new project's `image` job would fail from 2026-11-22, is fixed in the image though no rebuilt `python:3.12-slim` exists; building the image now needs network access to Debian's mirrors. `docs/agents/issue-tracker.md` gains the table of where each record goes, and this repository gains a weekly watch and Dependabot for the base images, so the next such failure is seen a week ahead. `AGENTS.md`, `CLAUDE.md` and `.claude/` are unchanged, and so are the rendered workflows and the questions, so the Actions allowlist is unchanged. `copier update` needs no hands, except where a project edited the lines named below. `plinth_sha`'s default stays 8fd5052 (v2.32.0).
@@ -68,22 +86,6 @@ means `copier update` on an instance needs hands.
   already holds a log is left as it is.
 
 ### Changed
-
-- **`CONTRIBUTING.md` says to land a big change as pull requests (merge
-  requests) one after another, not as a stack** (#282). Each piece is
-  branched from `main` after the one before it is merged. Under the
-  template's squash merges a stack costs more: the lower one lands as one
-  new commit, so the upper one needs `main` merged in (on GitLab,
-  `glab mr rebase`), and when the lower one changed after the upper one
-  branched, a local merge of `origin/main` to resolve the conflict, since
-  the force push a local rebase would need is denied. This
-  repository's stack of four for #266 conflicted twice that way, and a real
-  project that switched to sequential pieces has split every large ticket
-  since without a conflict. `ci.yml`'s comment on the `pull_request` trigger
-  no longer says the diff-size limit pushes towards stacking; the trigger
-  still has no `branches:` filter. An existing project gets the two changed
-  passages through `/plinth:template-update`; a project that edited either
-  keeps its own on conflict.
 
 - **A weekly workflow, `Base-image watch`, says when a pinned base image is
   close to failing new projects** (#266). It renders `backend` and `web` at
