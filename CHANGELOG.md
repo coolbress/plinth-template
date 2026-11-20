@@ -60,7 +60,12 @@ means `copier update` on an instance needs hands.
   workflow pins to the latest release before the release section, then
   `plinth_sha` to that commit; a new test stops a release whose default is
   behind the latest `coolbress/plinth` release tag, naming both, and fails
-  when the tags cannot be read. Between releases it compares nothing. This
+  when the tags cannot be read. Both release checks now take their window
+  from the event, without the network: the release pull request's title
+  `docs(changelog): the X.Y.Z section`, or on `main` its squash commit's
+  subject. Before, the older check read this repository's tags over the
+  network on any pull request whose pins differed; now no pull request
+  outside a release reads a tag, so none goes red on a network blip. This
   repository only: an instance receives nothing from this entry, and an
   existing project keeps its own pin on `copier update` (#22).
 
