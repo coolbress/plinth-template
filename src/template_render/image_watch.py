@@ -97,6 +97,12 @@ def check_supported(steps: list[dict[str, Any]]) -> None:
             raise UnsupportedStepError(f"step {label!r} runs in {step['shell']!r}")
         if "${{" in str(step["run"]):
             raise UnsupportedStepError(f"step {label!r} has an expression in `run:`")
+        # Only a literal boolean: an expression or a string would be read as
+        # the job stopping, where GitHub may let it go on.
+        if not isinstance(step.get("continue-on-error", False), bool):
+            raise UnsupportedStepError(
+                f"step {label!r} sets `continue-on-error:` to {step['continue-on-error']!r}"
+            )
         for value in (step.get("env") or {}).values():
             for expr in EXPRESSION.findall(str(value)):
                 if expr not in ("github.token", "runner.temp") and not STEP_OUTCOME.fullmatch(expr):

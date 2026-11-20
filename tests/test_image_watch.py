@@ -91,6 +91,8 @@ def test_the_default_shell_stops_at_the_first_failing_command(tmp_path: Path) ->
         {"name": "x", "env": {"A": "${{ secrets.X }}"}, "run": "true"},
         {"name": "x", "shell": "pwsh", "run": "true"},
         {"name": "x", "working-directory": "sub", "run": "true"},
+        {"name": "x", "continue-on-error": "${{ true }}", "run": "exit 1"},
+        {"name": "x", "continue-on-error": "true", "run": "exit 1"},
     ],
 )
 def test_what_the_runner_does_not_know_stops_it(tmp_path: Path, step: dict[str, Any]) -> None:
