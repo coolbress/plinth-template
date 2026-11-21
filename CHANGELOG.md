@@ -18,7 +18,9 @@ means `copier update` on an instance needs hands.
   owner's machine and releases only when a tag is pushed. Only the
   question's text changed, and this repository's README with it: no file a
   project renders changes, the choices and their values are the same, and
-  `copier update` needs no hands.
+  `copier update` needs no hands. plinth's `/plinth:new-project` asks the
+  question in its own words, which still call data processing `data-ml`;
+  that is coolbress/plinth#1003.
 
 ## [1.48.0] - 2026-11-21
 

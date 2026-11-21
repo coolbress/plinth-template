@@ -218,8 +218,8 @@ archetype:
     - cli: a command people install and run in a terminal; also the choice
       for a tool that runs on a schedule on the owner's machine (a data
       collector, a pipeline). On GitHub its release workflow runs only when
-      a tag is pushed (`v*`, or a listed member's `<name>-v*`), so a project
-      that never tags publishes nothing.
+      a tag is pushed (`v*`, or a member's `<prefix>-v*`), so a project that
+      never tags publishes nothing.
     - library: a package other code imports.
     - backend: a service that keeps running and answers requests, in a
       container.
