@@ -7819,7 +7819,17 @@ ARCHETYPE_PRODUCES = (
 )
 
 
-def test_the_archetype_question_says_what_each_choice_produces() -> None:
+def _release_triggers(out: Path) -> dict[Any, Any]:
+    triggers = _release(out)[True]  # PyYAML reads the `on:` key as True
+    assert isinstance(triggers, dict)
+    return triggers
+
+
+def test_the_archetype_question_says_what_each_choice_produces(
+    rendered: Path, tmp_path: Path
+) -> None:
+    """The wording, and the renders it describes: the help's claims about the
+    model card and the release workflow stay true of what copier writes."""
     cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
     help_text = " ".join(cfg["archetype"]["help"].split())
     for phrase in ARCHETYPE_PRODUCES:
@@ -7827,3 +7837,31 @@ def test_the_archetype_question_says_what_each_choice_produces() -> None:
     assert "The conditional files depend on it" not in help_text
     # GitLab renders no release workflow, so publishing is GitHub's alone.
     assert "trained here and published as release files" not in help_text
+
+    # cli on GitHub: the release workflow starts on a tag push and nothing else.
+    cli = _release_triggers(rendered)
+    assert set(cli) == {"push"}, f"cli's release starts on more than a push: {set(cli)}"
+    assert set(cli["push"]) == {"tags"}, "cli's release push is not tags only"
+    assert "v*" in cli["push"]["tags"]
+
+    # data-ml on GitHub: a model card, and a release on `v*` tags only.
+    gh = render(tmp_path / "gh-data-ml", archetype="data-ml", owner="someone")
+    assert (gh / "MODEL_CARD.md").is_file(), "data-ml on GitHub has no model card"
+    data_ml = _release_triggers(gh)
+    assert data_ml == {"push": {"tags": ["v*"]}}, f"data-ml's release triggers: {data_ml}"
+
+    # data-ml on GitLab: no release workflow, which is why the help says "On GitHub".
+    gl = render(
+        tmp_path / "gl-data-ml",
+        archetype="data-ml",
+        owner="someone",
+        host="gitlab",
+        visibility="private",
+    )
+    assert (gl / "MODEL_CARD.md").is_file(), "data-ml on GitLab has no model card"
+    assert not (gl / RELEASE).exists(), "data-ml on GitLab renders a release workflow"
+    gitlab_ci = (gl / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    jobs = yaml.safe_load(gitlab_ci)
+    assert isinstance(jobs, dict)
+    assert not [j for j in jobs if "release" in str(j).lower()], "GitLab has a release job"
+    assert "CI_COMMIT_TAG" not in gitlab_ci, "GitLab's pipeline runs something on a tag"
