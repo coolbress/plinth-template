@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.49.0] - 2026-11-22
+
+**A new project starts at plinth v2.39.0, and the `archetype` question says what each choice produces.** `plinth_sha`'s default moves to v2.39.0 (`e9b2095`) and `plinth_gitlab_integrity` to its checksum, the commit this repository's workflows call since #302. The `archetype` help has one line per choice, and data work with no model trained is `cli` (#300). No file a project renders changes except through the new pin: `AGENTS.md`, `.claude/` and `CONTRIBUTING.md` are unchanged, so plinth's pin raise to this release owes no eval suite run, and the rendered workflows are unchanged, so the Actions allowlist is too. `copier update` needs no hands; an existing project keeps its own plinth pin (#22).
+
 ### Changed
 
 - **The `archetype` question says what each choice produces, and that data
@@ -19,8 +23,7 @@ means `copier update` on an instance needs hands.
   question's text changed, and this repository's README with it: no file a
   project renders changes, the choices and their values are the same, and
   `copier update` needs no hands. plinth's `/plinth:new-project` asks the
-  question in its own words, which still call data processing `data-ml`;
-  that is coolbress/plinth#1003.
+  question in its own words, and says the same since coolbress/plinth#1003.
 
 ## [1.48.0] - 2026-11-21
 
