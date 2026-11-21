@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.48.0] - 2026-11-21
+
+**A new project starts at plinth v2.38.0, not v2.32.0, and its agent gets the rules several real projects were missing.** `plinth_sha`'s default moves to v2.38.0 (`a174ec0`) and `plinth_gitlab_integrity` to its checksum, so a project made from this release calls plinth's latest release instead of one five releases behind (#288). `AGENTS.md` changes: run the touched tests while working and the whole block once through the new `scripts/heavy.sh`, a machine-wide queue for the full suite (#284); read plinth's latest release before saying plinth lacks something (#279); the records' language, with a skeleton per record kind (#290); and when several pull requests wait, one session merges them one at a time (#293). `license` gains `Proprietary` (#289), and `CONTRIBUTING.md` lands a big change as pull requests one after another, not as a stack (#282). `AGENTS.md`, `.claude/` and `CONTRIBUTING.md` changed, so plinth's pin raise to this release owes an eval suite run. The rendered workflows change only in a comment, so the Actions allowlist is unchanged. `copier update` needs no hands, except where a project edited the lines named below; an existing project keeps its own plinth pin (#22).
+
 ### Added
 
 - **The sessions on one machine share its slots for the whole test suite,
