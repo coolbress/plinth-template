@@ -60,3 +60,10 @@ jobs:
       # instruction, not a new kind of file. Measured once without this line:
       # renaming uv.lock to uv.lock.jinja counted as 418 added lines.
       diff-size-exclude: "*.md *.md.jinja *.lock *.lock.jinja *lock.json *lock.yaml *lock.yml LICENSE"
+      # pytest renders every archetype on both hosts and builds the service
+      # images. `ci / test` took 5 min 8 s to 8 min 8 s on near-identical
+      # trees (2026-11-20 and 21; coverage runs on pull requests only), and
+      # pytest stops 2 minutes before the limit: at the default 10, the 1.48.0
+      # release pull request stopped at 8 min 4 s and its re-run passed at
+      # 8 min 0 s. The spread between runs of one tree is the runner's.
+      test-timeout-minutes: 15
