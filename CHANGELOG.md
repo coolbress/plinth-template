@@ -6,6 +6,30 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `Proprietary` `cli` or `library` releases to GitHub only, and its
+  README and how-to say so instead of walking through PyPI** (#304). Since
+  1.48.0 such a project carries the `Private :: Do Not Upload` classifier,
+  which PyPI refuses, while its release workflow, README and
+  `docs/how-to/publish-a-release.md` still described a PyPI release: a
+  person who followed them set up PyPI, pushed a tag and watched the
+  publish fail. For `license: Proprietary`, `release.yml` now has no
+  `publish` job, no `pypi` environment and no identity token; the tag still
+  checks, builds and installs the package, and the GitHub Release carries
+  the wheel, the sdist and the SBOM as before. The README's "Releasing" and
+  the how-to say where the files go and how to install a wheel from a
+  release (`gh release download`, then `uv tool install` for a `cli`,
+  `uv add` for a `library`). Other licenses, and `backend`, `data-ml` and
+  `web`, render as before. An existing Proprietary `cli` or `library` gets
+  the three files through `/plinth:template-update`, with no hands unless
+  it edited them; a `pypi` environment made by following the old steps is
+  no longer used and can be deleted under **Settings** > **Environments**.
+  No file a new project's agent reads changed (`AGENTS.md`, `.claude/` and
+  `CONTRIBUTING.md` are untouched), so plinth's pin raise to this release
+  owes no eval suite run. A Proprietary project's rendered workflow uses
+  fewer actions than before, so the Actions allowlist needs nothing new.
+
 ## [1.49.0] - 2026-11-22
 
 **A new project starts at plinth v2.39.0, and the `archetype` question says what each choice produces.** `plinth_sha`'s default moves to v2.39.0 (`e9b2095`) and `plinth_gitlab_integrity` to its checksum, the commit this repository's workflows call since #302. The `archetype` help has one line per choice, and data work with no model trained is `cli` (#300). No file a project renders changes except through the new pin: `AGENTS.md`, `.claude/` and `CONTRIBUTING.md` are unchanged, so plinth's pin raise to this release owes no eval suite run, and the rendered workflows are unchanged, so the Actions allowlist is too. `copier update` needs no hands; an existing project keeps its own plinth pin (#22).

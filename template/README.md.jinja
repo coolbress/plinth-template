@@ -485,7 +485,17 @@ your data.
 {%- endif %}
 {%- endif %}
 
-{% endif %}{% if archetype in ['cli', 'library'] and host != 'gitlab' %}## Releasing
+{% endif %}{% if archetype in ['cli', 'library'] and host != 'gitlab' and license == 'Proprietary' %}## Releasing
+
+A version tag (`v0.1.0`) builds this package and makes a GitHub Release that
+carries the wheel and the sdist, through
+[`.github/workflows/release.yml`](.github/workflows/release.yml). Nothing
+goes to a public package index: whoever can read this repository downloads
+the files from its **Releases** page and installs the wheel. Nothing has to
+be set up before the first tag; the steps, in plain words, are in
+[`docs/how-to/publish-a-release.md`](docs/how-to/publish-a-release.md).
+
+{% elif archetype in ['cli', 'library'] and host != 'gitlab' %}## Releasing
 
 A version tag (`v0.1.0`) publishes this package to PyPI and makes a GitHub
 Release, through [`.github/workflows/release.yml`](.github/workflows/release.yml).
