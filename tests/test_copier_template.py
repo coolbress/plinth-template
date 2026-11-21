@@ -7799,3 +7799,28 @@ def test_plinth_sha_must_be_a_full_commit_sha(tmp_path: Path, host: str, ref: st
             plinth_sha=ref,
             plinth_gitlab_integrity="A" * 43 + "=",
         )
+
+
+# coolbress/plinth-template#300: a project that only collects data took
+# `data-ml` because the help named what the conditional files depend on, not
+# what each choice produces.
+ARCHETYPE_PRODUCES = (
+    "cli: a command people install and run in a terminal",
+    "a tool that runs on a schedule on the owner's machine",
+    "On GitHub its release workflow runs only when a tag is pushed",
+    "a project that never tags publishes nothing",
+    "library: a package other code imports",
+    "backend: a service that keeps running and answers requests, in a container",
+    "data-ml: a model trained here and published as release files, with a model card",
+    "web: a web app with logins and a database",
+    "about US $13 a month",
+    "with no model trained is `cli`",
+)
+
+
+def test_the_archetype_question_says_what_each_choice_produces() -> None:
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    help_text = " ".join(cfg["archetype"]["help"].split())
+    for phrase in ARCHETYPE_PRODUCES:
+        assert phrase in help_text, f"the archetype help does not say: {phrase}"
+    assert "The conditional files depend on it" not in help_text

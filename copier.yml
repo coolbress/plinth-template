@@ -214,13 +214,23 @@ license:
 archetype:
   type: str
   help: |
-    What kind of project this is. The conditional files depend on it
-    (`.env.example` and a container image belong to a running service).
-    When unsure, choose the narrowest.
-    Web app with a database costs money to run: about US $13 a month on
-    Render (a $7 web service and a $6 Postgres), besides the Claude
-    subscription. Free Postgres is not supported (deleted after 30 days, no
-    backups), and Render has no spending cap.
+    What kind of project this is, by what it produces:
+    - cli: a command people install and run in a terminal; also the choice
+      for a tool that runs on a schedule on the owner's machine (a data
+      collector, a pipeline). On GitHub its release workflow runs only when
+      a tag is pushed (`v*`, or a listed member's `<name>-v*`), so a project
+      that never tags publishes nothing.
+    - library: a package other code imports.
+    - backend: a service that keeps running and answers requests, in a
+      container.
+    - data-ml: a model trained here and published as release files, with a
+      model card.
+    - web: a web app with logins and a database. It costs money to run:
+      about US $13 a month on Render (a $7 web service and a $6 Postgres),
+      besides the Claude subscription. Free Postgres is not supported
+      (deleted after 30 days, no backups), and Render has no spending cap.
+    When unsure, choose the narrowest. Data processing, collection or a
+    pipeline with no model trained is `cli`.
   default: cli
   choices:
     CLI: cli
