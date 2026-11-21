@@ -28,8 +28,8 @@ but the first:
   run in a terminal, also a tool that runs on a schedule on the owner's
   machine (a data collector, a pipeline); `library`, a package other code
   imports; `backend`, a service in a container that answers requests;
-  `data-ml`, a model trained here and published as release files with a
-  model card; or `web`, a server-rendered Django app with Postgres, GitHub
+  `data-ml`, a model trained here with a model card, which on GitHub a `v*`
+  tag publishes as release files; or `web`, a server-rendered Django app with Postgres, GitHub
   only. Data work with no model trained is `cli`;
 - `plinth_sha`, the commit of coolbress/plinth the CI calls; Enter takes the
   one this release was tested with;

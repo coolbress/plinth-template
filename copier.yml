@@ -223,8 +223,8 @@ archetype:
     - library: a package other code imports.
     - backend: a service that keeps running and answers requests, in a
       container.
-    - data-ml: a model trained here and published as release files, with a
-      model card.
+    - data-ml: a model trained here, with a model card. On GitHub a `v*` tag
+      publishes the model, its metrics and the card as release files.
     - web: a web app with logins and a database. It costs money to run:
       about US $13 a month on Render (a $7 web service and a $6 Postgres),
       besides the Claude subscription. Free Postgres is not supported

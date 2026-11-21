@@ -7811,7 +7811,8 @@ ARCHETYPE_PRODUCES = (
     "a project that never tags publishes nothing",
     "library: a package other code imports",
     "backend: a service that keeps running and answers requests, in a container",
-    "data-ml: a model trained here and published as release files, with a model card",
+    "data-ml: a model trained here, with a model card",
+    "On GitHub a `v*` tag publishes the model, its metrics and the card as release files",
     "web: a web app with logins and a database",
     "about US $13 a month",
     "with no model trained is `cli`",
@@ -7824,3 +7825,5 @@ def test_the_archetype_question_says_what_each_choice_produces() -> None:
     for phrase in ARCHETYPE_PRODUCES:
         assert phrase in help_text, f"the archetype help does not say: {phrase}"
     assert "The conditional files depend on it" not in help_text
+    # GitLab renders no release workflow, so publishing is GitHub's alone.
+    assert "trained here and published as release files" not in help_text
