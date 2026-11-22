@@ -2366,8 +2366,14 @@ def test_a_proprietary_readme_and_how_to_name_no_pypi_step(tmp_path: Path, arche
     assert "](docs/how-to/publish-a-release.md)" in section
     assert how_to.startswith("# Publish a release on GitHub\n")
     assert "gh release download v0.2.0" in how_to
-    install = "uv tool install dist/" if archetype == "cli" else "uv add ./dist/"
-    assert f"{install}probe-0.2.0-py3-none-any.whl" in how_to, how_to
+    assert "--pattern '*.whl' --dir wheels" in how_to
+    # A workspace root needs its members' wheels, which are on no index.
+    install = (
+        "uv tool install --find-links wheels wheels/probe-0.2.0-py3-none-any.whl"
+        if archetype == "cli"
+        else "uv add ./wheels/*.whl"
+    )
+    assert install in how_to, how_to
     mit = render(tmp_path / "m", archetype=archetype, license="MIT")
     assert "publishes this package to PyPI" in (mit / "README.md").read_text(encoding="utf-8")
     assert "pending publisher" in (mit / RELEASE_HOWTO).read_text(encoding="utf-8")

@@ -394,24 +394,28 @@ Nothing has to be set up before the first tag.
 ## 2. Install a release
 
 On a machine where `gh` is signed in to an account that can read this
-repository, download the wheel:
+repository, download the release's wheels (in a uv workspace there is one
+for each package, and the root needs its members' too):
 
 ```bash
-gh release download v0.2.0 --repo {{ repo }} --pattern '*.whl' --dir dist
+gh release download v0.2.0 --repo {{ repo }} --pattern '*.whl' --dir wheels
 ```
 
 {% if archetype == 'cli' -%}
-Then install it as a command on that machine:
+Then install it as a command on that machine. `--find-links wheels` lets
+uv take a workspace member from the downloaded files: it is on no package
+index.
 
 ```bash
-uv tool install dist/{{ package_name }}-0.2.0-py3-none-any.whl
+uv tool install --find-links wheels wheels/{{ package_name }}-0.2.0-py3-none-any.whl
 ```
 {%- else -%}
-Then, in the project that uses it, add it as a dependency, with the file
-kept in that project:
+Then, in the project that uses it, add them as dependencies, with the
+files kept in that project. Each wheel is added, so a workspace member the
+root needs is found in `wheels/` too: it is on no package index.
 
 ```bash
-uv add ./dist/{{ package_name }}-0.2.0-py3-none-any.whl
+uv add ./wheels/*.whl
 ```
 {%- endif %}
 
