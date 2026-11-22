@@ -192,3 +192,144 @@ def test_without_ps_it_says_so_instead_of_running_unqueued(start: Start, tmp_pat
     assert refused.returncode == 2, err
     assert "ps" in err, err
     assert not ran.exists()
+
+
+def _queue(tmp_path: Path) -> Path:
+    return tmp_path / "tmp" / f"plinth-heavy-{os.getuid()}"
+
+
+def _tickets(tmp_path: Path) -> list[Path]:
+    found = _queue(tmp_path) / ".tickets"
+    return sorted(p for p in found.glob("[0-9]*")) if found.is_dir() else []
+
+
+def _wait_for_tickets(tmp_path: Path, count: int, seconds: float = 10) -> None:
+    deadline = time.monotonic() + seconds
+    while len(_tickets(tmp_path)) < count:
+        assert time.monotonic() < deadline, f"{len(_tickets(tmp_path))} of {count} tickets"
+        time.sleep(0.05)
+
+
+def test_six_waiters_on_one_slot_run_in_the_order_they_started(
+    start: Start, tmp_path: Path
+) -> None:
+    """A poll at random, as before, gives a waiter of a second the same chance
+    at the next free slot as one of nineteen minutes. Each waiter here starts
+    once the one before it holds its ticket."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    log, started, go = tmp_path / "log", tmp_path / "started", tmp_path / "go"
+    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
+    _wait_for(started)
+    waiters = []
+    for n in range(1, 7):
+        waiters.append(start(env, f"echo {n} >> {log}"))
+        _wait_for_tickets(tmp_path, n + 1)
+    go.touch()
+    holder.communicate(timeout=60)
+    errors = [w.communicate(timeout=90)[1] for w in waiters]
+    assert [w.returncode for w in waiters] == [0] * 6, errors
+    assert log.read_text().split() == [str(n) for n in range(1, 7)], errors
+    # Each says where it is: the third has two waiting ahead of it.
+    assert "2 ahead, 1 running" in errors[2], errors[2]
+
+
+def test_a_waiter_killed_with_kill_9_does_not_hold_the_queue(start: Start, tmp_path: Path) -> None:
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    log, started, go = tmp_path / "log", tmp_path / "started", tmp_path / "go"
+    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
+    _wait_for(started)
+    killed = start(env, f"echo killed >> {log}")
+    _wait_for_tickets(tmp_path, 2)
+    behind = start(env, f"echo behind >> {log}")
+    _wait_for_tickets(tmp_path, 3)
+    killed.send_signal(signal.SIGKILL)  # no chance to give its ticket back
+    killed.communicate(timeout=10)
+    go.touch()
+    holder.communicate(timeout=60)
+    _, err = behind.communicate(timeout=60)
+    assert behind.returncode == 0, err
+    assert log.read_text().split() == ["behind"], err
+    holders = [t.read_text().split()[0] for t in _tickets(tmp_path)]
+    assert str(killed.pid) not in holders, "the killed waiter's ticket stayed"
+
+
+def test_a_wait_it_can_estimate_past_the_limit_exits_at_once(start: Start, tmp_path: Path) -> None:
+    """The shortest of the last runs took an hour and one is running now, so
+    a five-minute limit cannot be met: it says so at once instead of waiting
+    the five minutes out."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1", PLINTH_HEAVY_WAIT="5")
+    started, ran = tmp_path / "started", tmp_path / "ran"
+    start(env, f"touch {started}; exec sleep 60")
+    _wait_for(started)
+    (_queue(tmp_path) / ".tickets" / ".took").write_text("3600\n4000\n")
+    began = time.monotonic()
+    refused = start(env, f"touch {ran}")
+    _, err = refused.communicate(timeout=30)
+    assert refused.returncode == BUSY, err
+    assert time.monotonic() - began < 15, "it waited instead of exiting at once"
+    assert "did not run" in err, err
+    assert "at least 60 min" in err, err
+    assert not ran.exists()
+
+
+def test_a_short_history_waits_and_says_how_long(start: Start, tmp_path: Path) -> None:
+    """The last run took 2 s, so a limit of 20 minutes can be met: it waits,
+    and its wait line gives the running command's age and the estimate."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    started, go, ran = tmp_path / "started", tmp_path / "go", tmp_path / "ran"
+    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
+    _wait_for(started)
+    (_queue(tmp_path) / ".tickets" / ".took").write_text("2\n")
+    waiter = start(env, f"touch {ran}")
+    _wait_for_tickets(tmp_path, 2)
+    time.sleep(1)
+    go.touch()
+    holder.communicate(timeout=60)
+    _, err = waiter.communicate(timeout=60)
+    assert waiter.returncode == 0, err
+    assert ran.exists()
+    assert re.search(rf"0 ahead, 1 running \(pid {holder.pid} for 0 min\)", err), err
+    assert "about 0 min more" in err, err
+
+
+def test_a_finished_run_is_remembered_for_the_estimate(start: Start, tmp_path: Path) -> None:
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    first = start(env, "sleep 1")
+    first.communicate(timeout=30)
+    second = start(env, "true")
+    _, err = second.communicate(timeout=30)
+    assert second.returncode == 0, err
+    took = (_queue(tmp_path) / ".tickets" / ".took").read_text().split()
+    assert len(took) == 1, took
+    assert 1 <= int(took[0]) <= 5, took
+
+
+def test_a_new_ticket_holder_the_caller_cannot_signal_keeps_its_slot(
+    start: Start, tmp_path: Path
+) -> None:
+    """The ticket form of the pid-1 case below."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1", PLINTH_HEAVY_WAIT="0")
+    tickets = _queue(tmp_path) / ".tickets"
+    tickets.mkdir(parents=True, mode=0o700)
+    now = int(time.time())
+    (tickets / "0000000001").write_text(f"1 {now} {now}\n")
+    ran = tmp_path / "ran"
+    refused = start(env, f"touch {ran}")
+    _, err = refused.communicate(timeout=30)
+    assert refused.returncode == BUSY, err
+    assert not ran.exists(), "pid 1's ticket was taken as a dead one's"
+    assert (tickets / "0000000001").exists()
+
+
+def test_a_running_command_holds_a_slot_an_older_heavy_sh_counts(
+    start: Start, tmp_path: Path
+) -> None:
+    """A project still on an older template shares the directory and counts
+    only entries named by a pid; the new script writes one for what it runs."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    started, go = tmp_path / "started", tmp_path / "go"
+    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
+    _wait_for(started)
+    assert (_queue(tmp_path) / str(holder.pid)).is_file()
+    go.touch()
+    holder.communicate(timeout=60)
