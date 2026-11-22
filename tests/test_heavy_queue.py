@@ -213,6 +213,26 @@ def test_with_no_place_to_write_it_does_not_run(start: Start, tmp_path: Path) ->
     assert not ran.exists()
 
 
+def test_a_queue_path_with_a_space_runs_and_waits(start: Start, tmp_path: Path) -> None:
+    """perl's `glob` splits on spaces: no ticket was found, its own included,
+    and the waiter took ticket after ticket without end."""
+    spaced = tmp_path / "a b"
+    spaced.mkdir()
+    env = {**_env(tmp_path, PLINTH_HEAVY_SLOTS="1"), "PLINTH_HEAVY_DIR": str(spaced)}
+    started, go, log = tmp_path / "started", tmp_path / "go", tmp_path / "log"
+    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
+    _wait_for(started)
+    refused = start({**env, "PLINTH_HEAVY_WAIT": "0"}, f"echo refused >> {log}")
+    _, err = refused.communicate(timeout=30)
+    assert refused.returncode == BUSY, err
+    go.touch()
+    holder.communicate(timeout=30)
+    ran = start(env, f"echo ran >> {log}")
+    _, err = ran.communicate(timeout=30)
+    assert ran.returncode == 0, err
+    assert log.read_text().split() == ["ran"], err
+
+
 def test_the_queue_is_in_plinth_heavy_dir_and_in_tmpdir_without_it(
     start: Start, tmp_path: Path
 ) -> None:

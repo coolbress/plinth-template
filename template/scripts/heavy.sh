@@ -94,17 +94,19 @@ trap 'rm -f "$new" ${mine:+"$mine"}; exit 129' HUP
 # keep open. A child of the command that keeps fd 9 open keeps it too.
 # shellcheck disable=SC2016 # perl code, expanded by perl
 hold='use Fcntl ":flock"; open(my $f, ">&=", 9) or exit 1; flock($f, LOCK_EX | LOCK_NB) or exit 1'
-# Prints each ticket in order, "live" or "gone", with its line; removes a
+# Prints each ticket's name in order, "live" or "gone", with its line; removes a
 # gone one only while it holds its lock and the name is still that file, so
 # a scan that read a dead ticket cannot remove a live one made since.
 # shellcheck disable=SC2016
 sweep='use Fcntl ":flock";
-for my $t (sort glob("$ARGV[0]/[0-9]*")) {
-  next unless $t =~ m{/\d{10}\.\d{10}\.\d{10}$} and open(my $f, "<", $t);
+opendir(my $d, $ARGV[0]) or exit 1;
+for my $n (sort readdir($d)) {
+  my $t = "$ARGV[0]/$n";
+  next unless $n =~ /^\d{10}\.\d{10}\.\d{10}$/ and open(my $f, "<", $t);
   my $line = <$f> // ""; chomp $line;
-  if (!flock($f, LOCK_SH | LOCK_NB)) { print "live $t $line\n"; next }
+  if (!flock($f, LOCK_SH | LOCK_NB)) { print "live $n $line\n"; next }
   my @a = stat($f); my @b = lstat($t);
-  print "gone $t $line\n" if @b and "$a[0] $a[1]" eq "$b[0] $b[1]" and unlink $t;
+  print "gone $n $line\n" if @b and "$a[0] $a[1]" eq "$b[0] $b[1]" and unlink $t;
 }'
 
 # The next number after the highest ticket, the lock taken before the name
@@ -141,7 +143,7 @@ scan() {
       case "$seen" in *" $t "*) [ -n "${started:-}" ] && printf '%s\n' $((now - started)) >>"$took" ;; esac
       continue
     fi
-    if [ "$t" = "$mine" ]; then
+    if [ "$t" = "${mine##*/}" ]; then
       place=1
       continue
     fi
@@ -222,6 +224,8 @@ while :; do
   scan
   if [ "$place" -lt 0 ]; then
     # The ticket is gone, as when the directory was cleared: take another.
+    retakes=$((${retakes:-0} + 1))
+    [ "$retakes" -le 20 ] || cannot "its ticket in $tickets keeps going missing"
     take
     continue
   fi
@@ -230,15 +234,18 @@ while :; do
     # The entry an older heavy.sh counts, written before a last count as it
     # does, so two arriving together cannot both miss the other.
     [ -z "$legacy" ] || printf '%s\n' "$me" >"$legacy/$me"
+    # Marked running before that count too: two that took one number can
+    # each miss the other's ticket at their first count, never both at this
+    # one. Written in place, so the lock stays on the file.
+    printf '%s %s %s\n' "$me" "$arrived" "$(date +%s)" >"$mine"
     scan
     if [ $((ahead + busy)) -lt "$slots" ]; then
       trap - INT TERM HUP
-      # Written in place: the same file, so the lock stays on it.
-      printf '%s %s %s\n' "$me" "$arrived" "$(date +%s)" >"$mine"
       # The command keeps this pid and fd 9, so its ticket is held exactly
       # while it runs.
       exec "$@"
     fi
+    printf '%s %s\n' "$me" "$arrived" >"$mine"
     [ -z "$legacy" ] || rm -f "$legacy/$me"
   fi
   waited=$((SECONDS - began))
