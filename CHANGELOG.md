@@ -6,6 +6,30 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Changed
+
+- **`scripts/heavy.sh` serves waiters in the order they arrived and says
+  where each one is in the queue** (#308). It polled at random, so a waiter
+  of a second had the same chance at the next free slot as one of nineteen
+  minutes, and the older could reach the 20-minute exit 75 while the newer
+  ran. Each waiter now takes a numbered ticket holding its pid, made with
+  `ln` so that a waiter killed with `kill -9` leaves no lock behind; the
+  oldest `PLINTH_HEAVY_SLOTS` live tickets run, and a ticket whose pid is
+  gone is dropped. Once a minute a waiter prints how many wait ahead of it
+  and what runs for how long (`2 ahead, 1 running (pid 4242 for 41 min)`).
+  A waiter that watched a command end remembers how long it ran, and when
+  even the shortest of the last five puts its wait past `PLINTH_HEAVY_WAIT`
+  it exits 75 at once with its "did not run" line instead of waiting the
+  limit out; a command that ended with nobody waiting leaves no time, and
+  with nothing remembered it waits to the limit as before. Its header and `AGENTS.md`'s line
+  now say the queue is per `TMPDIR`: a sandboxed session can see another
+  `TMPDIR` from an unsandboxed one on the same machine and then shares no
+  queue with it. A project not yet updated still counts the updated ones'
+  running commands, and they count its. An existing project gets it through
+  `/plinth:template-update`; one that edited `scripts/heavy.sh` or the
+  block's `pytest` line resolves it by hand. `AGENTS.md` changed, so
+  plinth's pin raise owes an eval suite run.
+
 ## [1.49.1] - 2026-11-22
 
 **A `Proprietary` `cli` or `library` releases to GitHub only, and a new project starts at plinth v2.40.1.** Its release workflow has no PyPI job, and its README and how-to say where a release's files go and how to install them (#304). `plinth_sha`'s default moves to v2.40.1 (`7b773c2`), the commit this repository's workflows call since #306; `plinth_gitlab_integrity` stays the same, since `gitlab/python-ci.yml` is unchanged from v2.39.0. `AGENTS.md`, `.claude/` and `CONTRIBUTING.md` are unchanged, so plinth's pin raise to this release owes no eval suite run. A Proprietary project's rendered workflow uses fewer actions than before, so the Actions allowlist needs nothing new. `copier update` needs no hands, except for a Proprietary project that edited its release workflow, README release section or the how-to; an existing project keeps its own plinth pin (#22).

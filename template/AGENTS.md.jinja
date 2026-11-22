@@ -6,7 +6,7 @@
 uv sync --locked          # fails when the lockfile disagrees with pyproject
 uv run ruff check . && uv run ruff format --check .
 uv run mypy .
-scripts/heavy.sh uv run pytest  # waits for a free slot on this machine; 75: did not run
+scripts/heavy.sh uv run pytest  # waits its turn in the queue of sessions with this TMPDIR; 75: did not run
 {% if host == 'gitlab' %}uv build                  # `build` is a pipeline job{% else %}uv build                  # `ci / build` is a required check{% endif %}
 ```
 
