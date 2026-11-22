@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.50.1] - 2026-11-22
+
+**A sandboxed Claude Code session queues in `scripts/heavy.sh` with the unsandboxed ones.** It was told to run unqueued, because `ps` sees no process inside the sandbox; the queue now lives where both write and holds each ticket by a `perl` `flock` lock (#311). With no `perl` or nowhere to write, the command does not run and `heavy.sh` exits 75. `AGENTS.md` changed (its line on `heavy.sh`), so plinth's pin raise to this release owes an eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited `scripts/heavy.sh`. `plinth_sha`'s default stays 7b773c2 (v2.40.1), plinth's latest release.
+
 ### Fixed
 
 - **A sandboxed Claude Code session queues in `scripts/heavy.sh` with the
