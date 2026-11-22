@@ -91,8 +91,7 @@ take() {
       case "${t##*/}" in *[!0-9]*) continue ;; esac
       if [ -e "$t" ] || [ -L "$t" ]; then last=${t##*/}; fi
     done
-    # Named mine only once it is: a trap that ran between a lost race and the
-    # next try would otherwise remove the winner's ticket.
+    # Not `mine` until ln made it: a trap would remove the winner's ticket.
     try=$(printf '%s/%010d' "$tickets" $((10#$last + 1)))
     if ln "$new" "$try" 2>/dev/null; then
       mine=$try
@@ -215,9 +214,8 @@ while :; do
   fi
   # It runs when what runs and what waits ahead of it leave a slot free.
   if [ $((ahead + busy)) -lt "$slots" ]; then
-    # For an older heavy.sh, which counts only entries named by a pid: write
-    # the entry first and count again, as it does, so that the two arriving
-    # together cannot both miss the other.
+    # The entry an older heavy.sh counts, written before a last count as it
+    # does, so two arriving together cannot both miss the other.
     printf '%s\n' "$me" >"$queue/$me"
     scan
     if [ $((ahead + busy)) -lt "$slots" ]; then

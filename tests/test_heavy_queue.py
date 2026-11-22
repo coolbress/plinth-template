@@ -220,6 +220,8 @@ def test_six_waiters_on_one_slot_run_in_the_order_they_started(
     log, started, go = tmp_path / "log", tmp_path / "started", tmp_path / "go"
     holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
     _wait_for(started)
+    # A pid-named entry too, for an older heavy.sh, which counts only those.
+    assert (_queue(tmp_path) / str(holder.pid)).is_file()
     waiters = []
     for n in range(1, 7):
         waiters.append(start(env, f"echo {n} >> {log}"))
@@ -268,7 +270,7 @@ def test_a_wait_it_can_estimate_past_the_limit_exits_at_once(start: Start, tmp_p
     assert refused.returncode == BUSY, err
     assert time.monotonic() - began < 15, "it waited instead of exiting at once"
     assert "did not run" in err, err
-    assert "at least 60 min" in err, err
+    assert re.search(r"at least (59|60) min", err), err  # 3600 s less the holder's age
     assert not ran.exists()
 
 
@@ -308,9 +310,7 @@ def test_a_run_a_waiter_watched_end_is_remembered(start: Start, tmp_path: Path) 
 
 
 def test_a_run_that_ended_unwatched_leaves_no_time(start: Start, tmp_path: Path) -> None:
-    """The next call finds it gone, but the time since it started is the gap
-    between the two calls, not how long it ran: 3 s here for a run of 0 s,
-    and in a day's use hours, which would refuse every wait at once."""
+    """The time since it started is the gap between calls (3 s), not its run (0 s)."""
     env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
     first = start(env, "true")
     first.communicate(timeout=30)
@@ -354,26 +354,10 @@ def test_a_new_ticket_holder_the_caller_cannot_signal_keeps_its_slot(
     assert (tickets / "0000000001").exists()
 
 
-def test_a_running_command_holds_a_slot_an_older_heavy_sh_counts(
-    start: Start, tmp_path: Path
-) -> None:
-    """A project still on an older template shares the directory and counts
-    only entries named by a pid; the new script writes one for what it runs."""
-    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
-    started, go = tmp_path / "started", tmp_path / "go"
-    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
-    _wait_for(started)
-    assert (_queue(tmp_path) / str(holder.pid)).is_file()
-    go.touch()
-    holder.communicate(timeout=60)
-
-
 def test_a_waiter_stopped_after_losing_the_race_leaves_the_winner_s_ticket(
     start: Start, tmp_path: Path
 ) -> None:
-    """`ln` here stands in for a lost race: another waiter makes the name
-    first, then the call fails. A TERM in that moment ran the cleanup trap
-    on the name it tried, which was the winner's ticket."""
+    """A fake `ln` loses the race: another waiter makes the name, then it fails."""
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     tried = tmp_path / "tried"
