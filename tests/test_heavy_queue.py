@@ -3,8 +3,9 @@ suite, so the sessions on one machine share its slots instead of running
 eleven suites at once.
 
 Each test runs the rendered script with `/bin/bash`, which is bash 3.2 on
-macOS, and a `TMPDIR` of its own, so the queue it sees is the test's alone.
-Neither macOS nor this script has `flock`.
+macOS, and a `TMPDIR` and `PLINTH_HEAVY_DIR` of its own, so the queue it sees
+is the test's alone. A ticket is live while a lock on it is held, through
+perl's `flock`; macOS has no `flock` command.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import time
@@ -36,7 +36,16 @@ def heavy(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def _env(tmp_path: Path, **settings: str) -> dict[str, str]:
     queue = tmp_path / "tmp"
     queue.mkdir(exist_ok=True)
-    return {**os.environ, "TMPDIR": str(queue), **settings}
+    return {**os.environ, "TMPDIR": str(queue), "PLINTH_HEAVY_DIR": str(queue), **settings}
+
+
+def _stand_in(tmp_path: Path, name: str, body: str) -> dict[str, str]:
+    """An environment whose PATH finds `name` as a shell script of `body` first."""
+    bin_ = tmp_path / f"bin-{name}"
+    bin_.mkdir()
+    (bin_ / name).write_text(f"#!/bin/sh\n{body}\n")
+    (bin_ / name).chmod(0o755)
+    return {**_env(tmp_path), "PATH": f"{bin_}:{os.environ['PATH']}"}
 
 
 Start = Callable[[dict[str, str], str], subprocess.Popen[str]]
@@ -176,22 +185,70 @@ def test_a_queue_directory_that_is_a_link_is_refused(start: Start, tmp_path: Pat
     assert not any(elsewhere.iterdir()), "an entry was written through the link"
 
 
-def test_without_ps_it_says_so_instead_of_running_unqueued(start: Start, tmp_path: Path) -> None:
-    """Every entry, the caller's own included, would read as gone, and the
-    command would run with no limit and no word."""
-    bin_ = tmp_path / "bin"
-    bin_.mkdir()
-    for tool in ("id", "mkdir", "rm", "tr", "grep", "sleep", "sh", "touch"):
-        found = shutil.which(tool)
-        assert found, tool
-        (bin_ / tool).symlink_to(found)
-    env = {**_env(tmp_path), "PATH": str(bin_)}
+def test_without_perl_it_does_not_run_and_says_why(start: Start, tmp_path: Path) -> None:
+    """No lock, no queue: the command does not run unqueued (75)."""
+    env = _stand_in(tmp_path, "perl", "exit 127")
     ran = tmp_path / "ran"
     refused = start(env, f"touch {ran}")
     _, err = refused.communicate(timeout=30)
-    assert refused.returncode == 2, err
-    assert "ps" in err, err
+    assert refused.returncode == BUSY, err
+    assert "did not run" in err, err
+    assert "not verified" in err, err
+    assert "without scripts/heavy.sh" not in err, err
     assert not ran.exists()
+
+
+def test_with_no_place_to_write_it_does_not_run(start: Start, tmp_path: Path) -> None:
+    env = _env(tmp_path)
+    shut = tmp_path / "tmp"
+    shut.chmod(0o500)
+    try:
+        ran = tmp_path / "ran"
+        refused = start({**env, "PLINTH_HEAVY_DIR": str(shut)}, f"touch {ran}")
+        _, err = refused.communicate(timeout=30)
+    finally:
+        shut.chmod(0o700)
+    assert refused.returncode == BUSY, err
+    assert "did not run" in err, err
+    assert not ran.exists()
+
+
+def test_the_queue_is_in_plinth_heavy_dir_and_in_tmpdir_without_it(
+    start: Start, tmp_path: Path
+) -> None:
+    """The place both a sandboxed and an unsandboxed session write is
+    /tmp/claude-<uid>; PLINTH_HEAVY_DIR stands in for it here."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    env = _env(tmp_path)
+    start({**env, "PLINTH_HEAVY_DIR": str(shared)}, "true").communicate(timeout=30)
+    assert (shared / f"plinth-heavy-{os.getuid()}" / ".tickets").is_dir()
+    start({**env, "PLINTH_HEAVY_DIR": str(tmp_path / "none")}, "true").communicate(timeout=30)
+    assert (_queue(tmp_path) / ".tickets").is_dir(), "it did not fall back to TMPDIR"
+
+
+def test_a_session_whose_ps_sees_nothing_queues_with_one_that_sees(
+    start: Start, tmp_path: Path
+) -> None:
+    """In a sandboxed Claude Code session `ps` sees no process, not even its
+    own; a stand-in `ps` that finds nothing plays that session here. It
+    waits behind the other's command, and the other's next waiter behind it."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    blind = {**_stand_in(tmp_path, "ps", "exit 1"), "PLINTH_HEAVY_SLOTS": "1"}
+    log, started, go = tmp_path / "log", tmp_path / "started", tmp_path / "go"
+    holder = start(env, f"touch {started}; while [ ! -e {go} ]; do sleep 0.05; done")
+    _wait_for(started)
+    sandboxed = start(blind, f"echo sandboxed >> {log}")
+    _wait_for_tickets(tmp_path, 2)
+    behind = start(env, f"echo behind >> {log}")
+    _wait_for_tickets(tmp_path, 3)
+    time.sleep(1.5)
+    assert not log.exists(), "a waiter ran while the slot was busy"
+    go.touch()
+    holder.communicate(timeout=60)
+    errors = [w.communicate(timeout=60)[1] for w in (sandboxed, behind)]
+    assert (sandboxed.returncode, behind.returncode) == (0, 0), errors
+    assert log.read_text().split() == ["sandboxed", "behind"], errors
 
 
 def _queue(tmp_path: Path) -> Path:
@@ -337,45 +394,44 @@ def test_a_stray_name_in_the_tickets_does_not_stop_a_ticket(start: Start, tmp_pa
     assert ran.exists()
 
 
-def test_a_new_ticket_holder_the_caller_cannot_signal_keeps_its_slot(
+def _hold(ticket: Path) -> subprocess.Popen[str]:
+    """A process that holds the lock on `ticket`, as a live waiter does."""
+    script = (
+        '$| = 1; open(F, "<", $ARGV[0]) or die; flock(F, LOCK_EX) or die; print "held\n"; sleep 60'
+    )
+    proc = subprocess.Popen(  # noqa: S603 - perl and a literal script
+        ["perl", "-MFcntl=:flock", "-e", script, str(ticket)],  # noqa: S607
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert proc.stdout is not None
+    assert proc.stdout.readline() == "held\n"
+    return proc
+
+
+def test_a_dead_ticket_s_number_reused_by_a_live_one_keeps_the_live_one(
     start: Start, tmp_path: Path
 ) -> None:
-    """The ticket form of the pid-1 case below."""
+    """A scan that read a dead ticket, then removed its name after a newcomer
+    took the same number, removed the newcomer's ticket (#310 review). The
+    pid and arrival in the name keep the two apart: only the dead one goes."""
     env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1", PLINTH_HEAVY_WAIT="0")
     tickets = _queue(tmp_path) / ".tickets"
     tickets.mkdir(parents=True, mode=0o700)
-    now = int(time.time())
-    (tickets / "0000000001").write_text(f"1 {now} {now}\n")
-    ran = tmp_path / "ran"
-    refused = start(env, f"touch {ran}")
-    _, err = refused.communicate(timeout=30)
-    assert refused.returncode == BUSY, err
-    assert not ran.exists(), "pid 1's ticket was taken as a dead one's"
-    assert (tickets / "0000000001").exists()
-
-
-def test_a_waiter_stopped_after_losing_the_race_leaves_the_winner_s_ticket(
-    start: Start, tmp_path: Path
-) -> None:
-    """A fake `ln` loses the race: another waiter makes the name, then it fails."""
-    bin_ = tmp_path / "bin"
-    bin_.mkdir()
-    tried = tmp_path / "tried"
-    winner = subprocess.Popen(["sleep", "60"])  # noqa: S607 - a stand-in live pid
+    dead = tickets / "0000000005.0000000100.0000000001"
+    dead.write_text("100 1\n")
+    reused = tickets / f"0000000005.{os.getpid():010d}.{int(time.time()):010d}"
+    reused.write_text(f"{os.getpid()} {int(time.time())}\n")
+    holder = _hold(reused)
     try:
-        fake = bin_ / "ln"
-        fake.write_text(
-            f'#!/bin/sh\nprintf "%s 0\\n" {winner.pid} > "$2"\ntouch {tried}\nsleep 1\nexit 1\n'
-        )
-        fake.chmod(0o755)
-        env = {**_env(tmp_path), "PATH": f"{bin_}:{os.environ['PATH']}"}
-        waiter = start(env, "true")
-        _wait_for(tried)
-        waiter.send_signal(signal.SIGTERM)
-        _, err = waiter.communicate(timeout=30)
-        assert waiter.returncode == 143, err
-        holders = [p.read_text().split()[0] for p in _tickets(tmp_path)]
-        assert str(winner.pid) in holders, "the winner's ticket was removed"
+        ran = tmp_path / "ran"
+        refused = start(env, f"touch {ran}")
+        _, err = refused.communicate(timeout=30)
+        assert refused.returncode == BUSY, err
+        assert "1 ahead" in err or "did not run" in err, err
+        assert not ran.exists(), "it ran ahead of a live waiter"
+        assert reused.exists(), "the live ticket was removed"
+        assert not dead.exists(), "the dead ticket stayed"
     finally:
-        winner.kill()
-        winner.wait()
+        holder.kill()
+        holder.communicate()

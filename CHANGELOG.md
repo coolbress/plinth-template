@@ -12,22 +12,39 @@ means `copier update` on an instance needs hands.
   where each one is in the queue** (#308). It polled at random, so a waiter
   of a second had the same chance at the next free slot as one of nineteen
   minutes, and the older could reach the 20-minute exit 75 while the newer
-  ran. Each waiter now takes a numbered ticket holding its pid, made with
-  `ln` so that a waiter killed with `kill -9` leaves no lock behind; the
-  oldest `PLINTH_HEAVY_SLOTS` live tickets run, and a ticket whose pid is
-  gone is dropped. Once a minute a waiter prints how many wait ahead of it
-  and what runs for how long (`2 ahead, 1 running (pid 4242 for 41 min)`).
+  ran. Each waiter now takes a numbered ticket; the oldest
+  `PLINTH_HEAVY_SLOTS` live tickets run, and a dead one is dropped. Once a
+  minute a waiter prints how many wait ahead of it and what runs for how
+  long (`2 ahead, 1 running (pid 4242 for 41 min)`).
   A waiter that watched a command end remembers how long it ran, and when
   even the shortest of the last five puts its wait past `PLINTH_HEAVY_WAIT`
   it exits 75 at once with its "did not run" line instead of waiting the
   limit out; a command that ended with nobody waiting leaves no time, and
-  with nothing remembered it waits to the limit as before. Its header and `AGENTS.md`'s line
-  now say the queue is per `TMPDIR`: a sandboxed session can see another
-  `TMPDIR` from an unsandboxed one on the same machine and then shares no
-  queue with it. A project not yet updated still counts the updated ones'
-  running commands, and they count its. An existing project gets it through
+  with nothing remembered it waits to the limit as before. A project not
+  yet updated still counts the updated ones' running commands, and they
+  count its. An existing project gets it through
   `/plinth:template-update`; one that edited `scripts/heavy.sh` or the
   block's `pytest` line resolves it by hand. `AGENTS.md` changed, so
+  plinth's pin raise owes an eval suite run.
+
+### Fixed
+
+- **A sandboxed Claude Code session queues in `scripts/heavy.sh` with the
+  unsandboxed ones instead of being told to run unqueued** (#311). In a
+  sandboxed session `ps` sees no process, its own included, so `heavy.sh`
+  exited 2 and told the agent to run the command without it; and its
+  `TMPDIR`, `/tmp/claude-<uid>`, differs from an unsandboxed session's, so
+  the two kept separate queues. The queue now lives in `/tmp/claude-<uid>`
+  when Claude Code made it, which both sides write, else in `TMPDIR` as
+  before (`PLINTH_HEAVY_DIR` names another place). A ticket is live while
+  its waiter, and then its command, holds a lock on it through `perl`'s
+  `flock`, which the kernel drops when that process dies, `kill -9`
+  included; no `ps` is read for it. A ticket's name carries its number, pid
+  and arrival time, so a scan that read a dead ticket cannot remove a live
+  one that took the same number since. Where there is no `perl` or no
+  place to write, the command does not run and `heavy.sh` exits 75 with
+  its "did not run" line. An older `heavy.sh` and this one still count each
+  other's running commands where `ps` works. `AGENTS.md` changed, so
   plinth's pin raise owes an eval suite run.
 
 ## [1.49.1] - 2026-11-22

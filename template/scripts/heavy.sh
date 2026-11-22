@@ -4,21 +4,24 @@
 #
 #   scripts/heavy.sh uv run pytest
 #
-# The queue is per TMPDIR: every project made with plinth whose sessions see
-# the same ${TMPDIR:-/tmp} shares one directory there. A session whose TMPDIR
-# differs, as a sandboxed one's can, has a queue of its own and does not wait
-# for this one's commands.
+# The queue lives in /tmp/claude-<uid> when Claude Code made it there, as
+# it does for every session, sandboxed or not; otherwise in ${TMPDIR:-/tmp}.
+# PLINTH_HEAVY_DIR names another place.
 #
-# Waiters are served in the order they arrived. Each takes a numbered ticket
-# holding its pid; the oldest PLINTH_HEAVY_SLOTS live tickets run, and a
-# ticket whose pid is gone, killed or ended, is dropped. No flock: macOS has
-# none. Written for bash 3.2.
+# Waiters are served in the order they arrived. Each takes a ticket named
+# <number>.<pid>.<arrival> and holds a lock on it, through perl's flock, for
+# as long as it waits and its command runs. The kernel drops the lock when
+# that process dies, even by kill -9, so a ticket no one holds is dropped.
+# Neither ps nor a pid is read for this: a sandboxed session sees no process.
+# Written for bash 3.2.
 #
 #   PLINTH_HEAVY_SLOTS  how many run at once (default 2; set 1 on a small
 #                       machine)
 #   PLINTH_HEAVY_WAIT   minutes to wait for a slot (default 20). Then the
 #                       command does not run and the exit status is 75:
 #                       report that check as not verified, never as passed.
+#                       It is 75 as well when there is no queue to join:
+#                       no perl, or no place to write.
 #
 # While it waits it prints, once a minute, how many wait ahead of it, what
 # runs and for how long. A waiter that watched a command end remembers how
@@ -45,30 +48,38 @@ case "$limit" in
     ;;
 esac
 
-tmp=${TMPDIR:-/tmp}
-queue="${tmp%/}/plinth-heavy-$(id -u)"
-mkdir -p -m 700 "$queue" || exit 2
+cmd="$*"
+cannot() {
+  echo "heavy.sh: did not run '$cmd': $1, so it cannot queue. Report it as not verified." >&2
+  exit 75
+}
+uid=$(id -u)
+base=${PLINTH_HEAVY_DIR:-/tmp/claude-$uid}
+if [ ! -d "$base" ] || [ -L "$base" ] || [ ! -O "$base" ]; then base=${TMPDIR:-/tmp}; fi
+queue="${base%/}/plinth-heavy-$uid"
+mkdir -p -m 700 "$queue" 2>/dev/null || cannot "$queue cannot be made"
 # Another user can make this path first, on a shared /tmp, and fill it with
 # links to this user's files for the entry's write to overwrite.
 if [ -L "$queue" ] || [ ! -O "$queue" ]; then
   echo "heavy.sh: $queue is a link or not this user's; remove it, then run again" >&2
   exit 2
 fi
-# Without ps every entry, this one's too, reads as gone: no limit, no word.
-if ! ps -p $$ >/dev/null 2>&1; then
-  echo "heavy.sh: ps cannot see this process here, so the slots cannot be counted; run the command without scripts/heavy.sh" >&2
-  exit 2
-fi
-# Tickets live in a hidden directory: an older heavy.sh, from a project not
-# yet updated, removes every file in $queue whose name is not a live pid,
-# and its glob skips a name that starts with a dot.
 tickets="$queue/.tickets"
-mkdir -m 700 "$tickets" 2>/dev/null || [ -d "$tickets" ] || exit 2
+mkdir -m 700 "$tickets" 2>/dev/null || [ -d "$tickets" ] || cannot "$tickets cannot be made"
 if [ -L "$tickets" ]; then
   echo "heavy.sh: $tickets is a link; remove it, then run again" >&2
   exit 2
 fi
 took="$tickets/.took"
+# An older heavy.sh keeps a file named by its pid in ${TMPDIR:-/tmp}'s
+# plinth-heavy-<uid> for each command it runs, and counts only those, read
+# with ps. Where ps sees this process, this one writes and counts them too.
+legacy=''
+if ps -p $$ >/dev/null 2>&1; then
+  legacy=${TMPDIR:-/tmp}
+  legacy="${legacy%/}/plinth-heavy-$uid"
+  if ! mkdir -p -m 700 "$legacy" 2>/dev/null || [ -L "$legacy" ] || [ ! -O "$legacy" ]; then legacy=''; fi
+fi
 
 me=$$
 arrived=$(date +%s)
@@ -78,63 +89,65 @@ trap 'rm -f "$new" ${mine:+"$mine"}; exit 130' INT
 trap 'rm -f "$new" ${mine:+"$mine"}; exit 143' TERM
 trap 'rm -f "$new" ${mine:+"$mine"}; exit 129' HUP
 
-# The next number after the highest live ticket. `ln` makes the name only if
-# no other waiter made it first, with its content already in place, so there
-# is no lock to leave behind when a waiter is killed.
+# Takes the lock on fd 9 and keeps it there after perl exits: the lock
+# belongs to the open file, which this shell, and the command it becomes,
+# keep open. A child of the command that keeps fd 9 open keeps it too.
+# shellcheck disable=SC2016 # perl code, expanded by perl
+hold='use Fcntl ":flock"; open(my $f, ">&=", 9) or exit 1; flock($f, LOCK_EX | LOCK_NB) or exit 1'
+# Prints each ticket in order, "live" or "gone", with its line; removes a
+# gone one only while it holds its lock and the name is still that file, so
+# a scan that read a dead ticket cannot remove a live one made since.
+# shellcheck disable=SC2016
+sweep='use Fcntl ":flock";
+for my $t (sort glob("$ARGV[0]/[0-9]*")) {
+  next unless $t =~ m{/\d{10}\.\d{10}\.\d{10}$} and open(my $f, "<", $t);
+  my $line = <$f> // ""; chomp $line;
+  if (!flock($f, LOCK_SH | LOCK_NB)) { print "live $t $line\n"; next }
+  my @a = stat($f); my @b = lstat($t);
+  print "gone $t $line\n" if @b and "$a[0] $a[1]" eq "$b[0] $b[1]" and unlink $t;
+}'
+
+# The next number after the highest ticket, the lock taken before the name
+# is visible: a scan never sees it unheld. Two waiters can take one number;
+# the pid after it orders them, the same way for every scanner.
 take() {
   mine=''
-  printf '%s %s\n' "$me" "$arrived" >"$new" || exit 2
-  tries=0
-  while :; do
-    last=0
-    for t in "$tickets"/[0-9]*; do
-      case "${t##*/}" in *[!0-9]*) continue ;; esac
-      if [ -e "$t" ] || [ -L "$t" ]; then last=${t##*/}; fi
-    done
-    # Not `mine` until ln made it: a trap would remove the winner's ticket.
-    try=$(printf '%s/%010d' "$tickets" $((10#$last + 1)))
-    if ln "$new" "$try" 2>/dev/null; then
-      mine=$try
-      break
-    fi
-    tries=$((tries + 1))
-    if [ "$tries" -ge 50 ]; then
-      rm -f "$new"
-      echo "heavy.sh: could not take a ticket in $tickets; remove that directory, then run again" >&2
-      exit 2
-    fi
+  { printf '%s %s\n' "$me" "$arrived" >"$new" && exec 9>>"$new"; } 2>/dev/null || cannot "$new cannot be written"
+  perl -e "$hold" 2>/dev/null || cannot "perl could not hold a lock on $new"
+  last=0
+  for t in "$tickets"/[0-9]*; do
+    n=${t##*/}
+    n=${n%%.*}
+    case "$n" in '' | *[!0-9]*) continue ;; esac
+    if [ $((10#$n)) -gt $((10#$last)) ]; then last=$n; fi
   done
-  rm -f "$new"
+  try=$(printf '%s/%010d.%010d.%010d' "$tickets" $((10#$last + 1)) "$me" "$arrived")
+  mv "$new" "$try" || cannot "$try cannot be written"
+  mine=$try
 }
 
 # Reads the queue. Sets: place (-1 when this waiter has no ticket), ahead
 # (tickets before this one still waiting), busy (how many run), what (their
 # pids and ages), ages (seconds each running one has run, one per line). A
-# dead ticket is dropped. One that this waiter saw running at its last scan
-# leaves how long it ran, to within one poll: a command that ended unwatched
-# leaves nothing, since the time until the next call is not its run time.
+# gone ticket that this waiter saw running at its last scan leaves how long
+# it ran, to within one poll: a command that ended unwatched leaves nothing,
+# since the time until the next call is not its run time.
 seen=' '
 scan() {
   now=$(date +%s)
   place=-1 ahead=0 busy=0 what='' ages='' live=" $me " watched=' '
-  for t in "$tickets"/[0-9]* "$tickets"/.new.*; do
-    case "${t##*/}" in .new.*) ;; *[!0-9]*) continue ;; esac
-    [ -e "$t" ] || continue
-    { read -r pid _ started; } <"$t" 2>/dev/null || continue
+  while read -r state t pid _ started; do
+    if [ "$state" = gone ]; then
+      case "$seen" in *" $t "*) [ -n "${started:-}" ] && printf '%s\n' $((now - started)) >>"$took" ;; esac
+      continue
+    fi
     if [ "$t" = "$mine" ]; then
       place=1
       continue
     fi
-    if ! ps -p "$pid" >/dev/null 2>&1; then
-      if rm "$t" 2>/dev/null && [ -n "${started:-}" ]; then
-        case "$seen" in *" $pid "*) printf '%s\n' $((now - started)) >>"$took" ;; esac
-      fi
-      continue
-    fi
-    case "$t" in */.new.*) continue ;; esac
-    live="$live$pid "
+    live="$live${pid:-} "
     if [ -n "${started:-}" ]; then
-      watched="$watched$pid "
+      watched="$watched$t "
       busy=$((busy + 1))
       what="$what, pid $pid for $(((now - started) / 60)) min"
       ages="$ages$((now - started))
@@ -142,10 +155,10 @@ scan() {
     elif [ "$place" -lt 0 ]; then
       ahead=$((ahead + 1))
     fi
-  done
-  # An older heavy.sh's entries, named by their pid: each holds a slot. The
-  # entry this script writes for an older one to count is its ticket's pid.
-  for e in "$queue"/[0-9]*; do
+  done < <(perl -e "$sweep" "$tickets")
+  # An older heavy.sh's entries: each holds a slot. The entry this script
+  # writes for an older one to count is its own pid's.
+  for e in ${legacy:+"$legacy"/[0-9]*}; do
     [ -f "$e" ] || continue
     pid=${e##*/}
     case "$live" in *" $pid "*) continue ;; esac
@@ -216,15 +229,17 @@ while :; do
   if [ $((ahead + busy)) -lt "$slots" ]; then
     # The entry an older heavy.sh counts, written before a last count as it
     # does, so two arriving together cannot both miss the other.
-    printf '%s\n' "$me" >"$queue/$me"
+    [ -z "$legacy" ] || printf '%s\n' "$me" >"$legacy/$me"
     scan
     if [ $((ahead + busy)) -lt "$slots" ]; then
       trap - INT TERM HUP
-      printf '%s %s %s\n' "$me" "$arrived" "$(date +%s)" >"$new" && mv -f "$new" "$mine"
-      # The command keeps this pid, so its ticket is live exactly while it runs.
+      # Written in place: the same file, so the lock stays on it.
+      printf '%s %s %s\n' "$me" "$arrived" "$(date +%s)" >"$mine"
+      # The command keeps this pid and fd 9, so its ticket is held exactly
+      # while it runs.
       exec "$@"
     fi
-    rm -f "$queue/$me"
+    [ -z "$legacy" ] || rm -f "$legacy/$me"
   fi
   waited=$((SECONDS - began))
   estimate
