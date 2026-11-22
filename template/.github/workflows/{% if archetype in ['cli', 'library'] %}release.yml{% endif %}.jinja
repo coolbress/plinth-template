@@ -1,4 +1,37 @@
-# Publishes this package to PyPI when a version tag (`v1.2.3`) is pushed, then
+{% if license == 'Proprietary' %}{% raw %}# Builds this package when a version tag (`v1.2.3`) is pushed and makes a
+# GitHub Release that carries the wheel and the sdist, with generated notes.
+# The steps: docs/how-to/publish-a-release.md.
+#
+# Not a required check and not part of `ci`: it runs on a tag, never on a pull
+# request, so no ruleset waits for it. No job is skipped with `if:`; each job
+# runs or fails, so a red run says which step stopped.
+#
+# Nothing goes to PyPI: the license is Proprietary, and pyproject.toml carries
+# the `Private :: Do Not Upload` classifier, which PyPI refuses. The files go
+# to the GitHub Release alone, where only those who can read this repository
+# can download them. No stored secret: the run's own token makes the release.
+# The GitHub Release also carries an SBOM, `sbom.spdx.json`: what installing
+# the wheel puts in an environment.
+#
+# A uv workspace (`[tool.uv.workspace]` in pyproject.toml): one tag builds
+# the root and every member that is a package, and the release carries all
+# of their files. The tag is the root's version; each member keeps its own.
+#
+# A member can be released on its own tags instead, apart from the root: the
+# root's pyproject.toml lists it with a prefix that ends in `-`,
+#
+#   [tool.plinth.release]
+#   own-tags = { "<member's name>" = "<prefix>-" }
+#
+# and a tag `<prefix>-v<version>` then builds that member alone and makes its
+# release, its version compared after PEP 440 normalisation (`-v1.0.0-rc.1`
+# matches `1.0.0rc1`). A `v*` tag leaves the listed members out, and first
+# checks that PyPI has a release of each one the root depends on, within the
+# root's range, and a member's own tag installs the workspace's other
+# packages it depends on from PyPI. This workflow puts nothing on PyPI, so
+# list only a member the root does not depend on and that depends on no
+# other package of the workspace.
+{% endraw %}{% else %}{% raw %}# Publishes this package to PyPI when a version tag (`v1.2.3`) is pushed, then
 # makes a GitHub Release with generated notes. The steps a person takes once
 # before the first tag: docs/how-to/publish-a-release.md.
 #
@@ -34,7 +67,7 @@
 # the listed members out, and first checks that the index has a release of
 # each one the root depends on within the root's range: the member goes
 # first, the root after.
-name: Release
+{% endraw %}{% endif %}{% raw %}name: Release
 
 on:
   push:
@@ -45,8 +78,9 @@ on:
 # Nothing by default; each job asks for what it uses.
 permissions: {}
 
-# Two tags pushed together publish one after the other, never at once.
-concurrency:
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}# Two tags pushed together release one after the other, never at once.
+{% endraw %}{% else %}{% raw %}# Two tags pushed together publish one after the other, never at once.
+{% endraw %}{% endif %}{% raw %}concurrency:
   group: release
   cancel-in-progress: false
 
@@ -59,17 +93,20 @@ jobs:
     permissions:
       contents: read
     outputs:
-      # "true" in a uv workspace: the publish job then skips a file PyPI has,
+{% endraw %}{% if license != 'Proprietary' %}{% raw %}      # "true" in a uv workspace: the publish job then skips a file PyPI has,
       # unless the tag is a member's own.
       workspace: ${{ steps.build.outputs.workspace }}
-      # The listed member a `<prefix>-v*` tag releases; empty for a `v*` tag.
+{% endraw %}{% endif %}{% raw %}      # The listed member a `<prefix>-v*` tag releases; empty for a `v*` tag.
       member: ${{ steps.tag.outputs.member }}
-    # The index a listed member is looked up on: PyPI's, or TestPyPI's when
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}    # The index a listed member the root depends on is looked up on.
+    env:
+      INDEX_URL: https://pypi.org/simple/
+{% endraw %}{% else %}{% raw %}    # The index a listed member is looked up on: PyPI's, or TestPyPI's when
     # the release goes there. The install check takes the workspace's own
     # packages alone from it; everything else comes from PyPI.
     env:
       INDEX_URL: ${{ startsWith(vars.PYPI_REPOSITORY_URL, 'https://test.pypi.org/') && 'https://test.pypi.org/simple/' || 'https://pypi.org/simple/' }}
-    steps:
+{% endraw %}{% endif %}{% raw %}    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The whole history, to tell whether the tagged commit is on main.
@@ -234,9 +271,11 @@ jobs:
           set -euo pipefail
           member="$(cat "$RUNNER_TEMP/release-member")"
           if [ -n "$member" ]; then
-            # A listed member's own tag: that member alone, built as PyPI
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}            # A listed member's own tag: that member alone, built without
+            # the workspace's sources, as its wheel installs.
+{% endraw %}{% else %}{% raw %}            # A listed member's own tag: that member alone, built as PyPI
             # will install it, without the workspace's sources.
-            : > "$RUNNER_TEMP/workspace-root"
+{% endraw %}{% endif %}{% raw %}            : > "$RUNNER_TEMP/workspace-root"
             echo "workspace=true" >> "$GITHUB_OUTPUT"; uv build --package "$member" --no-sources
             exit 0
           fi
@@ -343,8 +382,9 @@ jobs:
           tags="$(cut -f2 "$RUNNER_TEMP/release-needs" | sort -u | sed 's/$/v<version>/' | paste -sd ' ' -)"
           if ! got="$(uv pip compile "$RUNNER_TEMP/needs.txt" --universal --no-config --no-deps --prerelease explicit --index-url "$INDEX_URL" --quiet --no-header --no-annotate 2>&1)"; then
             printf '%s\n' "$got"
-            echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release that meets it. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it $tags and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
-            exit 1
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}            echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release that meets it. Nothing was attached. This project's releases put nothing on a package index, so a member the root depends on cannot be released on its own tags ($tags). Leave this tag where it is: plinth's tag ruleset, on a repository that has it, refuses to move or delete it. Take the member out of [tool.plinth.release] own-tags in a pull request, raise the version to one that has no tag yet, merge it, and tag the merged commit with it."
+{% endraw %}{% else %}{% raw %}            echo "::error title=A member the root needs is not on the index::The root's pyproject.toml asks for $need, and $INDEX_URL has no release that meets it. Nothing was uploaded. A member listed under [tool.plinth.release] own-tags goes first: tag it $tags and wait for that run to be green, then re-run this run's failed jobs (Re-run jobs on the run's page, or gh run rerun <run id> --failed): this tag stays as it is."
+{% endraw %}{% endif %}{% raw %}            exit 1
           fi
           printf '%s\n' "$got" | sed '/^#/d' | grep -E '^[^ ]+==' > "$RUNNER_TEMP/listed-found" || true
           # Every member needed has a version, or the check did not run.
@@ -359,14 +399,16 @@ jobs:
       # A software bill of materials (SBOM), attached to the GitHub Release.
       # The wheel names what it needs, not what it installs, so the SBOM is
       # of a fresh environment with the built wheel installed at the runtime
-      # versions uv.lock names. It travels apart from dist/: the publish job
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}      # versions uv.lock names. It travels apart from dist/.
+{% endraw %}{% else %}{% raw %}      # versions uv.lock names. It travels apart from dist/: the publish job
       # uploads dist/ whole, and PyPI refuses a file that is not a package.
-      # The workspace's packages the install takes from the index come from
-      # $INDEX_URL alone, and nothing else does: TestPyPI holds old or
+{% endraw %}{% endif %}{% raw %}      # The workspace's packages the install takes from the index come from
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}      # $INDEX_URL alone.
+{% endraw %}{% else %}{% raw %}      # $INDEX_URL alone, and nothing else does: TestPyPI holds old or
       # unrelated uploads under the names PyPI's packages have, and uv takes
       # each package from the first index that has it, so `--index` would
       # send every dependency there.
-      - name: Install syft (official release, SHA256 verified)
+{% endraw %}{% endif %}{% raw %}      - name: Install syft (official release, SHA256 verified)
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SYFT_VERSION: "1.55.0"
@@ -393,9 +435,10 @@ jobs:
           # tag, the built wheel's requirements on the workspace's other
           # packages. uv applies such a pin only to a package the file
           # requires itself, so a workspace package needed only further down
-          # the chain is looked up on PyPI: in a TestPyPI rehearsal it is not
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}          # the chain is looked up on PyPI too.
+{% endraw %}{% else %}{% raw %}          # the chain is looked up on PyPI: in a TestPyPI rehearsal it is not
           # taken from TestPyPI.
-          from_index() {
+{% endraw %}{% endif %}{% raw %}          from_index() {
             python3 - <<'PY'
           import json, os, re, zipfile
           from email.parser import HeaderParser
@@ -429,10 +472,11 @@ jobs:
           if [ -s "$RUNNER_TEMP/workspace-root" ]; then
             # A workspace: the root's wheel alone. Its members are looked up
             # in dist/ too, each pinned to the version just built, so another
-            # version on the index is not taken instead. This does not show
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}            # version on the index is not taken instead. A member released on its
+{% endraw %}{% else %}{% raw %}            # version on the index is not taken instead. This does not show
             # that PyPI has that member's code: a member changed without a
             # new version is skipped at the upload. A member released on its
-            # own tags comes from the index, within the root's needs.
+{% endraw %}{% endif %}{% raw %}            # own tags comes from the index, within the root's needs.
             uv export --locked --no-dev --no-emit-workspace --no-hashes --quiet -o "$RUNNER_TEMP/constraints.txt"
             cat "$RUNNER_TEMP/workspace-pins" >> "$RUNNER_TEMP/constraints.txt"
             from_index
@@ -464,7 +508,7 @@ jobs:
           path: sbom/
           if-no-files-found: error
 
-  # The only job that can speak for this repository to PyPI, and it runs no
+{% endraw %}{% if license != 'Proprietary' %}{% raw %}  # The only job that can speak for this repository to PyPI, and it runs no
   # code from the repository: it uploads what `build` made.
   publish:
     needs: build
@@ -505,10 +549,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error title=PyPI did not accept this release::Read the run summary for what to check. The steps: docs/how-to/publish-a-release.md."
 
-  # The release page on GitHub, once PyPI has the files.
-  github-release:
-    needs: [build, publish]
-    runs-on: ubuntu-latest
+{% endraw %}{% endif %}{% if license == 'Proprietary' %}{% raw %}  # The release page on GitHub, with the files the build job made.
+{% endraw %}{% else %}{% raw %}  # The release page on GitHub, once PyPI has the files.
+{% endraw %}{% endif %}{% raw %}  github-release:
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}    needs: build
+{% endraw %}{% else %}{% raw %}    needs: [build, publish]
+{% endraw %}{% endif %}{% raw %}    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
@@ -521,11 +567,13 @@ jobs:
         with:
           name: sbom
           path: sbom/
-      # The wheel and sdist PyPI has, and the SBOM beside them. A member's
-      # own release is never marked the latest: that stays the root's.
+{% endraw %}{% if license == 'Proprietary' %}{% raw %}      # The wheel and sdist, and the SBOM beside them. A member's
+{% endraw %}{% else %}{% raw %}      # The wheel and sdist PyPI has, and the SBOM beside them. A member's
+{% endraw %}{% endif %}{% raw %}      # own release is never marked the latest: that stays the root's.
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           MEMBER: ${{ needs.build.outputs.member }}
         run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes ${MEMBER:+--latest=false} dist/* sbom/sbom.spdx.json
+{% endraw %}

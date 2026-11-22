@@ -2305,6 +2305,80 @@ def test_release_runs_only_on_a_version_tag_and_stores_no_secret(rendered: Path)
         assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
 
 
+@pytest.mark.parametrize("archetype", ["cli", "library"])
+def test_a_proprietary_release_attaches_its_files_and_publishes_nowhere(
+    tmp_path: Path, archetype: str
+) -> None:
+    """`Proprietary` carries the classifier PyPI refuses, so its release has
+    no PyPI job: no publish action, no `pypi` environment, no identity
+    token. The tag still builds and checks the package, and the GitHub
+    Release carries the wheel, the sdist and the SBOM (#304). An MIT render
+    keeps its publish job (the test above)."""
+    out = render(tmp_path, archetype=archetype, license="Proprietary")
+    text = (out / RELEASE).read_text(encoding="utf-8")
+    data = _release(out)
+    assert data[True] == {"push": {"tags": ["v*", "*-v*"]}}
+    jobs = data["jobs"]
+    assert set(jobs) == {"build", "github-release"}
+    for name, job in jobs.items():
+        assert "if" not in job, f"job {name} is skipped with if:"
+        assert "environment" not in job, f"job {name} runs in an environment"
+        assert "id-token" not in job["permissions"], f"job {name} asks for an identity token"
+    assert jobs["github-release"]["needs"] == "build"
+    assert jobs["github-release"]["permissions"] == {"contents": "write"}
+    (create,) = [
+        s for s in jobs["github-release"]["steps"] if s.get("name") == "Create the GitHub Release"
+    ]
+    assert create["run"].endswith("dist/* sbom/sbom.spdx.json"), create["run"]
+    assert "pypa/gh-action-pypi-publish" not in text
+    assert "PYPI_REPOSITORY_URL" not in text
+    assert "environment: pypi" not in text
+    assert "secrets." not in text
+    for ref in re.findall(r"uses:\s*(\S+)", text):
+        assert re.search(r"@[0-9a-f]{40}$", ref), f"{ref} is not pinned to a full commit SHA"
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library"])
+def test_a_proprietary_readme_and_how_to_name_no_pypi_step(tmp_path: Path, archetype: str) -> None:
+    """A person following them sets up nothing on PyPI, which refuses the
+    upload anyway; they say the files are on the GitHub Release and how to
+    install a wheel from there (#304). An MIT render still walks through
+    PyPI."""
+    steps = (
+        "pypi.org/account",
+        "pypi.org/manage",
+        "pending publisher",
+        "Trusted Publishing",
+        "TestPyPI",
+        "PYPI_REPOSITORY_URL",
+        "`pypi` environment",
+        "publishes this package to PyPI",
+    )
+    out = render(tmp_path / "p", archetype=archetype, license="Proprietary")
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    section = readme.split("## Releasing\n", 1)[1].split("\n## ", 1)[0]
+    how_to = (out / RELEASE_HOWTO).read_text(encoding="utf-8")
+    for text in (section, how_to):
+        assert not [s for s in steps if s in text], [s for s in steps if s in text]
+        assert "PyPI" not in text.replace("PyPI refuses", "")
+    assert "wheel and the sdist" in section
+    assert "GitHub Release" in section
+    assert "](docs/how-to/publish-a-release.md)" in section
+    assert how_to.startswith("# Publish a release on GitHub\n")
+    assert "gh release download v0.2.0" in how_to
+    assert "--pattern '*.whl' --dir wheels" in how_to
+    # A workspace root needs its members' wheels, which are on no index.
+    install = (
+        "uv tool install --find-links wheels wheels/probe-0.2.0-py3-none-any.whl"
+        if archetype == "cli"
+        else "uv add ./wheels/*.whl"
+    )
+    assert install in how_to, how_to
+    mit = render(tmp_path / "m", archetype=archetype, license="MIT")
+    assert "publishes this package to PyPI" in (mit / "README.md").read_text(encoding="utf-8")
+    assert "pending publisher" in (mit / RELEASE_HOWTO).read_text(encoding="utf-8")
+
+
 def test_release_checks_the_version_before_it_builds(rendered: Path) -> None:
     """The checks come before the build, and the build job is the one the
     upload needs: a failed check uploads nothing."""

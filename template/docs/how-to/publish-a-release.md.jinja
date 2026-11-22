@@ -345,6 +345,129 @@ upload has passed. The run says which step stopped.
 
 Deleting a tag turns its release into a draft. After pushing the tag again,
 delete the draft under **Releases**.
+{% elif license == 'Proprietary' -%}
+{%- set repo = (owner if owner else '<your GitHub account>') ~ '/' ~ project_name -%}
+# Publish a release on GitHub
+
+This project is not licensed for use by others, so its releases go to one
+place: the release page on GitHub, under **Releases**, which only those who
+can read this repository can open. Nothing goes to a public package index;
+`pyproject.toml` carries the `Private :: Do Not Upload` classifier, so
+PyPI refuses an upload made by mistake. This page is the steps, in order,
+for every release.
+
+How it works, in one paragraph: you push a version tag, such as `v0.2.0`.
+The workflow `.github/workflows/release.yml` then checks the tag, builds the
+package, installs it in a fresh environment, and makes a release page on
+GitHub that carries the built files: the wheel (`.whl`, what an install
+uses), the sdist (`.tar.gz`, the source) and `sbom.spdx.json`. No password
+or token is stored anywhere: the release is made with the run's own token,
+which GitHub makes for that run and which stops working when it ends.
+
+Nothing has to be set up before the first tag.
+
+## 1. Publish
+
+1. Set the version. The version is written in `pyproject.toml`
+   (`version = "0.1.0"` to start). For a new release, ask the agent to raise
+   it in a pull request, for example "raise the version to 0.2.0 with
+   `uv version 0.2.0`", and add what changed to `CHANGELOG.md`. Merge it when
+   its checks are green.
+2. Push the tag. The tag is the version with a `v` in front, on the merged
+   `main`. In a terminal, in this repository:
+
+   ```bash
+   git fetch origin
+   git tag v0.2.0 origin/main
+   git push origin v0.2.0
+   ```
+
+   You push the tag yourself, not the agent: letting a version out is a
+   person's decision.
+3. Open the repository's **Actions** tab and the run named **Release**. When
+   it is green, the release page is under **Releases**, with its notes and
+   the files. `sbom.spdx.json` is a software bill of materials (SBOM): the
+   package and every package installing it brings, at the versions
+   `uv.lock` names. A scanner reads it to tell whether a newly published
+   vulnerability touches a release.
+
+## 2. Install a release
+
+On a machine where `gh` is signed in to an account that can read this
+repository, download the release's wheels (in a uv workspace there is one
+for each package, and the root needs its members' too):
+
+```bash
+gh release download v0.2.0 --repo {{ repo }} --pattern '*.whl' --dir wheels
+```
+
+{% if archetype == 'cli' -%}
+Then install it as a command on that machine. `--find-links wheels` lets
+uv take a workspace member from the downloaded files: it is on no package
+index.
+
+```bash
+uv tool install --find-links wheels wheels/{{ package_name }}-0.2.0-py3-none-any.whl
+```
+{%- else -%}
+Then, in the project that uses it, add them as dependencies, with the
+files kept in that project. Each wheel is added, so a workspace member the
+root needs is found in `wheels/` too: it is on no package index.
+
+```bash
+uv add ./wheels/*.whl
+```
+{%- endif %}
+
+## A uv workspace: more than one package
+
+Skip this section unless the root `pyproject.toml` has a
+`[tool.uv.workspace]` table. A uv workspace is one repository that holds
+several packages, the root and its members. One tag builds the root and
+every member that is a package, and its release page carries all of their
+files. The tag is checked against the root's version only; each member
+keeps its own version in its own `pyproject.toml`. A member that is not a
+package (no `[build-system]`, or `package = false` under `[tool.uv]`) is not
+built.
+
+A member can instead be released on its own tags, apart from the root:
+list it in the root `pyproject.toml`, in a pull request, with a prefix
+that ends in a hyphen,
+
+```toml
+[tool.plinth.release]
+own-tags = { "<member's name>" = "checker-" }
+```
+
+and a tag `checker-v1.0.0` then builds that member alone and makes its own
+release page, never marked the latest. A `v*` tag leaves a listed member
+out, and stops if the root depends on it: it looks the member up on the
+public package index, where this project's packages never are. For the
+same reason a member's own tag stops if the member depends on another
+package of the workspace. List only a member the root does not depend on
+and that depends on no other package of the workspace.
+
+## When a release fails
+
+Nothing is attached until every check before the release has passed. The
+run says which step stopped, in its summary.
+
+- **"The tag and the version differ."** The tag says one version,
+  `pyproject.toml` another. The wrong tag stays: the repository's tag
+  ruleset (when plinth set one up) refuses to move or delete a `v*` tag, so
+  its version number is used up. If the file's version has no tag yet, tag
+  `origin/main` with it as in step 1. Otherwise raise the version in a pull
+  request to one with no tag, merge it, and tag that.
+- **"The tag is not on main."** The tag points at a commit that never went
+  through a pull request. It stays, as above: tag `origin/main` as in step
+  1, with a version that has no tag yet.
+- **"The own-tags list cannot be read".** `[tool.plinth.release] own-tags`
+  names a package that is not a member of the workspace, or a prefix that
+  does not end in a hyphen. Fix it in a pull request, then tag a version
+  that has no tag yet.
+
+To take a broken release out of reach, delete its release page under
+**Releases** (the tag stays) and publish a fixed version.
 {% else -%}
 {%- set owner_name = owner if owner else '<your GitHub account>' -%}
 # Publish a release to PyPI
