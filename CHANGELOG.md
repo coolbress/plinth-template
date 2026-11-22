@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.50.0] - 2026-11-22
+
+**`scripts/heavy.sh` serves waiters in arrival order and says where each one is in the queue.** A waiter takes a numbered ticket, the oldest `PLINTH_HEAVY_SLOTS` live tickets run, and a waiter prints its place once a minute and exits 75 at once when the commands it saw end say its wait would pass `PLINTH_HEAVY_WAIT` (#308). The queue is per `TMPDIR`: a sandboxed session does not share it with an unsandboxed one, and #311 has what that leaves. `AGENTS.md` changed (its line on `heavy.sh`), so plinth's pin raise to this release owes an eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited `scripts/heavy.sh`. `plinth_sha`'s default stays 7b773c2 (v2.40.1), plinth's latest release.
+
 ### Changed
 
 - **`scripts/heavy.sh` serves waiters in the order they arrived and says
