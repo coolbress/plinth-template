@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.49.1] - 2026-11-22
+
+**A `Proprietary` `cli` or `library` releases to GitHub only, and a new project starts at plinth v2.40.1.** Its release workflow has no PyPI job, and its README and how-to say where a release's files go and how to install them (#304). `plinth_sha`'s default moves to v2.40.1 (`7b773c2`), the commit this repository's workflows call since #306; `plinth_gitlab_integrity` stays the same, since `gitlab/python-ci.yml` is unchanged from v2.39.0. `AGENTS.md`, `.claude/` and `CONTRIBUTING.md` are unchanged, so plinth's pin raise to this release owes no eval suite run. A Proprietary project's rendered workflow uses fewer actions than before, so the Actions allowlist needs nothing new. `copier update` needs no hands, except for a Proprietary project that edited its release workflow, README release section or the how-to; an existing project keeps its own plinth pin (#22).
+
 ### Fixed
 
 - **A `Proprietary` `cli` or `library` releases to GitHub only, and its
