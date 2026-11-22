@@ -82,6 +82,7 @@ trap 'rm -f "$new" ${mine:+"$mine"}; exit 129' HUP
 # no other waiter made it first, with its content already in place, so there
 # is no lock to leave behind when a waiter is killed.
 take() {
+  mine=''
   printf '%s %s\n' "$me" "$arrived" >"$new" || exit 2
   tries=0
   while :; do
@@ -90,8 +91,13 @@ take() {
       case "${t##*/}" in *[!0-9]*) continue ;; esac
       if [ -e "$t" ] || [ -L "$t" ]; then last=${t##*/}; fi
     done
-    mine=$(printf '%s/%010d' "$tickets" $((10#$last + 1)))
-    ln "$new" "$mine" 2>/dev/null && break
+    # Named mine only once it is: a trap that ran between a lost race and the
+    # next try would otherwise remove the winner's ticket.
+    try=$(printf '%s/%010d' "$tickets" $((10#$last + 1)))
+    if ln "$new" "$try" 2>/dev/null; then
+      mine=$try
+      break
+    fi
     tries=$((tries + 1))
     if [ "$tries" -ge 50 ]; then
       rm -f "$new"

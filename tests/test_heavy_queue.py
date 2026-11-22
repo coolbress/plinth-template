@@ -366,3 +366,32 @@ def test_a_running_command_holds_a_slot_an_older_heavy_sh_counts(
     assert (_queue(tmp_path) / str(holder.pid)).is_file()
     go.touch()
     holder.communicate(timeout=60)
+
+
+def test_a_waiter_stopped_after_losing_the_race_leaves_the_winner_s_ticket(
+    start: Start, tmp_path: Path
+) -> None:
+    """`ln` here stands in for a lost race: another waiter makes the name
+    first, then the call fails. A TERM in that moment ran the cleanup trap
+    on the name it tried, which was the winner's ticket."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    tried = tmp_path / "tried"
+    winner = subprocess.Popen(["sleep", "60"])  # noqa: S607 - a stand-in live pid
+    try:
+        fake = bin_ / "ln"
+        fake.write_text(
+            f'#!/bin/sh\nprintf "%s 0\\n" {winner.pid} > "$2"\ntouch {tried}\nsleep 1\nexit 1\n'
+        )
+        fake.chmod(0o755)
+        env = {**_env(tmp_path), "PATH": f"{bin_}:{os.environ['PATH']}"}
+        waiter = start(env, "true")
+        _wait_for(tried)
+        waiter.send_signal(signal.SIGTERM)
+        _, err = waiter.communicate(timeout=30)
+        assert waiter.returncode == 143, err
+        holders = [p.read_text().split()[0] for p in _tickets(tmp_path)]
+        assert str(winner.pid) in holders, "the winner's ticket was removed"
+    finally:
+        winner.kill()
+        winner.wait()
