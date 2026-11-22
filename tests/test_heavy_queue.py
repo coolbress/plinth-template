@@ -292,16 +292,49 @@ def test_a_short_history_waits_and_says_how_long(start: Start, tmp_path: Path) -
     assert "about 0 min more" in err, err
 
 
-def test_a_finished_run_is_remembered_for_the_estimate(start: Start, tmp_path: Path) -> None:
+def test_a_run_a_waiter_watched_end_is_remembered(start: Start, tmp_path: Path) -> None:
     env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
-    first = start(env, "sleep 1")
+    started = tmp_path / "started"
+    holder = start(env, f"touch {started}; sleep 3")
+    _wait_for(started)
+    waiter = start(env, "true")
+    _wait_for_tickets(tmp_path, 2)
+    holder.communicate(timeout=30)
+    _, err = waiter.communicate(timeout=30)
+    assert waiter.returncode == 0, err
+    took = (_queue(tmp_path) / ".tickets" / ".took").read_text().split()
+    assert len(took) == 1, took
+    assert 3 <= int(took[0]) <= 6, took
+
+
+def test_a_run_that_ended_unwatched_leaves_no_time(start: Start, tmp_path: Path) -> None:
+    """The next call finds it gone, but the time since it started is the gap
+    between the two calls, not how long it ran: 3 s here for a run of 0 s,
+    and in a day's use hours, which would refuse every wait at once."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    first = start(env, "true")
     first.communicate(timeout=30)
+    time.sleep(3)
     second = start(env, "true")
     _, err = second.communicate(timeout=30)
     assert second.returncode == 0, err
-    took = (_queue(tmp_path) / ".tickets" / ".took").read_text().split()
-    assert len(took) == 1, took
-    assert 1 <= int(took[0]) <= 5, took
+    took = _queue(tmp_path) / ".tickets" / ".took"
+    assert not took.exists() or not took.read_text().split(), took.read_text()
+
+
+def test_a_stray_name_in_the_tickets_does_not_stop_a_ticket(start: Start, tmp_path: Path) -> None:
+    """A name that starts with a digit and is not all digits, and a dangling
+    link with a ticket's name, made the next number's search loop forever."""
+    env = _env(tmp_path, PLINTH_HEAVY_SLOTS="1")
+    tickets = _queue(tmp_path) / ".tickets"
+    tickets.mkdir(parents=True, mode=0o700)
+    (tickets / "0000000003.bak").write_text("x\n")
+    (tickets / "0000000004").symlink_to(tmp_path / "nowhere")
+    ran = tmp_path / "ran"
+    run = start(env, f"touch {ran}")
+    _, err = run.communicate(timeout=30)
+    assert run.returncode == 0, err
+    assert ran.exists()
 
 
 def test_a_new_ticket_holder_the_caller_cannot_signal_keeps_its_slot(

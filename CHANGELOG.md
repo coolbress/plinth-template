@@ -17,10 +17,11 @@ means `copier update` on an instance needs hands.
   oldest `PLINTH_HEAVY_SLOTS` live tickets run, and a ticket whose pid is
   gone is dropped. Once a minute a waiter prints how many wait ahead of it
   and what runs for how long (`2 ahead, 1 running (pid 4242 for 41 min)`).
-  It remembers how long the last five runs took, and when even the shortest
-  puts its wait past `PLINTH_HEAVY_WAIT` it exits 75 at once with its "did
-  not run" line instead of waiting the limit out; with nothing remembered
-  yet it waits to the limit as before. Its header and `AGENTS.md`'s line
+  A waiter that watched a command end remembers how long it ran, and when
+  even the shortest of the last five puts its wait past `PLINTH_HEAVY_WAIT`
+  it exits 75 at once with its "did not run" line instead of waiting the
+  limit out; a command that ended with nobody waiting leaves no time, and
+  with nothing remembered it waits to the limit as before. Its header and `AGENTS.md`'s line
   now say the queue is per `TMPDIR`: a sandboxed session can see another
   `TMPDIR` from an unsandboxed one on the same machine and then shares no
   queue with it. A project not yet updated still counts the updated ones'

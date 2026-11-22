@@ -21,9 +21,9 @@
 #                       report that check as not verified, never as passed.
 #
 # While it waits it prints, once a minute, how many wait ahead of it, what
-# runs and for how long. It remembers how long the last runs took; when even
-# the shortest of them puts the wait past PLINTH_HEAVY_WAIT, it exits 75 at
-# once instead of waiting it out.
+# runs and for how long. A waiter that watched a command end remembers how
+# long it ran; when even the shortest of the last five puts the wait past
+# PLINTH_HEAVY_WAIT, it exits 75 at once instead of waiting it out.
 set -u
 
 if [ "$#" -eq 0 ]; then
@@ -83,13 +83,21 @@ trap 'rm -f "$new" ${mine:+"$mine"}; exit 129' HUP
 # is no lock to leave behind when a waiter is killed.
 take() {
   printf '%s %s\n' "$me" "$arrived" >"$new" || exit 2
+  tries=0
   while :; do
     last=0
     for t in "$tickets"/[0-9]*; do
-      [ -e "$t" ] && last=${t##*/}
+      case "${t##*/}" in *[!0-9]*) continue ;; esac
+      if [ -e "$t" ] || [ -L "$t" ]; then last=${t##*/}; fi
     done
     mine=$(printf '%s/%010d' "$tickets" $((10#$last + 1)))
     ln "$new" "$mine" 2>/dev/null && break
+    tries=$((tries + 1))
+    if [ "$tries" -ge 50 ]; then
+      rm -f "$new"
+      echo "heavy.sh: could not take a ticket in $tickets; remove that directory, then run again" >&2
+      exit 2
+    fi
   done
   rm -f "$new"
 }
@@ -97,11 +105,15 @@ take() {
 # Reads the queue. Sets: place (-1 when this waiter has no ticket), ahead
 # (tickets before this one still waiting), busy (how many run), what (their
 # pids and ages), ages (seconds each running one has run, one per line). A
-# dead ticket is dropped, and a dead one that ran leaves how long it took.
+# dead ticket is dropped. One that this waiter saw running at its last scan
+# leaves how long it ran, to within one poll: a command that ended unwatched
+# leaves nothing, since the time until the next call is not its run time.
+seen=' '
 scan() {
   now=$(date +%s)
-  place=-1 ahead=0 busy=0 what='' ages='' live=' '
+  place=-1 ahead=0 busy=0 what='' ages='' live=" $me " watched=' '
   for t in "$tickets"/[0-9]* "$tickets"/.new.*; do
+    case "${t##*/}" in .new.*) ;; *[!0-9]*) continue ;; esac
     [ -e "$t" ] || continue
     { read -r pid _ started; } <"$t" 2>/dev/null || continue
     if [ "$t" = "$mine" ]; then
@@ -110,13 +122,14 @@ scan() {
     fi
     if ! ps -p "$pid" >/dev/null 2>&1; then
       if rm "$t" 2>/dev/null && [ -n "${started:-}" ]; then
-        printf '%s\n' $((now - started)) >>"$took"
+        case "$seen" in *" $pid "*) printf '%s\n' $((now - started)) >>"$took" ;; esac
       fi
       continue
     fi
     case "$t" in */.new.*) continue ;; esac
     live="$live$pid "
     if [ -n "${started:-}" ]; then
+      watched="$watched$pid "
       busy=$((busy + 1))
       what="$what, pid $pid for $(((now - started) / 60)) min"
       ages="$ages$((now - started))
@@ -141,6 +154,7 @@ scan() {
     fi
   done
   what=${what#, }
+  seen=$watched
 }
 
 # The wait this waiter can estimate, in seconds, from the shortest of the
@@ -195,12 +209,18 @@ while :; do
   fi
   # It runs when what runs and what waits ahead of it leave a slot free.
   if [ $((ahead + busy)) -lt "$slots" ]; then
-    trap - INT TERM HUP
-    printf '%s %s %s\n' "$me" "$arrived" "$(date +%s)" >"$new" && mv -f "$new" "$mine"
-    # For an older heavy.sh, which counts only entries named by a pid.
+    # For an older heavy.sh, which counts only entries named by a pid: write
+    # the entry first and count again, as it does, so that the two arriving
+    # together cannot both miss the other.
     printf '%s\n' "$me" >"$queue/$me"
-    # The command keeps this pid, so its ticket is live exactly while it runs.
-    exec "$@"
+    scan
+    if [ $((ahead + busy)) -lt "$slots" ]; then
+      trap - INT TERM HUP
+      printf '%s %s %s\n' "$me" "$arrived" "$(date +%s)" >"$new" && mv -f "$new" "$mine"
+      # The command keeps this pid, so its ticket is live exactly while it runs.
+      exec "$@"
+    fi
+    rm -f "$queue/$me"
   fi
   waited=$((SECONDS - began))
   estimate
