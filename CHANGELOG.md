@@ -6,6 +6,27 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A sandboxed Claude Code session queues in `scripts/heavy.sh` with the
+  unsandboxed ones instead of being told to run unqueued** (#311). In a
+  sandboxed session `ps` sees no process, its own included, so `heavy.sh`
+  exited 2 and told the agent to run the command without it; and its
+  `TMPDIR`, `/tmp/claude-<uid>`, differs from an unsandboxed session's, so
+  the two kept the separate queues 1.50.0 describes. The queue now lives in
+  `/tmp/claude-<uid>` when Claude Code made it, which both sides write, else
+  in `TMPDIR` as before (`PLINTH_HEAVY_DIR` names another place). A ticket
+  no longer holds a pid read with `ps` or comes from `ln`: it is live while
+  its waiter, and then its command, holds a lock on it through `perl`'s
+  `flock`, which the kernel drops when that process dies, `kill -9`
+  included. A ticket's name carries its number, pid and arrival time, so a
+  scan that read a dead ticket cannot remove a live one that took the same
+  number since. Where there is no `perl` or no place to write, the command
+  does not run and `heavy.sh` exits 75 with its "did not run" line. An
+  older `heavy.sh` and this one still count each other's running commands
+  where `ps` works. `AGENTS.md` changed (its line on `heavy.sh`), so
+  plinth's pin raise owes an eval suite run.
+
 ## [1.50.0] - 2026-11-22
 
 **`scripts/heavy.sh` serves waiters in arrival order and says where each one is in the queue.** A waiter takes a numbered ticket, the oldest `PLINTH_HEAVY_SLOTS` live tickets run, and a waiter prints its place once a minute and exits 75 at once when the commands it saw end say its wait would pass `PLINTH_HEAVY_WAIT` (#308). The queue is per `TMPDIR`: a sandboxed session does not share it with an unsandboxed one, and #311 has what that leaves. `AGENTS.md` changed (its line on `heavy.sh`), so plinth's pin raise to this release owes an eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited `scripts/heavy.sh`. `plinth_sha`'s default stays 7b773c2 (v2.40.1), plinth's latest release.
