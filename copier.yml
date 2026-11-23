@@ -284,7 +284,7 @@ plinth_sha:
     Commit of coolbress/plinth whose reusable workflows this project calls.
     Press Enter for the one this template release was tested with; on an
     update, pass the pin the repository has now.
-  default: "15ae0a9b1c0ada0bbbce91ebf89195af66d4628f"
+  default: "d3740717d8dc0d36afb3cadc721b5945daeec943"
   # A branch, a tag or a short SHA can move or be ambiguous, and on GitLab a
   # moved ref fails every pipeline against the recorded checksum.
   validator: >-

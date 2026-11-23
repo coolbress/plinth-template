@@ -6,6 +6,15 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.50.3] - 2026-11-23
+
+**New projects call plinth v2.42.0.** `plinth_sha`'s default moves from 15ae0a9 (v2.41.0) to d374071 (v2.42.0), plinth's latest release, which this repository's own workflows call since #321. No rendered file changes for an instance: `copier update` needs no hands, `AGENTS.md` and `.claude/` are unchanged (so plinth's pin raise to this release owes no eval suite run), and no job, check or action changes, so the Actions allowlist is unchanged. A 46-character limit on the repository name was merged and reverted before this release (#320, #323): `copier update` validates a recorded name again, so the limit would have refused the update of an instance named longer, and it moves to plinth's `/plinth:new-project` instead (#318).
+
+### Changed
+
+- **`plinth_sha`'s default is d374071 (plinth v2.42.0).** A project created
+  at this release calls plinth v2.42.0's reusable workflows.
+
 ## [1.50.2] - 2026-11-23
 
 **A project whose package name is longer than 11 characters starts with `ci / lint` green.** The `cli` entry point's `--version` line carried the name twice and went past ruff's 100 characters, so such a project's first commit and first pull request were red (#315); three more lines did the same for longer names. Names up to 46 characters now pass `ruff check` and `ruff format --check` in every archetype; from 47, #318 is open. `AGENTS.md` and `.claude/` are unchanged, so plinth's pin raise to this release owes no eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited those lines. `plinth_sha`'s default moves to 15ae0a9 (v2.41.0), plinth's latest release, which this repository's own workflows now call (#317).
