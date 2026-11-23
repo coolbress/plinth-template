@@ -6,6 +6,21 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.50.2] - 2026-11-23
+
+**A project whose package name is longer than 11 characters starts with `ci / lint` green.** The `cli` entry point's `--version` line carried the name twice and went past ruff's 100 characters, so such a project's first commit and first pull request were red (#315); three more lines did the same for longer names. Names up to 46 characters now pass `ruff check` and `ruff format --check` in every archetype; from 47, #318 is open. `AGENTS.md` and `.claude/` are unchanged, so plinth's pin raise to this release owes no eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited those lines. `plinth_sha`'s default moves to 15ae0a9 (v2.41.0), plinth's latest release, which this repository's own workflows now call (#317).
+
+### Fixed
+
+- **A package name longer than 11 characters renders lines ruff passes**
+  (#315). `src/<package>/__main__.py` (`cli`) names the package once, alone on
+  its line in an exploded `ArgumentParser(...)` call, and `--version` reads
+  `version(parser.prog)`; `tests/test_entry_point.py` (`cli`, `backend`,
+  `data-ml`) names it once in a `PACKAGE` constant; `manage.py` (`web`) and
+  `tests/test_train.py` (`data-ml`) no longer put it inside a longer line. A
+  render test holds a 37-character name in every archetype. Names of 47
+  characters or more still fail in other files (#318).
+
 ## [1.50.1] - 2026-11-22
 
 **A sandboxed Claude Code session queues in `scripts/heavy.sh` with the unsandboxed ones.** It was told to run unqueued, because `ps` sees no process inside the sandbox; the queue now lives where both write and holds each ticket by a `perl` `flock` lock (#311). With no `perl` or nowhere to write, the command does not run and `heavy.sh` exits 75. `AGENTS.md` changed (its line on `heavy.sh`), so plinth's pin raise to this release owes an eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited `scripts/heavy.sh`. `plinth_sha`'s default stays 7b773c2 (v2.40.1), plinth's latest release.
