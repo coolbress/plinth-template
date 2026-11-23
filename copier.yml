@@ -145,7 +145,7 @@ _exclude:
 
 project_name:
   type: str
-  help: Repository name (GitHub rules). Example my-app
+  help: Repository name (GitHub rules, at most 46 characters). Example my-app
   # A repository name and a Python package name follow different rules: GitHub
   # allows `.` and a leading digit, Python does not. The package name is
   # derived from the repository name below; when that derivation cannot be a
@@ -155,6 +155,15 @@ project_name:
   # starts and ends with a letter or digit: `_demo` is an identifier, rendered,
   # and uv refused to read the project (coolbress/plinth-template#256).
   # A name whose test a shipped test takes is refused at `archetype`, below.
+  #
+  # At most 46 characters, and the package name is as long. From 47 the cli's
+  # `tests/test_built_wheel.py` renders a line past ruff's 100; at GitHub's
+  # 100, `from <package> import (` alone is longer than 100, so no rewrite of
+  # the files holds every name GitHub allows (coolbress/plinth-template#318).
+  # `copier update` validates the recorded name again, and a validator cannot
+  # tell an update from a copy: an instance named longer would be refused its
+  # update. None was known when the limit came in; such a project started
+  # with `ci / lint` red.
   validator: >-
     {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
     {%- if not project_name -%}
@@ -174,6 +183,11 @@ project_name:
     The package name '{{ pkg }}' derived from '{{ project_name }}' is also the
     distribution name in pyproject.toml, which must start and end with a letter or digit.
     Choose a repository name without a leading or trailing '-', '_' or '.'.
+    {%- elif project_name | length > 46 -%}
+    '{{ project_name }}' is {{ project_name | length }} characters; a repository name
+    here is at most 46 characters. The package name is as long, and a longer one
+    renders lines past ruff's 100 characters, so ci / lint starts red.
+    Choose a shorter repository name.
     {%- endif -%}
 
 # Derived, never asked. Its default still reaches the render context.

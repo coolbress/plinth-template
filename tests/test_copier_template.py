@@ -6671,6 +6671,23 @@ def test_a_name_that_is_not_a_distribution_name_is_refused(tmp_path: Path, bad: 
     assert not dest.exists() or not any(dest.iterdir())
 
 
+#: The longest name the door accepts. From 47 characters the cli's
+#: `tests/test_built_wheel.py` goes past ruff's 100, and at GitHub's 100 even
+#: `from <package> import (` does, so no rewrite holds every name GitHub allows
+#: (coolbress/plinth-template#318).
+NAME_LIMIT = 46
+
+
+def test_a_name_past_the_limit_is_refused_saying_the_limit(tmp_path: Path) -> None:
+    """A name that renders a line ruff fails is refused before anything is written,
+    and the message says how long a name may be."""
+    dest = tmp_path / "long"
+    with pytest.raises(ValueError, match=f"at most {NAME_LIMIT} characters") as refused:
+        render(dest, project_name="a" * (NAME_LIMIT + 1))
+    assert f"{NAME_LIMIT + 1} characters" in str(refused.value)
+    assert not dest.exists() or not any(dest.iterdir())
+
+
 # ── end to end ────────────────────────────────────────────────────────────
 
 #: The archetypes whose file sets differ. The service conditions are
@@ -6732,10 +6749,11 @@ def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str)
         )
 
 
-#: 37 characters, and so is the package name. The end-to-end renders use short
-#: names, and a line that carries the package name twice passed with them and
-#: failed E501 past 11 characters (coolbress/plinth-template#315).
-LONG_NAME = "a-subscription-tracker-for-households"
+#: The longest name the door accepts, and so is the package name. The
+#: end-to-end renders use short names, and a line that carries the package name
+#: twice passed with them and failed E501 past 11 characters
+#: (coolbress/plinth-template#315).
+LONG_NAME = "a-subscription-tracker-for-households-and-pets"
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
@@ -6743,6 +6761,7 @@ LONG_NAME = "a-subscription-tracker-for-households"
 def test_a_long_package_name_passes_ruff(tmp_path: Path, archetype: str) -> None:
     """`ci / lint` is green from the first commit with a long name too: the
     rendered project's own ruff, at the version its lockfile pins."""
+    assert len(LONG_NAME) == NAME_LIMIT, "not the longest name the door accepts"
     out = render(tmp_path / archetype, project_name=LONG_NAME, archetype=archetype)
     lock = (out / "uv.lock").read_text(encoding="utf-8")
     pinned = re.search(r'name = "ruff"\nversion = "([^"]+)"', lock)
