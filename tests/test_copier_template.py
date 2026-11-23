@@ -6732,6 +6732,29 @@ def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str)
         )
 
 
+#: 37 characters, and so is the package name. The end-to-end renders use short
+#: names, and a line that carries the package name twice passed with them and
+#: failed E501 past 11 characters (coolbress/plinth-template#315).
+LONG_NAME = "a-subscription-tracker-for-households"
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("archetype", SERVABLE)
+def test_a_long_package_name_passes_ruff(tmp_path: Path, archetype: str) -> None:
+    """`ci / lint` is green from the first commit with a long name too: the
+    rendered project's own ruff, at the version its lockfile pins."""
+    out = render(tmp_path / archetype, project_name=LONG_NAME, archetype=archetype)
+    lock = (out / "uv.lock").read_text(encoding="utf-8")
+    pinned = re.search(r'name = "ruff"\nversion = "([^"]+)"', lock)
+    assert pinned, "uv.lock pins no ruff"
+    ruff = ["uv", "tool", "run", "--quiet", f"ruff@{pinned.group(1)}"]
+    for step in (["check", "."], ["format", "--check", "."]):
+        done = subprocess.run(  # noqa: S603
+            [*ruff, *step], cwd=out, capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, f"ruff {' '.join(step)}\n{done.stdout}\n{done.stderr}"
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
 def test_web_entry_point_refuses_then_serves(tmp_path: Path) -> None:
     """What the web image check asks, without Docker: installed without the dev
