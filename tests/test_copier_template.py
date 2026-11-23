@@ -6732,10 +6732,12 @@ def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str)
         )
 
 
-#: 37 characters, and so is the package name. The end-to-end renders use short
-#: names, and a line that carries the package name twice passed with them and
-#: failed E501 past 11 characters (coolbress/plinth-template#315).
-LONG_NAME = "a-subscription-tracker-for-households"
+#: 46 characters, the longest name plinth's `/plinth:new-project` accepts
+#: (coolbress/plinth#1053), and so is the package name. The end-to-end renders
+#: use short names, and a line that carries the package name twice passed with
+#: them and failed E501 past 11 characters (coolbress/plinth-template#315); from
+#: 47, other lines fail (#318).
+LONG_NAME = "a-subscription-tracker-for-households-and-team"
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
