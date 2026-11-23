@@ -6,6 +6,18 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.50.3] - 2026-11-23
+
+**A repository name longer than 46 characters is refused before anything is rendered.** From 47 characters the package name pushed a line in the `cli` archetype's `tests/test_built_wheel.py` past ruff's 100, so such a project started with `ci / lint` red. At GitHub's 100 characters, `from <package> import (` alone is 114 characters, and no formatting breaks it (#318). The refusal says the name's length and the limit. `copier update` validates the recorded answer again, so an instance named longer than 46 characters is refused its update. None is known; such an instance would need hands, and this release would be MAJOR for it. `AGENTS.md` and `.claude/` are unchanged, so plinth's pin raise to this release owes no eval suite run. No job, check or action changes, so the Actions allowlist is unchanged. `plinth_sha`'s default moves to d374071 (v2.42.0), plinth's latest release, which this repository's own workflows now call (#321).
+
+### Changed
+
+- **`project_name` is at most 46 characters** (#318). The validator
+  refuses a longer name with `'<name>' is <n> characters; a repository
+  name here is at most 46 characters.` and the question's help says the
+  limit. A render test holds 46 characters passing `ruff check` and
+  `ruff format --check` in every archetype, and 47 refused.
+
 ## [1.50.2] - 2026-11-23
 
 **A project whose package name is longer than 11 characters starts with `ci / lint` green.** The `cli` entry point's `--version` line carried the name twice and went past ruff's 100 characters, so such a project's first commit and first pull request were red (#315); three more lines did the same for longer names. Names up to 46 characters now pass `ruff check` and `ruff format --check` in every archetype; from 47, #318 is open. `AGENTS.md` and `.claude/` are unchanged, so plinth's pin raise to this release owes no eval suite run. No job, check, question or action changes, so the Actions allowlist is unchanged. `copier update` needs no hands unless the project edited those lines. `plinth_sha`'s default moves to 15ae0a9 (v2.41.0), plinth's latest release, which this repository's own workflows now call (#317).
