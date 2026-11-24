@@ -48,10 +48,21 @@ jobs:
   ci:
     uses: coolbress/plinth/.github/workflows/python-ci.yml@{{ plinth_sha }}
     with:
-      # pyproject declares `requires-python = ">=3.12"`; testing one version
-      # claims support that was never exercised. Not a matrix: a matrix would
-      # rename the check to `ci / test (3.13)` and the ruleset requires `ci / test`.
-      extra-python-versions: "3.13"
+      # The Python versions CI tests. CI tests the lowest supported version
+      # and one newer version that takes bug fixes. The lowest is
+      # `.python-version` and pyproject's `requires-python`; the newer one is
+      # this value, which a template release moves forward once the
+      # dependencies the template ships install on the next version. Raising
+      # the lowest is a separate, MAJOR template change: the container base
+      # images move with it, and a base image moved alone from
+      # `python:3.12-slim` to `3.14-slim` once passed every required check and
+      # could not start.
+      # Each version here runs the whole suite again, one after another,
+      # inside `ci / test` and its time limit: replace the version, do not add
+      # one. Space separated ("3.13 3.14"). Not a matrix: a matrix would rename
+      # the check to `ci / test (3.14)` and the ruleset requires `ci / test`.
+      # docs/how-to/keep-this-project-current.md says the same.
+      extra-python-versions: "3.14"
 {%- if archetype == 'web' %}
       # Turns on `ci / migrations` and `ci / deploy-check`, which the ruleset
       # requires for this archetype. Without it both pass as "does not apply",

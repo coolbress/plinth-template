@@ -17,9 +17,20 @@ include:
   - remote: https://raw.githubusercontent.com/coolbress/plinth/{{ plinth_sha }}/gitlab/python-ci.yml
     integrity: sha256-{{ plinth_gitlab_integrity }}
     inputs:
-      # pyproject declares `requires-python = ">=3.12"`; testing one version
-      # claims support that was never exercised.
-      extra-python-versions: "3.13"
+      # The Python versions CI tests. CI tests the lowest supported version
+      # and one newer version that takes bug fixes. The lowest is
+      # `.python-version` and pyproject's `requires-python`; the newer one is
+      # this value, which a template release moves forward once the
+      # dependencies the template ships install on the next version. Raising
+      # the lowest is a separate, MAJOR template change: the container base
+      # images move with it, and a base image moved alone from
+      # `python:3.12-slim` to `3.14-slim` once passed every required check and
+      # could not start.
+      # Each version here runs the whole suite again, one after another,
+      # inside the `test` job and its time limit: replace the version, do not
+      # add one. Space separated ("3.13 3.14").
+      # docs/how-to/keep-this-project-current.md says the same.
+      extra-python-versions: "3.14"
 {%- if archetype in ['backend', 'data-ml'] %}
 
 # The container image, checked the one way that tells it from a stub: build
