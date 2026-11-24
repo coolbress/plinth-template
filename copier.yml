@@ -196,6 +196,29 @@ owner:
   help: Owner of the repository (a GitHub user or organization, or a GitLab namespace). Example my-org
   default: ""
 
+# What the project is, in one line: `README.md`'s first line under the title,
+# where `/grilling` and the next session read it; empty keeps the placeholder.
+# `/plinth:new-project` passes the person's sentence, shortened to one line
+# (coolbress/plinth#1068). No validator, here or on `records_language`:
+# `copier update` validates recorded answers again, so one that later tightens
+# refuses the update of an instance answered before (#323).
+description:
+  type: str
+  help: One line saying what this project is. Press Enter to leave the README's placeholder.
+  default: ""
+
+# The language of the project's issues, pull or merge requests, commit
+# messages and documents, named in English (`Korean`, not `ko`) because
+# `AGENTS.md` states it in a sentence. Recorded, so `copier update` keeps it;
+# an edited line in a template-owned file would meet a conflict instead (#331).
+records_language:
+  type: str
+  help: |
+    The language issues, pull or merge requests, commit messages and documents
+    are written in, named in English. Example Korean. Headings tools read,
+    commit types and code stay English.
+  default: English
+
 license:
   type: str
   help: |

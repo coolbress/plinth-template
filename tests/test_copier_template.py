@@ -5411,27 +5411,73 @@ def test_every_render_says_where_eight_kinds_of_record_go(
     assert len(rows[2:]) == 8, rows
 
 
-_RECORDS_LANGUAGE = (
-    "are written in English unless this line names another language for the project; "
-    "the person's language is for answering them. Before proposing to write one in "
-    "another language, name this convention and ask."
-)
+def _records_language(language: str) -> str:
+    return (
+        f"they are written in {language}; the headings tools read (`## Outcome`, "
+        "`## Decision`, the form headings), Conventional Commit types and code stay in "
+        "English. The person's language is for answering them. Before proposing to write "
+        "one in another language, name this convention and ask."
+    )
 
 
+@pytest.mark.parametrize("language", ["English", "Korean", None, " "])
 @pytest.mark.parametrize("host", ["github", "gitlab"])
-def test_agents_md_states_the_records_language(tmp_path: Path, host: str) -> None:
+def test_agents_md_states_the_records_language(
+    tmp_path: Path, host: str, language: str | None
+) -> None:
     """A session wrote a map and 31 child records in the person's language: the
-    only sentence on it named no issues and stated no convention (#290)."""
-    lines = (render(tmp_path, host=host) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    only sentence on it named no issues and stated no convention (#290). The
+    language is a recorded answer, `records_language`, so a project that writes
+    its records in Korean says so without editing a template-owned line (#331).
+    `None` is a render that does not answer it, and a blank answer (no validator
+    refuses one, #323) reads as English rather than leaving the sentence broken."""
+    out = render(tmp_path, host=host, records_language=language)
+    lines = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
     assert len(lines) <= 60, "AGENTS.md is past its cap"
     request = "pull requests" if host == "github" else "merge requests"
-    found = [ln for ln in lines if _RECORDS_LANGUAGE in ln]
+    found = [ln for ln in lines if _records_language((language or "").strip() or "English") in ln]
     assert len(found) == 1, "AGENTS.md does not state the records' language"
     line = found[0]
     assert line.startswith("- Answer the person in the language they write in"), line
-    assert f"Issues, {request}, commits, code and documents" in line, line
+    assert f"Issues, {request}, commit messages and documents" in line, line
     assert "research notes under `docs/` included" in line, line
+    assert "unless this line names another language" not in line, line
     assert lines.index(line) > lines.index("## Always"), "not under Always"
+    assert _answers(out)["records_language"] == (language or "English")
+
+
+_PLACEHOLDER = "> One line saying what this is."
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+@pytest.mark.parametrize(
+    "description",
+    ['A "quoted" tool for #42 | 주문 기록을 모아 보는 도구', "", None],
+    ids=["given", "empty", "unanswered"],
+)
+def test_readme_opens_with_the_description_or_the_placeholder(
+    tmp_path: Path, host: str, description: str | None
+) -> None:
+    """A description given at creation reached only the GitHub repository page,
+    which no agent reads (#331). Rendered as written, quote, `#`, `|` and Hangul
+    included; without one, the placeholder stays."""
+    out = render(tmp_path, host=host, description=description)
+    lines = (out / "README.md").read_text(encoding="utf-8").splitlines()
+    assert lines[:2] == ["# probe", ""], lines[:2]
+    assert lines[2] == (f"> {description}" if description else _PLACEHOLDER), lines[2]
+    assert _answers(out)["description"] == (description or "")
+
+
+def test_the_two_new_questions_have_no_validator() -> None:
+    """`copier update` validates recorded answers again: a validator that later
+    tightens breaks the update of an instance answered before (#323)."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    assert cfg["records_language"]["default"] == "English"
+    assert cfg["description"]["default"] == ""
+    for question in ("records_language", "description"):
+        assert cfg[question]["type"] == "str", question
+        assert "validator" not in cfg[question], question
+        assert "when" not in cfg[question], f"{question} is not recorded unless asked (#22)"
 
 
 # Each record kind's label and its English title prefix.
