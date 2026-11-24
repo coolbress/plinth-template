@@ -969,6 +969,31 @@ def test_service_archetype_dependabot_leaves_the_python_minor_alone(backend: Pat
     assert "version-update:semver-patch" not in docker, "patches are blocked too"
 
 
+#: The policy's sentence, the same words in the CI file a project edits to
+#: change its tested versions and in its documentation (#333).
+PYTHON_POLICY = "CI tests the lowest supported version and one newer version that takes bug fixes."
+
+
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_ci_tests_3_14_beside_the_lowest_and_says_the_policy(
+    instance: str, request: pytest.FixtureRequest
+) -> None:
+    """3.14 in place of 3.13, not beside it: each extra version runs the whole
+    suite again inside the one `ci / test` job, and a project whose suite ran
+    twice was cancelled at the time limit (coolbress/nexusbt#381). The policy
+    is written where a project changes the value, and in its documentation."""
+    out: Path = request.getfixturevalue(instance)
+    ci_file = out / (".gitlab-ci.yml" if instance == "gitlab" else ".github/workflows/ci.yml")
+    ci = ci_file.read_text(encoding="utf-8")
+    assert re.findall(r'extra-python-versions: "([^"]*)"', ci) == ["3.14"]
+    assert (out / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+    doc_file = out / "docs" / "how-to" / "keep-this-project-current.md"
+    for where in (ci_file, doc_file):
+        lines = where.read_text(encoding="utf-8").splitlines()
+        flat = " ".join(" ".join(re.sub(r"^\s*#\s?", "", line) for line in lines).split())
+        assert PYTHON_POLICY in flat, f"{where.name} does not state the policy"
+
+
 def test_the_documents_say_who_can_move_the_wall(rendered: Path) -> None:
     """The rule the agent reads, and the limit the explanation states (plinth #129)."""
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
@@ -2065,9 +2090,10 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
     assert page.startswith("# Keep this project current")
     # GitHub adds one section after the steps: Dependabot's other pull
-    # requests (plinth #949). GitLab has no Dependabot. Both end with what to
-    # read before asking plinth for a feature (#279).
-    assert page.count("\n## ") == (5 if host == "github" else 4), "three steps, then one or two"
+    # requests (plinth #949). GitLab has no Dependabot. Both then say which
+    # Python versions CI tests (#333), and end with what to read before
+    # asking plinth for a feature (#279).
+    assert page.count("\n## ") == (6 if host == "github" else 5), "three steps, then two or three"
     sections = re.split(r"\n(?=## )", page)[1:4]
     for section, (heading, phrases) in zip(sections, _KEEP_STEPS[host], strict=True):
         flat = " ".join(section.split())
@@ -2146,6 +2172,41 @@ def test_a_session_reads_plinths_latest_release_before_asking_plinth(
             assert phrase in flat, f"the section lacks: {phrase}"
         assert "dependabot" not in flat.lower()
         assert "uses:" not in flat
+
+
+_HYPOTHESIS_RULE = (
+    "- Pure functions, parsers and serializers get property-based tests with Hypothesis"
+)
+_HYPOTHESIS_WHEN = "joins the `dev` group in `pyproject.toml` the first time one is written"
+_PAID_SERVICE_RULE = "- Tests never call a paid outside service"
+_PAID_SERVICE_FAKE = "they use a fake, and CI needs no key for it"
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_agents_md_says_how_tests_are_written(tmp_path: Path, host: str) -> None:
+    """No required check can ask for a property test or forbid a paid call in a
+    test; both are things an agent does or does not do while writing one, so
+    `AGENTS.md` says them (#336). Hypothesis is not a default dependency: the
+    line says when it is added."""
+    out = render(tmp_path, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    for start, phrase in (
+        (_HYPOTHESIS_RULE, _HYPOTHESIS_WHEN),
+        (_PAID_SERVICE_RULE, _PAID_SERVICE_FAKE),
+    ):
+        lines = [ln for ln in agents if ln.startswith(start)]
+        assert len(lines) == 1, f"AGENTS.md lacks: {start}"
+        assert phrase in lines[0], f"the line lacks: {phrase}"
+    paid = next(ln for ln in agents if ln.startswith(_PAID_SERVICE_RULE))
+    for example in ("an AI model's API", "a paid data source", "a messaging platform"):
+        assert example in paid, f"the line does not name {example}"
+    # The next line follows them; an edit beside it once dropped its space.
+    assert any(ln.startswith("- `/implement` ends at a commit, so the ") for ln in agents)
+    pyproject = (out / "pyproject.toml").read_text(encoding="utf-8")
+    assert "hypothesis" not in pyproject.lower(), "Hypothesis became a default dependency"
+    asks = (out / ".claude" / "permissions.md").read_text(encoding="utf-8")
+    assert "| `uv add` |" in asks, "adding Hypothesis asks, and permissions.md does not say why"
 
 
 _DEPENDENCY_SECTION = "## Other dependency pull requests"
