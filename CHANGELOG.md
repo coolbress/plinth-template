@@ -50,6 +50,19 @@ means `copier update` on an instance needs hands.
   to `web` from another archetype by an update that does not pass
   `custom_user_model=true`.
 
+- **`AGENTS.md` says how tests are written, in two lines** (#336). Both
+  hosts: pure functions, parsers and serializers get property-based tests
+  with Hypothesis, which joins the `dev` group in `pyproject.toml` the first
+  time one is written and is not a default dependency; and tests never call
+  a paid outside service (an AI model's API, a paid data source, a messaging
+  platform): they use a fake, and CI needs no key for it. No check enforces
+  either. `.claude/permissions.md` gains a `uv add` row: adding Hypothesis
+  asks, so the person sees the package before `pyproject.toml` and `uv.lock`
+  change. An existing project gets the two lines through
+  `/plinth:template-update`, with no hands unless it edited the lines around
+  them. `AGENTS.md` changes, so plinth's pin raise to this release owes an
+  eval suite run.
+
 ### Changed
 
 - **New projects test Python 3.14 in place of 3.13** (#333). CI tests the
