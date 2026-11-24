@@ -8,6 +8,25 @@ means `copier update` on an instance needs hands.
 
 ### Added
 
+- **Two questions: `description` and `records_language`** (#331).
+  `description` (default empty) is one line saying what the project is; when
+  given it is `README.md`'s first line under the title, and when empty the
+  placeholder stays. `records_language` (default `English`, a language named
+  in English such as `Korean`) is the language of the project's issues, pull
+  or merge requests, commit messages and documents; `AGENTS.md` states it in
+  its "Answer the person" line, in place of "written in English unless this
+  line names another language", and says the headings tools read, Conventional
+  Commit types and code stay in English. Neither has a validator, since
+  `copier update` validates recorded answers again (#323); a blank
+  `records_language` reads as English. plinth's
+  `/plinth:new-project` passes both from its next pin raise
+  (coolbress/plinth#1068); until then a render takes the defaults. An existing
+  project gets the new line through `/plinth:template-update`, which records
+  `English` and an empty description; `README.md` does not change, and
+  `AGENTS.md` changes in that one line, with no hands unless the project
+  edited it, where the update meets a conflict on it. `AGENTS.md` changes,
+  so plinth's pin raise to this release owes an eval suite run.
+
 - **A new `web` project can start with its own user model** (#332). A new
   question, `custom_user_model`, asked for `web` only. Answered yes, the
   project gets an `accounts` app with `User(AbstractUser)`, its first

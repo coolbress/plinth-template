@@ -20,10 +20,14 @@ copier copy gh:coolbress/plinth-template my-app
 The package name is derived from the repository name; a name that cannot
 become a Python package is refused before any file is written.
 
-On GitHub copier asks thirteen questions, and Enter takes the default for all
+On GitHub copier asks fifteen questions, and Enter takes the default for all
 but the first:
 
 - the repository name, the owner, the license (MIT, Apache-2.0, or Proprietary: all rights reserved);
+- one line saying what the project is, which becomes the README's first line
+  under the title (empty keeps a placeholder), and the language its issues,
+  pull requests, commit messages and documents are written in, named in
+  English (`English` by default), which `AGENTS.md` states;
 - the kind of project, one of five, by what it produces: `cli`, a command
   run in a terminal, also a tool that runs on a schedule on the owner's
   machine (a data collector, a pipeline); `library`, a package other code
@@ -51,7 +55,7 @@ somewhere else, which then asks where. It also asks whether this is a new
 project with no database yet: yes gives it its own user model,
 `accounts.User`, from the first migration. Enter answers no, which is what a
 project made before the question keeps at an update: Django cannot change the
-user model of a database that has one. GitLab asks eight: the owner's
+user model of a database that has one. GitLab asks ten: the owner's
 `.github` files, visibility and the third-party reviewer are not asked, and the
 checksum of plinth's GitLab pipeline is.
 
