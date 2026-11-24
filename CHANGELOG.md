@@ -27,6 +27,28 @@ means `copier update` on an instance needs hands.
   edited it, where the update meets a conflict on it. `AGENTS.md` changes,
   so plinth's pin raise to this release owes an eval suite run.
 
+- **A `data-ml` project records the SHA-256 of the data it trained on, and
+  its model card says what the model is for and where it is biased** (#334).
+  `train()` hashes the arrays `load_sample()` returns (`data_sha256()`: each
+  array's dtype, shape and bytes; arrays of Python objects are refused) and
+  writes the hash as a `data_sha256` row of the card's "How it was made"
+  table and under the `data_sha256` key of `metrics.json`. The release check
+  accepts that one text value in `metrics.json` and does not require it; it
+  still refuses any other value that is not a number. `MODEL_CARD.md` gains
+  "Intended use" and "Bias" sections ("Limits" stays the limitations
+  section) and Hugging Face-style YAML front matter (`license`,
+  `library_name`, `tags`); the release does not require them, and its notes
+  leave the front matter out. In `copier.yml`, the `data-ml` choice now reads
+  "A model trained here (ML)" instead of "Data or ML"; the key is
+  unchanged, so no answers file changes.
+  **What an existing `data-ml` project gets** from `copier update`: the new
+  release check and release notes in `release.yml`, and the new `train.py`,
+  `MODEL_CARD.md`, `tests/test_train.py` and release how-to. A project that
+  never edited them takes them without hands. One that edited
+  `MODEL_CARD.md` or `train.py`, which are its own, may meet conflicts in
+  those files; keeping its own version keeps releasing, since the release
+  requires neither the hash nor the new sections.
+
 - **A new `web` project can start with its own user model** (#332). A new
   question, `custom_user_model`, asked for `web` only. Answered yes, the
   project gets an `accounts` app with `User(AbstractUser)`, its first

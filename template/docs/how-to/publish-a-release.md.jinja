@@ -156,8 +156,8 @@ that version later. Each release here holds five files:
 | File | What it is |
 |---|---|
 | `model.skops` | The trained model, saved with skops |
-| `metrics.json` | How well it did on the part of the data it never trained on, as named numbers |
-| `MODEL_CARD.md` | What the model is, what it was trained on, those results, and how it was made: the scikit-learn and skops versions, the commit and the seed |
+| `metrics.json` | How well it did on the part of the data it never trained on, as named numbers, and the SHA-256 of the data it trained on (`data_sha256`) |
+| `MODEL_CARD.md` | What the model is, what it was trained on, those results, and how it was made: the scikit-learn and skops versions, the commit, the seed and the training data's SHA-256 |
 | `sbom.spdx.json` | The software bill of materials (SBOM): every Python package, with its version, in the environment the model was trained in |
 | `SHA256SUMS` | A fingerprint of each of the other four, to check a download is whole and unchanged |
 
@@ -165,7 +165,8 @@ How it works, in one paragraph: you push a version tag, such as `v0.2.0`.
 The workflow `.github/workflows/release.yml` then checks the tag, trains the
 model again from the tagged code (`python -m {{ package_name }} train`), lists
 the environment it trained in, checks that the four files are there, that
-`metrics.json` reads as numbers and that the card says how the model was
+`metrics.json` reads as numbers (and, if it names the training data's
+SHA-256, a well-formed one) and that the card says how the model was
 made from the tagged commit, and only then makes the release, with the card
 and the metrics as its notes. No password or token is stored anywhere: the
 run uses its own token, which GitHub makes for that run and which stops

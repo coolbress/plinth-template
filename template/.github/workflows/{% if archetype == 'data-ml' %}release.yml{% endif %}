@@ -120,8 +120,11 @@ jobs:
               exit 1
             fi
           done
-          if ! python3 -c 'import json, sys; d = json.load(open("metrics.json")); sys.exit(not (isinstance(d, dict) and d and all(type(v) in (int, float) for v in d.values())))'; then
-            echo "::error title=metrics.json is not a set of named numbers::metrics.json did not parse as an object of names and numbers, such as {\"accuracy\": 0.97}. Nothing was uploaded, and no release was made."
+          # Named numbers, and at most one text value: the SHA-256 of the
+          # training data under `data_sha256`. Not required: a project made
+          # before the training run wrote it releases without it.
+          if ! python3 -c 'import json, re, sys; d = json.load(open("metrics.json")); h = "data_sha256"; sys.exit(not (isinstance(d, dict) and set(d) - {h} and all(type(v) in (int, float) for k, v in d.items() if k != h) and (h not in d or (isinstance(d[h], str) and re.fullmatch("[0-9a-f]{64}", d[h])))))'; then
+            echo "::error title=metrics.json is not a set of named numbers::metrics.json did not parse as an object of names and numbers, such as {\"accuracy\": 0.97}; the one text value it may hold is the training data's SHA-256 under \"data_sha256\", as 64 lower-case hex digits. Nothing was uploaded, and no release was made."
             exit 1
           fi
           # What loading the model needs and what makes it again: the run
@@ -178,7 +181,9 @@ jobs:
         run: |
           set -euo pipefail
           {
-            cat MODEL_CARD.md
+            # The card without its metadata block (the lines between the
+            # first two `---`): the notes are read, not parsed.
+            awk 'NR == 1 && $0 == "---" { meta = 1; next } meta && $0 == "---" { meta = 0; next } !meta' MODEL_CARD.md
             echo
             echo "## metrics.json"
             echo
