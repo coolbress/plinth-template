@@ -3,6 +3,7 @@
 {% block main %}
 <h1>Note</h1>
 <p id="text">{{ note.text }}</p>
-<form method="post">{% csrf_token %}<label for="note">Note</label> <input id="note" name="text" value="{{ note.text }}" maxlength="200" required> <button>Save</button></form>
+<form method="post">{% csrf_token %}<label for="note">Note</label> <input id="note" name="text" maxlength="200" required{% if error %} value="{{ typed }}" aria-invalid="true" aria-describedby="note-error"{% else %} value="{{ note.text }}"{% endif %}> <button>Save</button>{% if error %}
+<p id="note-error">{{ error }}</p>{% endif %}</form>
 <p><a href="{% url 'notes' %}">All notes</a></p>
 {% endblock %}

@@ -14,6 +14,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from .access import members
 from .models import Note
 
+#: Said next to the field when a note is only spaces, which is not saved.
+BLANK = "Write the note first: a note of only spaces is not saved."
+
 
 def _me(request: HttpRequest) -> User:
     user = request.user
@@ -25,21 +28,28 @@ def _me(request: HttpRequest) -> User:
 @members
 def note_list(request: HttpRequest) -> HttpResponse:
     me = _me(request)
+    context: dict[str, object] = {}
     if request.method == "POST":
-        text = request.POST.get("text", "").strip()[:200]
+        typed = request.POST.get("text", "")
+        text = typed.strip()[:200]
         if text:
             note = Note.objects.create(owner=me, text=text)
             return redirect("note", pk=note.pk)
-    return render(request, "notes/list.html", {"notes": Note.objects.filter(owner=me)})
+        context = {"error": BLANK, "typed": typed}
+    context["notes"] = Note.objects.filter(owner=me)
+    return render(request, "notes/list.html", context)
 
 
 @members
 def note_detail(request: HttpRequest, pk: int) -> HttpResponse:
     note = get_object_or_404(Note, pk=pk, owner=_me(request))
+    context: dict[str, object] = {"note": note}
     if request.method == "POST":
-        text = request.POST.get("text", "").strip()[:200]
+        typed = request.POST.get("text", "")
+        text = typed.strip()[:200]
         if text:
             note.text = text
             note.save(update_fields=["text"])
-        return redirect("note", pk=note.pk)
-    return render(request, "notes/detail.html", {"note": note})
+            return redirect("note", pk=note.pk)
+        context |= {"error": BLANK, "typed": typed}
+    return render(request, "notes/detail.html", context)

@@ -6,6 +6,10 @@ three facts from the served page, so a template that drops one fails here
 before a browser opens it. Every page also carries the viewport `<meta>`:
 without it a phone draws the page at desktop width, shrunk.
 
+A note that is refused says why next to its field: the field carries
+`aria-invalid` and an `aria-describedby` that names the message (WCAG 2.2,
+3.3.1), keeps what was typed, and nothing is saved.
+
 The error pages are Django's deployment checklist: with `DEBUG` off, a
 missing page and a server error are answered from `404.html` and
 `500.html`, not Django's bare default.
@@ -24,10 +28,14 @@ from django.views.defaults import server_error
 #: What may sit outside `<main>`: the document's own head.
 HEAD = {"html", "head", "title", "meta", "link"}
 
+#: Elements with no end tag, so never open around text.
+VOID = {"input", "meta", "link", "br", "img", "hr"}
+
 
 class Page(HTMLParser):
-    """The `lang` on `<html>`, how many `<main>`, what sits outside it, and
-    which fields have no label."""
+    """The `lang` on `<html>`, how many `<main>`, what sits outside it,
+    which fields have no label, each field's attributes and the text of each
+    element with an `id`."""
 
     def __init__(self, html: str) -> None:
         super().__init__()
@@ -38,6 +46,9 @@ class Page(HTMLParser):
         self.fields: dict[str, str] = {}
         self.labelled: set[str] = set()
         self.viewport = ""
+        self.attrs: dict[str, dict[str, str]] = {}
+        self.text: dict[str, str] = {}
+        self.open: list[tuple[str, str]] = []
         self.feed(html)
         self.close()
 
@@ -56,10 +67,20 @@ class Page(HTMLParser):
             self.labelled.add(a["for"])
         if tag in ("input", "textarea", "select") and a.get("type") not in ("hidden", "submit"):
             self.fields[a.get("name", "?")] = a.get("id", "")
+            self.attrs[a.get("name", "?")] = a
+        if a.get("id") and tag not in VOID:
+            self.text[a["id"]] = ""
+            self.open.append((tag, a["id"]))
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "main":
             self.depth -= 1
+        if self.open and self.open[-1][0] == tag:
+            self.open.pop()
+
+    def handle_data(self, data: str) -> None:
+        for _, id_ in self.open:
+            self.text[id_] += data
 
     def unlabelled(self) -> list[str]:
         return [name for name, id_ in self.fields.items() if not id_ or id_ not in self.labelled]
@@ -88,6 +109,42 @@ def test_the_notes_page_and_a_note(client: Client) -> None:
     written = client.post("/", {"text": "buy bread"}, secure=True)
     assert written.status_code == 302
     check(client.get(written["Location"], secure=True).content.decode())
+
+
+def refused(page: Page, field: str, why: str) -> None:
+    """The field is marked invalid and points at the message that says `why`
+    (WCAG 2.2, 3.3.1 error identification)."""
+    attrs = page.attrs[field]
+    assert attrs.get("aria-invalid") == "true", f"{field} is not marked aria-invalid"
+    described = attrs.get("aria-describedby", "")
+    assert described in page.text, f"{field}'s aria-describedby names no element"
+    assert why in page.text[described], f"{described!r} does not say why: {page.text[described]!r}"
+
+
+BLANK = "Write the note first: a note of only spaces is not saved."
+
+
+@pytest.mark.django_db
+def test_a_blank_note_is_refused_saying_why(client: Client) -> None:
+    client.force_login(User.objects.create_user("dana", password=secrets.token_urlsafe()))
+    answer = client.post("/", {"text": "   "}, secure=True)
+    assert answer.status_code == 200
+    page = check(answer.content.decode())
+    refused(page, "text", BLANK)
+    assert page.attrs["text"].get("value") == "   ", "what was typed is lost"
+    assert "None yet." in client.get("/", secure=True).content.decode(), "a note was created"
+
+
+@pytest.mark.django_db
+def test_a_note_saved_blank_is_refused_saying_why_and_kept(client: Client) -> None:
+    client.force_login(User.objects.create_user("dana", password=secrets.token_urlsafe()))
+    url = client.post("/", {"text": "buy bread"}, secure=True)["Location"]
+    answer = client.post(url, {"text": "   "}, secure=True)
+    assert answer.status_code == 200
+    page = check(answer.content.decode())
+    refused(page, "text", BLANK)
+    assert page.attrs["text"].get("value") == "   ", "what was typed is lost"
+    assert Page(client.get(url, secure=True).content.decode()).text["text"] == "buy bread"
 
 
 FIELD = '<label for="n">Note</label><input id="n" name="text">'
