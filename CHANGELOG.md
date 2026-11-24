@@ -63,6 +63,28 @@ means `copier update` on an instance needs hands.
   them. `AGENTS.md` changes, so plinth's pin raise to this release owes an
   eval suite run.
 
+### Changed
+
+- **New projects test Python 3.14 in place of 3.13** (#333). CI tests the
+  project's own version from `.python-version` (3.12) and, as the extra
+  version, 3.14 where it tested 3.13: `extra-python-versions: "3.14"` in
+  `.github/workflows/ci.yml` and in GitLab's `.gitlab-ci.yml`. Replaced, not
+  added: each extra version runs the whole suite again inside the one
+  `ci / test` job and its time limit, and a project whose suite ran twice was
+  cancelled at that limit (coolbress/nexusbt#381). The check keeps its name,
+  `ci / test`. The comment above the value and a new section of
+  `docs/how-to/keep-this-project-current.md`, "The Python versions CI
+  tests", write the policy down: CI tests the lowest supported version and
+  one newer version that takes bug fixes, moved forward in a template release
+  once the dependencies the template ships install on the next one; raising
+  the lowest version is a separate, MAJOR change, since the container base
+  images move with it.
+  An existing project gets it through `/plinth:template-update` (on GitLab,
+  the `copier update` line `/plinth:floor-check` prints), with no hands unless
+  the project edited that line or the comment above it, where the update
+  meets a conflict on it. A project whose code uses something Python 3.14
+  removed then fails `ci / test` on that update's pull request.
+
 ## [1.50.4] - 2026-11-24
 
 **A `web` project's note example refuses a blank note and says why, and a GitLab project's `AGENTS.md` says where the next work is.** A note of only spaces was dropped without a word; both views now re-render the page with the message next to the field and keep what was typed (#327, part of #326). On GitLab, `AGENTS.md` sent the agent to `/plinth:guide`, which reads GitHub only; the GitLab render now names the project's issues and merge requests, read with `glab` (#328, part of coolbress/plinth#1061). The GitHub render of `AGENTS.md` and `.claude/` are unchanged byte for byte; plinth's eval suite renders with the defaults (GitHub), so plinth's pin raise to this release owes no eval suite run. `copier update` needs no hands unless a project edited those lines. No job, check, question or action changes, so the Actions allowlist is unchanged. `plinth_sha`'s default moves from d374071 (v2.42.0) to 8452dd9 (v2.43.0), plinth's latest release, which this repository's own workflows call since #329; `plinth_gitlab_integrity`'s default is the same at both commits.

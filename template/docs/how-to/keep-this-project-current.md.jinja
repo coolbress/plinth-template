@@ -156,6 +156,28 @@ and `/plinth:template-update` keeps this project's lines unless the template
 changed the same ones, which it then shows as a conflict.
 {%- endif %}
 
+## The Python versions CI tests
+
+CI tests the lowest supported version and one newer version that takes bug
+fixes. The lowest is `.python-version` and `requires-python` in
+`pyproject.toml`. The newer one is `extra-python-versions` in
+{% if host == 'gitlab' %}`.gitlab-ci.yml`{% else %}`.github/workflows/ci.yml`{% endif %}.
+A template release moves it forward once the dependencies the template ships
+install on the next version, and step 2 brings that here.
+
+**Replace the version there, do not add one.** Each version in the value runs
+the whole test suite again, one after another, inside the one
+{% if host == 'gitlab' %}`test` job{% else %}`ci / test` check{% endif %} and
+its time limit (`test-timeout-minutes`, 10 minutes unless this project set
+it). A project whose suite ran twice took 8 minutes against a 10-minute limit and was
+stopped at the limit twice. The value is space separated, as in
+`"3.13 3.14"`.
+
+**Raising the lowest version is a separate, MAJOR template change.** The
+container base images, `.python-version` and mypy's target move together: a
+base image moved alone from `python:3.12-slim` to `3.14-slim` once passed
+every required check and could not start.
+
 ## Before saying plinth lacks something
 
 This project calls plinth at one fixed commit, the pin, which can be many

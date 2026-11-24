@@ -969,6 +969,31 @@ def test_service_archetype_dependabot_leaves_the_python_minor_alone(backend: Pat
     assert "version-update:semver-patch" not in docker, "patches are blocked too"
 
 
+#: The policy's sentence, the same words in the CI file a project edits to
+#: change its tested versions and in its documentation (#333).
+PYTHON_POLICY = "CI tests the lowest supported version and one newer version that takes bug fixes."
+
+
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_ci_tests_3_14_beside_the_lowest_and_says_the_policy(
+    instance: str, request: pytest.FixtureRequest
+) -> None:
+    """3.14 in place of 3.13, not beside it: each extra version runs the whole
+    suite again inside the one `ci / test` job, and a project whose suite ran
+    twice was cancelled at the time limit (coolbress/nexusbt#381). The policy
+    is written where a project changes the value, and in its documentation."""
+    out: Path = request.getfixturevalue(instance)
+    ci_file = out / (".gitlab-ci.yml" if instance == "gitlab" else ".github/workflows/ci.yml")
+    ci = ci_file.read_text(encoding="utf-8")
+    assert re.findall(r'extra-python-versions: "([^"]*)"', ci) == ["3.14"]
+    assert (out / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+    doc_file = out / "docs" / "how-to" / "keep-this-project-current.md"
+    for where in (ci_file, doc_file):
+        lines = where.read_text(encoding="utf-8").splitlines()
+        flat = " ".join(" ".join(re.sub(r"^\s*#\s?", "", line) for line in lines).split())
+        assert PYTHON_POLICY in flat, f"{where.name} does not state the policy"
+
+
 def test_the_documents_say_who_can_move_the_wall(rendered: Path) -> None:
     """The rule the agent reads, and the limit the explanation states (plinth #129)."""
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
@@ -2065,9 +2090,10 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
     assert page.startswith("# Keep this project current")
     # GitHub adds one section after the steps: Dependabot's other pull
-    # requests (plinth #949). GitLab has no Dependabot. Both end with what to
-    # read before asking plinth for a feature (#279).
-    assert page.count("\n## ") == (5 if host == "github" else 4), "three steps, then one or two"
+    # requests (plinth #949). GitLab has no Dependabot. Both then say which
+    # Python versions CI tests (#333), and end with what to read before
+    # asking plinth for a feature (#279).
+    assert page.count("\n## ") == (6 if host == "github" else 5), "three steps, then two or three"
     sections = re.split(r"\n(?=## )", page)[1:4]
     for section, (heading, phrases) in zip(sections, _KEEP_STEPS[host], strict=True):
         flat = " ".join(section.split())
