@@ -6,6 +6,30 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.50.4] - 2026-11-24
+
+**A `web` project's note example refuses a blank note and says why, and a GitLab project's `AGENTS.md` says where the next work is.** A note of only spaces was dropped without a word; both views now re-render the page with the message next to the field and keep what was typed (#327, part of #326). On GitLab, `AGENTS.md` sent the agent to `/plinth:guide`, which reads GitHub only; the GitLab render now names the project's issues and merge requests, read with `glab` (#328, part of coolbress/plinth#1061). The GitHub render of `AGENTS.md` and `.claude/` are unchanged byte for byte; plinth's eval suite renders with the defaults (GitHub), so plinth's pin raise to this release owes no eval suite run. `copier update` needs no hands unless a project edited those lines. No job, check, question or action changes, so the Actions allowlist is unchanged. `plinth_sha`'s default moves from d374071 (v2.42.0) to 8452dd9 (v2.43.0), plinth's latest release, which this repository's own workflows call since #329; `plinth_gitlab_integrity`'s default is the same at both commits.
+
+### Changed
+
+- **`plinth_sha`'s default is 8452dd9 (plinth v2.43.0).** A project created
+  at this release calls plinth v2.43.0's reusable workflows.
+- **A GitLab project's `AGENTS.md` says where the next work is** (#328).
+  Asked what to do next, the agent reads the open issues with
+  `glab issue list` and the open merge requests with `glab mr list`, and
+  names the next one; right after creation, the first merge request is on
+  the project's Merge requests page. `/plinth:guide` is named as GitHub's
+  only. The GitHub render is unchanged.
+
+### Fixed
+
+- **A blank note is refused, saying why** (#327). In a `web` render,
+  `notes/views.py` re-renders the list or the note's page (status 200) with
+  "Write the note first: a note of only spaces is not saved." and what was
+  typed; nothing is created, and an edit leaves the stored note as it was.
+  The field carries `aria-invalid` and `aria-describedby` naming the
+  message. Two cases in the rendered `tests/test_pages.py` hold it.
+
 ## [1.50.3] - 2026-11-23
 
 **New projects call plinth v2.42.0.** `plinth_sha`'s default moves from 15ae0a9 (v2.41.0) to d374071 (v2.42.0), plinth's latest release, which this repository's own workflows call since #321. No rendered file changes for an instance: `copier update` needs no hands, `AGENTS.md` and `.claude/` are unchanged (so plinth's pin raise to this release owes no eval suite run), and no job, check or action changes, so the Actions allowlist is unchanged. A 46-character limit on the repository name was merged and reverted before this release (#320, #323): `copier update` validates a recorded name again, so the limit would have refused the update of an instance named longer, and it moves to plinth's `/plinth:new-project` instead (#318).
