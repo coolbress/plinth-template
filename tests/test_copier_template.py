@@ -8171,3 +8171,287 @@ def test_no_file_of_a_project_with_its_own_user_model_imports_the_built_in_one(
     assert _imports_of_the_built_in_user(own) == []
     plain = render(tmp_path / "plain", archetype="web")
     assert "src/probe/notes/views.py" in _imports_of_the_built_in_user(plain)
+
+
+# ── the same, for a project that exists: its update (#332) ─────────────────
+
+#: The last release that did not ask `custom_user_model`: what an existing
+#: `web` project was rendered from, with no such key in its answers file.
+BEFORE_THE_USER_MODEL = "v1.50.4"
+
+OWN_CHECKS = (
+    ["uv", "sync", "--locked", "--quiet"],
+    ["uv", "run", "--quiet", "ruff", "check", "."],
+    ["uv", "run", "--quiet", "ruff", "format", "--check", "."],
+    ["uv", "run", "--quiet", "mypy", "."],
+    ["uv", "run", "--quiet", "pytest", "-q"],
+    ["uv", "build", "--quiet"],
+)
+
+
+def _manage(out: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """`manage.py` in a synced instance, on SQLite in its folder: no `DATABASE_URL`."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    return subprocess.run(  # noqa: S603
+        [str(out / ".venv" / "bin" / "python"), "manage.py", *args],
+        cwd=out,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=300,
+    )
+
+
+def _rows(out: Path) -> dict[str, int]:
+    """How many users, group memberships and notes the instance's database holds."""
+    ask = (
+        "from django.contrib.auth import get_user_model as u;"
+        "from django.apps import apps;"
+        "print(u().objects.count(), u().groups.through.objects.count(),"
+        " apps.get_model('notes', 'Note').objects.count(), u()._meta.label)"
+    )
+    done = _manage(out, "shell", "--no-imports", "-v", "0", "-c", ask)
+    assert done.returncode == 0, done.stdout + done.stderr
+    users, memberships, notes, label = done.stdout.split()
+    return {"users": int(users), "memberships": int(memberships), "notes": int(notes)} | {label: 1}
+
+
+def _clone_of_the_release(dest: Path, tag: str) -> None:
+    """This repository at a released tag, from GitHub: a pull request's
+    checkout holds one commit and no tag. Tried three times."""
+    why = ""
+    for _ in range(3):
+        if dest.exists():
+            shutil.rmtree(dest)
+        try:
+            done = subprocess.run(  # noqa: S603
+                [  # noqa: S607
+                    "git",
+                    "clone",
+                    "--quiet",
+                    "--branch",
+                    tag,
+                    "https://github.com/coolbress/plinth-template.git",
+                    str(dest),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired as error:
+            why = str(error)
+            continue
+        if done.returncode == 0:
+            return
+        why = done.stderr
+    raise AssertionError(f"could not clone plinth-template at {tag}: {why}")
+
+
+@pytest.fixture(scope="module")
+def release_then_this_tree(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """One template repository holding `BEFORE_THE_USER_MODEL` as released
+    and, on top of it, this working tree tagged `v9.0.0`."""
+    tpl = tmp_path_factory.mktemp("releases") / "tpl"
+    _clone_of_the_release(tpl, BEFORE_THE_USER_MODEL)
+    for entry in tpl.iterdir():
+        if entry.name != ".git":
+            shutil.rmtree(entry) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-q", "--allow-empty", "-m", "this tree")
+    _git(tpl, "tag", "-a", "-m", "this tree", "v9.0.0")
+    return tpl
+
+
+WEB_PROJECT = {"project_name": "probe", "license": "MIT", "archetype": "web", "owner": "someone"}
+
+
+def test_without_the_answer_a_web_render_is_the_last_release_s(
+    tmp_path: Path, release_then_this_tree: Path
+) -> None:
+    """Byte for byte, for every file the question touches. A later release
+    that changes one of these files for every project takes it off
+    `USER_MODEL_FILES` here; the update test below still holds the rest."""
+    import copier
+
+    renders = {}
+    for ref in (BEFORE_THE_USER_MODEL, "v9.0.0"):
+        renders[ref] = tmp_path / ref
+        copier.run_copy(
+            str(release_then_this_tree),
+            str(renders[ref]),
+            data=WEB_PROJECT,
+            defaults=True,
+            quiet=True,
+            unsafe=False,
+            vcs_ref=ref,
+        )
+    assert "custom_user_model" not in _answers(renders[BEFORE_THE_USER_MODEL])
+    assert _answers(renders["v9.0.0"])["custom_user_model"] is False
+    before, now = _tree(renders[BEFORE_THE_USER_MODEL]), _tree(renders["v9.0.0"])
+    for name in USER_MODEL_FILES:
+        assert now[name] == before[name], f"{name} differs from {BEFORE_THE_USER_MODEL}'s"
+    assert not [name for name in now if name.startswith("src/probe/accounts")]
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_an_existing_web_project_updates_without_its_user_model_moving(
+    tmp_path: Path, release_then_this_tree: Path
+) -> None:
+    """A `web` project made at the last release, with users and notes in its
+    database (`tests/migration_rows.json`), updated with `--defaults`: its
+    answers file had no `custom_user_model`, so it takes `false`. The settings,
+    the migrations and `notes/` are not touched, no migration is left to
+    apply or to write, the rows are all there, and its own checks pass.
+
+    On SQLite, the instance's local database; `ci / migrations` asks the
+    same of Postgres on the instance's pull requests."""
+    import copier
+
+    proj = tmp_path / "proj"
+    copier.run_copy(
+        str(release_then_this_tree),
+        str(proj),
+        data=WEB_PROJECT,
+        defaults=True,
+        quiet=True,
+        unsafe=False,
+        vcs_ref=BEFORE_THE_USER_MODEL,
+    )
+    assert "custom_user_model" not in _answers(proj)
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=proj, check=True)  # noqa: S607
+    for command in (["migrate", "--no-input"], ["loaddata", "tests/migration_rows.json"]):
+        done = _manage(proj, *command)
+        assert done.returncode == 0, done.stdout + done.stderr
+    held = _rows(proj)
+    assert held == {"users": 2, "memberships": 1, "notes": 2, "auth.User": 1}
+
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    assert _answers(proj)["_commit"] == "v9.0.0"
+    assert _answers(proj)["custom_user_model"] is False
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],  # noqa: S607
+        cwd=proj,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    moved = [
+        line
+        for line in status.splitlines()
+        if line[3:] in USER_MODEL_FILES
+        or line[3:].startswith(("src/probe/notes/", "src/probe/accounts"))
+        or "/migrations/" in line
+    ]
+    assert moved == [], status
+    assert not (proj / "src" / "probe" / "accounts").exists()
+
+    for command in (["migrate", "--check"], ["makemigrations", "--check", "--dry-run"]):
+        done = _manage(proj, *command)
+        assert done.returncode == 0, f"{command}\n{done.stdout}\n{done.stderr}"
+    assert _rows(proj) == held
+    for step in OWN_CHECKS:
+        done = subprocess.run(step, cwd=proj, capture_output=True, text=True, check=False)  # noqa: S603
+        assert done.returncode == 0, (
+            f"{' '.join(step)} failed after the update\n{done.stdout}\n{done.stderr}"
+        )
+
+
+def test_an_update_keeps_a_project_s_own_user_model(tmp_path: Path) -> None:
+    """Recorded `true`, an update that passes nothing keeps the model, its
+    app and the setting."""
+    import copier
+
+    def later(tpl: Path) -> None:  # outside `template/`, so no rendered file differs
+        (tpl / "LATER").write_text("", encoding="utf-8")
+
+    tpl = _two_tag_template(tmp_path, lambda _: None, later)
+    proj = tmp_path / "proj"
+    copier.run_copy(
+        str(tpl),
+        str(proj),
+        data={**WEB_PROJECT, "custom_user_model": True},
+        defaults=True,
+        quiet=True,
+        unsafe=False,
+        vcs_ref="v9.0.0",
+    )
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    before = _tree(proj)
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.1.0"
+    )
+    assert _answers(proj)["_commit"] == "v9.1.0"
+    assert _answers(proj)["custom_user_model"] is True
+    assert _tree(proj) == before, "the update moved a file"
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_web_project_with_its_own_user_model_passes_its_own_checks(tmp_path: Path) -> None:
+    """Its lint, types, tests and build; then what `ci / migrations` and
+    `ci / deploy-check` run, on SQLite: no model without a migration, the
+    migrations apply to an empty database, `tests/migration_rows.json` loads
+    into `accounts.User`, and the deploy check passes with its two silences."""
+    out = render(
+        tmp_path / "own",
+        project_name="my.app",
+        archetype="web",
+        owner="someone",
+        custom_user_model=True,
+    )
+    for step in OWN_CHECKS:
+        done = subprocess.run(step, cwd=out, capture_output=True, text=True, check=False)  # noqa: S603
+        assert done.returncode == 0, (
+            f"{' '.join(step)} failed in the generated project\n{done.stdout}\n{done.stderr}"
+        )
+    for command in (
+        ["makemigrations", "--check", "--dry-run", "accounts", "notes"],
+        ["migrate", "--no-input"],
+        ["loaddata", "tests/migration_rows.json"],
+    ):
+        done = _manage(out, *command)
+        assert done.returncode == 0, f"{command}\n{done.stdout}\n{done.stderr}"
+    assert _rows(out) == {"users": 2, "memberships": 1, "notes": 2, "accounts.User": 1}
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+    env |= {
+        "DJANGO_SECRET_KEY": os.urandom(32).hex(),
+        "DJANGO_ALLOWED_HOSTS": "deploy-check.invalid",
+        "DATABASE_URL": "postgres://deploy-check@localhost:5432/none",
+    }
+    done = subprocess.run(  # noqa: S603
+        [
+            str(out / ".venv" / "bin" / "python"),
+            "manage.py",
+            "check",
+            "--deploy",
+            "--fail-level",
+            "WARNING",
+        ],
+        cwd=out,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "(2 silenced)" in done.stdout + done.stderr
