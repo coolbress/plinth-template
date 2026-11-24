@@ -2148,6 +2148,41 @@ def test_a_session_reads_plinths_latest_release_before_asking_plinth(
         assert "uses:" not in flat
 
 
+_HYPOTHESIS_RULE = (
+    "- Pure functions, parsers and serializers get property-based tests with Hypothesis"
+)
+_HYPOTHESIS_WHEN = "joins the `dev` group in `pyproject.toml` the first time one is written"
+_PAID_SERVICE_RULE = "- Tests never call a paid outside service"
+_PAID_SERVICE_FAKE = "they use a fake, and CI needs no key for it"
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_agents_md_says_how_tests_are_written(tmp_path: Path, host: str) -> None:
+    """No required check can ask for a property test or forbid a paid call in a
+    test; both are things an agent does or does not do while writing one, so
+    `AGENTS.md` says them (#336). Hypothesis is not a default dependency: the
+    line says when it is added."""
+    out = render(tmp_path, host=host)
+    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    for start, phrase in (
+        (_HYPOTHESIS_RULE, _HYPOTHESIS_WHEN),
+        (_PAID_SERVICE_RULE, _PAID_SERVICE_FAKE),
+    ):
+        lines = [ln for ln in agents if ln.startswith(start)]
+        assert len(lines) == 1, f"AGENTS.md lacks: {start}"
+        assert phrase in lines[0], f"the line lacks: {phrase}"
+    paid = next(ln for ln in agents if ln.startswith(_PAID_SERVICE_RULE))
+    for example in ("an AI model's API", "a paid data source", "a messaging platform"):
+        assert example in paid, f"the line does not name {example}"
+    # The next line follows them; an edit beside it once dropped its space.
+    assert any(ln.startswith("- `/implement` ends at a commit, so the ") for ln in agents)
+    pyproject = (out / "pyproject.toml").read_text(encoding="utf-8")
+    assert "hypothesis" not in pyproject.lower(), "Hypothesis became a default dependency"
+    asks = (out / ".claude" / "permissions.md").read_text(encoding="utf-8")
+    assert "| `uv add` |" in asks, "adding Hypothesis asks, and permissions.md does not say why"
+
+
 _DEPENDENCY_SECTION = "## Other dependency pull requests"
 
 
