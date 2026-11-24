@@ -51,7 +51,11 @@ but the first:
   required it does not block a merge.
 
 `web` adds where the app runs: Render, which plinth builds and checks, or
-somewhere else, which then asks where. GitLab asks ten: the owner's
+somewhere else, which then asks where. It also asks whether this is a new
+project with no database yet: yes gives it its own user model,
+`accounts.User`, from the first migration. Enter answers no, which is what a
+project made before the question keeps at an update: Django cannot change the
+user model of a database that has one. GitLab asks ten: the owner's
 `.github` files, visibility and the third-party reviewer are not asked, and the
 checksum of plinth's GitLab pipeline is.
 

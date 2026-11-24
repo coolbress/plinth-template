@@ -27,6 +27,29 @@ means `copier update` on an instance needs hands.
   edited it, where the update meets a conflict on it. `AGENTS.md` changes,
   so plinth's pin raise to this release owes an eval suite run.
 
+- **A new `web` project can start with its own user model** (#332). A new
+  question, `custom_user_model`, asked for `web` only. Answered yes, the
+  project gets an `accounts` app with `User(AbstractUser)`, its first
+  migration and the admin registration, `AUTH_USER_MODEL = "accounts.User"`
+  in the settings, and no file that imports
+  `django.contrib.auth.models.User`: a field added to users later is an
+  ordinary migration. Django's documentation says to set a custom user model
+  before the first `migrate`, and that changing it afterwards is done by
+  hand.
+  **An existing `web` project does nothing.** The default is no: a project
+  made before the question has no answer recorded, takes the default at its
+  next `copier update`, and its settings, migrations, `notes/` and tests are
+  what 1.50.4 rendered, byte for byte, so `copier update` needs no hands.
+  Do not answer yes on a project that has run `migrate`: its database holds
+  `auth_user`, and moving it is by hand (Django, "Changing to a custom user
+  model mid-project").
+  A new project made with `/plinth:new-project` gets the model once
+  coolbress/plinth passes the answer, with its pin raise to the release that
+  carries this. Until then, a new `web` project starts with `auth.User` as
+  before; so does a render by hand that presses Enter, and a project moved
+  to `web` from another archetype by an update that does not pass
+  `custom_user_model=true`.
+
 ## [1.50.4] - 2026-11-24
 
 **A `web` project's note example refuses a blank note and says why, and a GitLab project's `AGENTS.md` says where the next work is.** A note of only spaces was dropped without a word; both views now re-render the page with the message next to the field and keep what was typed (#327, part of #326). On GitLab, `AGENTS.md` sent the agent to `/plinth:guide`, which reads GitHub only; the GitLab render now names the project's issues and merge requests, read with `glab` (#328, part of coolbress/plinth#1061). The GitHub render of `AGENTS.md` and `.claude/` are unchanged byte for byte; plinth's eval suite renders with the defaults (GitHub), so plinth's pin raise to this release owes no eval suite run. `copier update` needs no hands unless a project edited those lines. No job, check, question or action changes, so the Actions allowlist is unchanged. `plinth_sha`'s default moves from d374071 (v2.42.0) to 8452dd9 (v2.43.0), plinth's latest release, which this repository's own workflows call since #329; `plinth_gitlab_integrity`'s default is the same at both commits.

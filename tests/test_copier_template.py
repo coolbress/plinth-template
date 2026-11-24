@@ -8030,3 +8030,144 @@ def test_the_archetype_question_says_what_each_choice_produces(
     assert isinstance(jobs, dict)
     assert not [j for j in jobs if "release" in str(j).lower()], "GitLab has a release job"
     assert "CI_COMMIT_TAG" not in gitlab_ci, "GitLab's pipeline runs something on a tag"
+
+
+# ── the web archetype's own user model (#332) ─────────────────────────────
+
+#: What the question changes, as rendered for a project named `probe`. With
+#: the answer `false`, or none, each is what the release before the question
+#: rendered: Django cannot change the user model of a database that already
+#: has one, so an existing project's `copier update` must not move these.
+USER_MODEL_FILES = (
+    "src/probe/settings.py",
+    "src/probe/notes/views.py",
+    "src/probe/notes/models.py",
+    "src/probe/notes/migrations/0001_initial.py",
+    "tests/migration_rows.json",
+    "tests/test_probe.py",
+    "tests/test_access.py",
+    "tests/test_pages.py",
+    "tests/test_passwords.py",
+)
+
+
+def _imports_of_the_built_in_user(out: Path) -> list[str]:
+    """Every rendered Python file that names `django.contrib.auth.models.User`."""
+    import ast
+
+    found = []
+    for file in sorted(out.rglob("*.py")):
+        if ".venv" in file.parts:
+            continue
+        text = file.read_text(encoding="utf-8")
+        named = bool(re.search(r"django\.contrib\.auth\.models\.User\b", text))
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.ImportFrom) and node.module == "django.contrib.auth.models":
+                named = named or any(alias.name in ("User", "*") for alias in node.names)
+        if named:
+            found.append(file.relative_to(out).as_posix())
+    return found
+
+
+def test_the_user_model_question_is_asked_for_web_and_recorded(tmp_path: Path) -> None:
+    """Asked, so the answer is recorded and an update keeps it (#22); `false`
+    by default, which is what an instance from before the question takes at
+    its next update. As a `--data` string, the way `/plinth:new-project` passes
+    answers, it renders what the API's `True` renders."""
+    question = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["custom_user_model"]
+    assert question["type"] == "bool"
+    assert question["when"] == "{{ archetype == 'web' }}"
+    assert question["default"] is False
+
+    own = render(tmp_path / "own", archetype="web", custom_user_model=True)
+    assert _answers(own)["custom_user_model"] is True
+    unasked = render(tmp_path / "unasked", archetype="web")
+    assert _answers(unasked)["custom_user_model"] is False
+    assert _tree(unasked) == _tree(
+        render(tmp_path / "no", archetype="web", custom_user_model=False)
+    )
+
+    for word, same in (("true", own), ("false", unasked)):
+        by_cli = tmp_path / f"cli-{word}"
+        argv = [
+            sys.executable,
+            "-m",
+            "copier",
+            "copy",
+            "--defaults",
+            "--quiet",
+            "--vcs-ref",
+            "HEAD",
+        ]
+        for answer in ("project_name=probe", "archetype=web", f"custom_user_model={word}"):
+            argv += ["--data", answer]
+        done = subprocess.run(  # noqa: S603
+            [*argv, str(TEMPLATE_ROOT), str(by_cli)], capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, done.stderr
+        assert _tree(by_cli) == _tree(same), f"--data custom_user_model={word}"
+
+    backend = render(tmp_path / "backend", archetype="backend")
+    assert "custom_user_model" not in _answers(backend)
+    given = render(tmp_path / "given", archetype="backend", custom_user_model=True)
+    assert _tree(given) == _tree(backend), "the answer changed an archetype that is not asked"
+
+
+def test_a_new_web_project_has_its_own_user_model(tmp_path: Path) -> None:
+    """`AUTH_USER_MODEL` names a `User(AbstractUser)` in its own app, with its
+    first migration and the admin registration, and the note's migration
+    follows through `swappable_dependency`."""
+    out = render(tmp_path / "own", archetype="web", custom_user_model=True)
+    package = out / "src" / "probe"
+    settings = (package / "settings.py").read_text(encoding="utf-8")
+    assert '\nAUTH_USER_MODEL = "accounts.User"\n' in settings
+    assert 'f"{__package__}.accounts",' in settings
+    assert "class User(AbstractUser):" in (package / "accounts" / "models.py").read_text(
+        encoding="utf-8"
+    )
+    assert "admin.site.register(User, UserAdmin)" in (package / "accounts" / "admin.py").read_text(
+        encoding="utf-8"
+    )
+    migration = (package / "accounts" / "migrations" / "0001_initial.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'name="User"' in migration
+    assert (package / "accounts" / "migrations" / "__init__.py").is_file()
+    note = (package / "notes" / "migrations" / "0001_initial.py").read_text(encoding="utf-8")
+    assert "migrations.swappable_dependency(settings.AUTH_USER_MODEL)" in note
+    rows = json.loads((out / "tests" / "migration_rows.json").read_text(encoding="utf-8"))
+    assert sorted({row["model"] for row in rows}) == ["accounts.user", "auth.group", "notes.note"]
+
+    plain = render(tmp_path / "plain", archetype="web")
+    assert not (plain / "src" / "probe" / "accounts").exists()
+    assert "AUTH_USER_MODEL" not in (plain / "src" / "probe" / "settings.py").read_text(
+        encoding="utf-8"
+    )
+    changed = {
+        name
+        for name in _tree(out).keys() | _tree(plain).keys()
+        if _tree(out).get(name) != _tree(plain).get(name)
+    }
+    added = {name for name in changed if name.startswith("src/probe/accounts/")}
+    assert changed - added <= {*USER_MODEL_FILES, ".copier-answers.yml"}, (
+        "the answer changes a file USER_MODEL_FILES does not name"
+    )
+    assert added == {
+        "src/probe/accounts/__init__.py",
+        "src/probe/accounts/admin.py",
+        "src/probe/accounts/models.py",
+        "src/probe/accounts/migrations/__init__.py",
+        "src/probe/accounts/migrations/0001_initial.py",
+    }
+
+
+def test_no_file_of_a_project_with_its_own_user_model_imports_the_built_in_one(
+    tmp_path: Path,
+) -> None:
+    """With `AUTH_USER_MODEL` set, `django.contrib.auth.models.User` is a model
+    with no table: code that names it fails at the first query. The render
+    without the answer still names it, which is what this reads for."""
+    own = render(tmp_path / "own", archetype="web", custom_user_model=True)
+    assert _imports_of_the_built_in_user(own) == []
+    plain = render(tmp_path / "plain", archetype="web")
+    assert "src/probe/notes/views.py" in _imports_of_the_built_in_user(plain)

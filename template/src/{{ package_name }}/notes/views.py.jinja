@@ -6,12 +6,13 @@ not found (404), never shown or changed.
 
 from __future__ import annotations
 
-from django.contrib.auth.models import User
-from django.core.exceptions import PermissionDenied
+{% if custom_user_model | string | lower == 'true' %}{% else %}from django.contrib.auth.models import User
+{% endif %}from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .access import members
+{% if custom_user_model | string | lower == 'true' %}from ..accounts.models import User
+{% endif %}from .access import members
 from .models import Note
 
 #: Said next to the field when a note is only spaces, which is not saved.
