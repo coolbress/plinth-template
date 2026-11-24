@@ -21,10 +21,13 @@ import secrets
 from html.parser import HTMLParser
 
 import pytest
-from django.contrib.auth.models import User
-from django.test import Client, RequestFactory
+{% if custom_user_model | string | lower == 'true' %}from django.contrib.auth import get_user_model
+{% else %}from django.contrib.auth.models import User
+{% endif %}from django.test import Client, RequestFactory
 from django.views.defaults import server_error
-
+{% if custom_user_model | string | lower == 'true' %}
+User = get_user_model()
+{% endif %}
 #: What may sit outside `<main>`: the document's own head.
 HEAD = {"html", "head", "title", "meta", "link"}
 

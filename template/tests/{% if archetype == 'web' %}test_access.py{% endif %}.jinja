@@ -13,14 +13,18 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-from django.contrib.auth.models import Group, User
-from django.core.management import call_command
+{% if custom_user_model | string | lower == 'true' %}from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+{% else %}from django.contrib.auth.models import Group, User
+{% endif %}from django.core.management import call_command
 from django.http import HttpRequest, HttpResponse
 from django.test import Client
 from django.urls import URLPattern, URLResolver, get_resolver, path
 
 from {{ package_name }}.notes.models import Note
-
+{% if custom_user_model | string | lower == 'true' %}
+User = get_user_model()
+{% endif %}
 ROWS = Path(__file__).parent / "migration_rows.json"
 
 

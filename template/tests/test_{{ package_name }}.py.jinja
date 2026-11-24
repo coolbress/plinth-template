@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from django.contrib.auth.models import User
-from django.core.management import call_command
+{% if custom_user_model | string | lower == 'true' %}from django.contrib import admin
+from django.contrib.auth import get_user_model
+{% else %}from django.contrib.auth.models import User
+{% endif %}from django.core.management import call_command
 from django.db.utils import OperationalError
 from django.test import Client
 
@@ -15,7 +17,9 @@ from {{ package_name }} import settings as project_settings
 from {{ package_name }}.__main__ import missing
 from {{ package_name }}.predeploy import run
 from {{ package_name }}.settings import database
-
+{% if custom_user_model | string | lower == 'true' %}
+User = get_user_model()
+{% endif %}
 
 def test_greet() -> None:
     assert greet("world") == "Hello, world!"
@@ -49,7 +53,15 @@ def test_the_admin_s_static_files_are_served(static_root: Path, client: Client) 
 def test_the_migrations_apply_and_users_are_stored() -> None:
     User.objects.create_user("a", password="a-long-test-password")  # noqa: S106
     assert User.objects.count() == 1
+{% if custom_user_model | string | lower == 'true' %}
 
+def test_users_are_this_project_s_own_model_and_the_admin_lists_them() -> None:
+    """`AUTH_USER_MODEL` names accounts/models.py's `User`: a field added to
+    it later is an ordinary migration."""
+    assert User._meta.label == "accounts.User"
+    assert project_settings.AUTH_USER_MODEL == "accounts.User"
+    assert admin.site.is_registered(User)
+{% endif %}
 
 def test_production_start_names_what_is_missing() -> None:
     hosts = "DJANGO_ALLOWED_HOSTS or RENDER_EXTERNAL_HOSTNAME"

@@ -1,7 +1,7 @@
 [
   {"model": "auth.group", "pk": 1, "fields": {"name": "editors", "permissions": []}},
   {
-    "model": "auth.user",
+    "model": "{% if custom_user_model | string | lower == 'true' %}accounts.user{% else %}auth.user{% endif %}",
     "pk": 1,
     "fields": {
       "password": "!",
@@ -19,7 +19,7 @@
     }
   },
   {
-    "model": "auth.user",
+    "model": "{% if custom_user_model | string | lower == 'true' %}accounts.user{% else %}auth.user{% endif %}",
     "pk": 2,
     "fields": {
       "password": "!",

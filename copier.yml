@@ -90,6 +90,10 @@ _exclude:
   - "{% if archetype != 'web' %}tests/conftest.py{% endif %}"
   - "{% if archetype != 'web' %}src/{{ package_name }}/notes{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
+  # The web archetype's own user model, only where the project started with
+  # one (`custom_user_model` below). The same string test as the owner
+  # answers further down: `--data` passes "true" and "false" as strings.
+  - "{% if archetype != 'web' or custom_user_model | string | lower != 'true' %}src/{{ package_name }}/accounts{% endif %}"
   # The data-ml archetype's model: the training run, its test, and the card
   # each release publishes beside the model (coolbress/plinth#716).
   - "{% if archetype != 'data-ml' %}src/{{ package_name }}/train.py{% endif %}"
@@ -364,6 +368,35 @@ hosting_elsewhere:
     Fly.io: fly
     A server you rent: vps
     A computer at home: home
+
+# Whether a `web` project's users are its own model (#332): an
+# `accounts.User` that subclasses Django's `AbstractUser`, named by
+# `AUTH_USER_MODEL`, from the first migration. Django's documentation says to
+# set one before the first `migrate`, and that changing it afterwards is done
+# by hand, schema and data ("Changing to a custom user model mid-project").
+#
+# The default is `false`, and that is for the projects that exist: one made
+# before this question has no answer recorded, takes the default at its next
+# `copier update`, and keeps `auth.User` with every file as it was. Its
+# database already holds `auth_user`. A new project gets the model when
+# `true` is passed, which coolbress/plinth's `/plinth:new-project` is to do
+# from its pin raise to the release that carries this. Never change the
+# default to `true`, and never flip the answer of a project that has run
+# `migrate`: both render `AUTH_USER_MODEL` into a project whose database has
+# the other user table.
+#
+# Asked, not `when: false`, for the reason `plinth_sha` is: only an answer
+# that was asked is recorded, and a new project's `true` must survive its
+# updates. Not asked or recorded outside `web`.
+custom_user_model:
+  type: bool
+  when: "{{ archetype == 'web' }}"
+  help: |
+    Is this a new project, with no database yet? Yes gives it its own user
+    model (accounts.User), so a field can be added to users later like any
+    other change. Press Enter for no on a project that already has a
+    database: its user model cannot be changed by an update.
+  default: false
 
 # The SHA-256 of plinth's `gitlab/python-ci.yml` at `plinth_sha`, base64, for
 # the include's `integrity:`: GitLab refuses an included file whose bytes
