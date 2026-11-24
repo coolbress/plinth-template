@@ -2202,13 +2202,12 @@ def test_dependabot_comment_says_what_the_cooldown_holds(rendered: Path) -> None
     assert "docs/how-to/keep-this-project-current.md" in dep
 
 
-@pytest.mark.parametrize("host", ["github", "gitlab"])
-def test_agents_names_the_guide_for_what_to_do_next(tmp_path: Path, host: str) -> None:
+def test_agents_names_the_guide_for_what_to_do_next(tmp_path: Path) -> None:
     """Asked in plain words what to do next, a session reached
     `/plinth:guide` in 0 of 6 runs: `AGENTS.md` named only the arsenal, and
     the guide is user-invoked, so the agent can only tell the person to type
     it (#234). One line of its own names it; the arsenal line stays."""
-    agents = (render(tmp_path, host=host) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    agents = (render(tmp_path) / "AGENTS.md").read_text(encoding="utf-8").splitlines()
     assert len(agents) <= 60, "AGENTS.md is past its cap"
     guide = [ln for ln in agents if "/plinth:guide" in ln]
     assert len(guide) == 1, "AGENTS.md does not name /plinth:guide on one line"
@@ -2217,6 +2216,27 @@ def test_agents_names_the_guide_for_what_to_do_next(tmp_path: Path, host: str) -
     arsenal = [ln for ln in agents if "/plinth:arsenal" in ln]
     assert len(arsenal) == 1, "AGENTS.md does not name /plinth:arsenal on one line"
     assert "choosing a tool" in arsenal[0], "the arsenal line no longer covers choosing a tool"
+
+
+def test_gitlab_agents_says_where_the_next_work_is_not_the_guide(gitlab: Path) -> None:
+    """On a project whose answers record `host: gitlab`, plinth's guide prints
+    that it reads GitHub only and names no next command (plinth #1061), so
+    `AGENTS.md` sending the agent there was a dead end. The GitLab line says
+    where the next work is instead, and names the guide only as GitHub's."""
+    agents = (gitlab / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    nxt = [ln for ln in agents if ln.startswith("- Asked what to do next")]
+    assert len(nxt) == 1, "AGENTS.md has no one line on what to do next"
+    line = nxt[0]
+    assert "type `/plinth:guide`" not in line, "the GitLab line sends the agent to the guide"
+    assert "reads GitHub only" in line, "the line does not say the guide is GitHub's"
+    assert "Merge requests page" in line, "the line does not name where the first MR is"
+    assert "`glab issue list`" in line, line
+    assert "`glab mr list`" in line, line
+    guide = [ln for ln in agents if "/plinth:guide" in ln]
+    assert guide == [line], "another AGENTS.md line names /plinth:guide on GitLab"
+    arsenal = [ln for ln in agents if "/plinth:arsenal" in ln]
+    assert len(arsenal) == 1, "AGENTS.md does not name /plinth:arsenal on one line"
 
 
 @pytest.mark.parametrize("review", [True, False])

@@ -14,7 +14,7 @@ While changing code, run the tests of what changed (`uv run pytest tests/test_<m
 
 ## Where you are
 
-- Asked what to do next, or where the project is: tell the person to type `/plinth:guide`, which reads the project and names the one command to type next; only the person can start it.
+{% if host == 'gitlab' %}- Asked what to do next, or where the project is: plinth's `/plinth:guide` reads GitHub only, so look yourself. Right after the project was created, the first merge request, when the run opened one, is on the project's Merge requests page; later, read the open issues with `glab issue list` and the open merge requests with `glab mr list`, and name the next one to the person.{% else %}- Asked what to do next, or where the project is: tell the person to type `/plinth:guide`, which reads the project and names the one command to type next; only the person can start it.{% endif %}
 - Starting something new, or choosing a tool: `/plinth:arsenal`. Asked how to update this project: the three steps in order in [docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md). Before saying plinth does not do something, or asking plinth for it, read plinth's latest `CHANGELOG.md`, not the copy at this project's pin; if the feature is there, the answer is raising the pin (the same page's last section).
 - Adding to what exists: read the issue, then `/implement #N`.
 - Something is broken: read the failing check's log first, then `/mattpocock-skills:diagnosing-bugs`. Asked to undo a merged change: offer the revert in [docs/how-to/undo-a-merged-change.md](docs/how-to/undo-a-merged-change.md), which goes through the checks, before a fix written forward.
