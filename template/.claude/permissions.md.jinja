@@ -13,12 +13,15 @@ other, so a new command in either document changes this file or the list.
 | Command | Why it asks |
 | --- | --- |
 | `git worktree remove` | It deletes the worktree's ignored files, a local data file included, without a word. `AGENTS.md` asks for `git status --porcelain --ignored` in the worktree first, and a rule would run the removal before anyone read that list. |
-| `uv add` | `AGENTS.md` has Hypothesis join the `dev` group the first time a property-based test is written, and adding it rewrites `pyproject.toml` and `uv.lock`. The approval is where the person sees the package and any index option before anything is fetched; see the `uv` rules below. |
+| `uv add` | `CONTRIBUTING.md` has Hypothesis join the `dev` group the first time a property-based test is written, and adding it rewrites `pyproject.toml` and `uv.lock`. The approval is where the person sees the package and any index option before anything is fetched; see the `uv` rules below. |
 | `uv lock` | No document tells the agent to run it on its own: `uv sync --locked` fails when the lockfile disagrees with `pyproject.toml`, and changing the lockfile is the person's call. The approval is also where an index option is seen; see the `uv` rules below. |
 | `git push` | It publishes the branch to the host, where other people can read it, and a project is public by default. The approval is the person seeing what leaves the machine. |
 {% if host == 'gitlab' %}| `glab mr create` | The same: it publishes a title and a description to the host. |
+| `glab issue create` | The same, for an issue. |
 | `glab mr merge` | It runs only on the person's word for that merge request, as `AGENTS.md` says; a rule would let a yes for one carry to the next. |
 | `glab mr rebase` | It rewrites the merge request's branch on the host. |{% else %}| `gh pr create` | The same: it publishes a title and a description to the host. |
+| `gh issue create` | The same, for an issue. |
+| `gh release view --repo coolbress/plinth` | It reads another repository, plinth, over the network, and only before saying plinth lacks something; a rule naming a repository would pass reads of that repository with any other option too. |
 | `gh pr merge` | It runs only on the person's word for that pull request, as `AGENTS.md` says; a rule would let a yes for one carry to the next. |
 | `gh pr update-branch` | It pushes a merge commit to the pull request's branch on the host and starts its checks again; only the session merging the open pull requests runs it, one at a time, as `CONTRIBUTING.md` step 7 says. |{% endif %}
 
@@ -32,6 +35,38 @@ other, so a new command in either document changes this file or the list.
 {% if host == 'gitlab' %}| `glab auth login` | A refusal is never answered by a wider token; the person changes a setting instead. |{% else %}| `gh auth refresh` | A refusal is never answered by more scopes; the person changes a setting instead. |
 | `scripts/with-admin-token.sh` | Typed by the person, in their own terminal, with a credential the session never holds. |{% endif %}
 | `bash -c` | It runs a string as a shell, where a deny rule cannot see the command; only the sandbox stops what it does. |
+
+## What the deny rules catch
+
+`AGENTS.md` names what `permissions.deny` stops; this section says which
+spellings each rule catches and what it leaves.
+
+- The token rules: {% if host == 'gitlab' %}`glab`'s token, from `glab auth status --show-token` or `-t` or
+  `glab config get token`.{% else %}`gh`'s token, from `gh auth token` or from `gh auth status --show-token`
+  or `-t`. A spelling with the options in another order, such as `-t` after
+  `--hostname`, matches no deny rule and no allow rule: in a mode that asks,
+  the person approves or refuses it, and in auto mode the classifier decides.{% endif %}
+- The `.env` rules stop the Read tool, `cat`, `head`, `tail`, `sed`, `grep`,
+  `<`, `.` and `source`, and a `cat` or `grep` of `.env` inside `$(...)`, a
+  subshell or a group; not `bash -c`, another reader inside `$(...)`, a search
+  that does not name the file, or a script that opens it, which only the
+  sandbox stops.
+- The force-push rules read the command's text. They deny `--force`,
+  `--force-with-lease` and `--force-if-includes` anywhere after `git push`,
+  `-f` as an argument of its own, a `+` refspec, the same with options between
+  `git` and `push` (`git -C <dir>`), and each part of a command chained with
+  `&&` or `;`. Any git command whose text has ` push ` with a `+`, `--force` or
+  ` -f` after it is refused too, such as a commit message or a branch name;
+  reword it. They do not stop a path to git (`/usr/bin/git push --force`),
+  `sh -c 'git push --force'`, a git alias, combined short flags such as `-uf`,
+  or `--mirror`, and in auto mode no prompt asks about those: the classifier
+  decides, and it has let a force push through. The boundary is the host's:
+  {% if host == 'gitlab' %}the protected branch{% else %}the ruleset{% endif %} refuses a force push to `main`, and nothing refuses one
+  to another branch.
+- The shell-write rules (a `cat` heredoc, `tee`, `sed -i`) keep the agent's
+  edits where the person can review them. A denied call is not a prompt and
+  ran nothing, not even the commands chained before it: write the file with
+  the edit tools and run those commands on their own.
 
 ## Why the allowed rules have the shape they have
 

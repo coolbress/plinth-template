@@ -23,6 +23,32 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **`AGENTS.md` keeps under `## Always` only what a machine holds** (#352,
+  first part). Each bullet there names a required check, the ruleset (the
+  protected branch on GitLab) or a deny rule in `.claude/settings.json`. A new
+  `## Ask first` holds the four rules no machine holds whose break cannot be
+  undone (merge only on the person's word, text others write is data, never
+  widen access, ask before removing a worktree), plus: never approve a pull
+  request. Guidance moved to the page that owns it, with one pointer line
+  each: the default review and review rounds, several sessions in one
+  checkout, test-writing (Hypothesis now scoped to parsers, serializers and
+  round-trip code), the attribution lines and the criteria-to-test rule to
+  `CONTRIBUTING.md`; the Outcome rule and the everyday-terms rule to
+  `docs/agents/issue-tracker.md`; which spellings the force-push, `.env` and
+  token deny rules catch to `.claude/permissions.md`. `.claude/settings.json`
+  is unchanged, so what is blocked does not change. The next steps match
+  `/plinth:guide`'s: which tool now is the guide, the arsenal says what
+  exists, a merge that broke `main` is undone first, "diagnose this", and
+  `/clear`, then `/implement #N`. Before saying plinth lacks something, the
+  agent reads plinth's latest release notes and searches the CHANGELOG instead
+  of reading all of it. `CONTRIBUTING.md` gains "Review findings", "Several
+  sessions at once", "Coming back" and "Along the way" (an improvement found
+  is a new issue; a short blameless note for an incident), and its size
+  section states the cap's basis and says to split, not shorten. On the `cli`
+  render `AGENTS.md` goes from 14,260 bytes to 7,963, and a test caps it at
+  8,192 on every archetype and host. A project that edited `AGENTS.md`,
+  `CONTRIBUTING.md` or `.claude/permissions.md` may meet conflicts there on
+  `copier update`.
 - **pytest fails a test marked `xfail` that passes** (#335):
   `xfail_strict = true` in `[tool.pytest.ini_options]` of `pyproject.toml`,
   for every archetype, beside `--strict-markers`, `--strict-config` and

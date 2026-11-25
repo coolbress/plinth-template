@@ -198,14 +198,70 @@ one narrow ignore in `pyproject.toml`, with its reason.
    cancels the run in progress, `ci / test` included, and `label.yml` runs
    on it too.{% endif %}
 
+## Review findings
+
+The default review is a fresh-context review, before the description is
+written: a new subagent (not a fork of this session) or a new session, given
+only the diff (`git diff origin/main...HEAD`), the issue's acceptance criteria
+and `AGENTS.md`'s Code Review Rules, never this conversation; its findings go
+in the description as it reported them. `/implement`'s `/code-review` is
+briefed and summed up by the session that wrote the change, so it is not
+independent; say which review ran.
+
+Fix what is irreversible or reaches others before merging; a recoverable
+inconvenience is fixed if it is a few lines with a case, otherwise an issue;
+after two fix rounds, only the irreversible class is fixed and the rest becomes
+issues. Judge the class by what the diff does, not by the reviewer's severity
+label: a line of guidance that could say more exposes nothing, so it is never
+that class. When a finding repeats the last one's kind, rewrite once for the
+whole kind. Say on the thread what was not changed and why.
+
+## Several sessions at once
+
+Before editing, inspect the branch, working-tree changes, worktree list and
+commits ahead of the intended base: `git fetch origin`, then `git status -sb`,
+`git worktree list`, `git log --oneline origin/main..HEAD`. Identify what
+belongs to this task. Those show the state of the checkout, not who else is
+using it: no command shows another session, so a clean checkout on `main` is
+not proof that it is yours alone. When it is not, or when it holds unrelated or
+unexplained work, leave it untouched and work in a uniquely named worktree
+branched from an explicitly verified base (step 2). Never switch, reset, rebase
+or stash another task's checkout.
+
+When several {% if host == 'gitlab' %}merge requests{% else %}pull requests{% endif %} are open, only the session the person names, or the
+person, merges them, one at a time as step 7 says, and that session does not
+edit a description while it waits. A session not told to merge does not bring
+its own {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %} up to date, even when it is behind.
+
+## Coming back
+
+{% if host == 'gitlab' %}Coming back to the project, the person asks for the open issues
+(`glab issue list`) and merge requests (`glab mr list`): plinth's `/plinth:guide`
+reads GitHub only.{% else %}Coming back to the project, the person types `/plinth:guide`: it reads the
+project and names the one command to type next.{% endif %} The agent reads the
+issues, their unticked acceptance criteria, the open {% if host == 'gitlab' %}merge requests{% else %}pull requests{% endif %} and the
+recent commits, as `AGENTS.md` says.
+
+## Along the way
+
+- An improvement found during a change becomes a new issue, not part of the
+  change.
+- An incident that lost data, needed a revert or reached users gets a short
+  blameless note in its issue's `## Outcome`: what happened, why, and what
+  changes so it does not happen again, about the system, not a person
+  (the conditions follow the
+  [Google SRE book, ch. 15](https://sre.google/sre-book/postmortem-culture/)).
+
 {% if host == 'gitlab' %}## Merge request size
 
 Aim at 200 changed lines and stay under 400; `diff-size` blocks above.{% else %}## Pull request size
 
 Aim at 200 changed lines and stay under 400; `ci / diff-size` blocks above.{% endif %}
-The figure comes from the largest published code-review case study (Cisco,
-one team): review effect falls off around 200 lines and 400 is its ceiling.
-Documentation and lockfiles are not counted. A bigger change is split into
+The cap's basis is small, revertable changes whose description says one thing.
+The largest published code-review case study (Cisco, one team) recommends 200
+to 400 lines per review sitting; that is a pace for the reviewer, not a limit
+on a change. To get under the cap, split the change; do not shorten docs,
+docstrings or tests to fit. Documentation and lockfiles are not counted. A bigger change is split into
 {% if host == 'gitlab' %}merge requests{% else %}pull requests{% endif %} that land one after another, each branched from `main` after the
 one before it is merged. A stack, each branched from the one below, costs
 more under squash merges: the lower one lands as one new commit, so the upper
@@ -218,6 +274,12 @@ push.{% endif %}
 
 ## Tests
 
+- Acceptance criteria live in the issue, as lines a check or a reviewer can
+  confirm; {% if host == 'gitlab' %}a merge request names, for each one it meets,{% else %}a pull request names, for each one it meets,{% endif %} the test that checks it,
+  or why none does. When the issue has "What should happen" and "Not sure yet"
+  fields, read both first: ask the person about each "Not sure yet" item before
+  writing code, and {% if host == 'gitlab' %}say in the merge request{% else %}say in the pull request{% endif %} which "When … then …" line each
+  test covers.
 - A change in behaviour or a bug fix {% if host == 'gitlab' %}comes with the test that catches it, in the
   same merge request;{% else %}comes with the test that catches it, in the
   same pull request;{% endif %} a documentation, configuration or refactoring change that
@@ -225,3 +287,15 @@ push.{% endif %}
 - Writing the failing test first is encouraged, not enforced.
 - A new behaviour has a test that actually runs it. The measure is not coverage
   but whether the test would fail if the behaviour broke.
+- Parsers, serializers and round-trip code, where a round trip or an invariant
+  can be stated, are worth a property-based test with Hypothesis besides their
+  example tests: a property states the behaviour expected, where an example
+  only shows the behaviour the code has now. Hypothesis is not a default
+  dependency: it joins the `dev` group in `pyproject.toml` the first time one
+  is written.
+- Tests never call a paid outside service (an AI model's API, a paid data
+  source, a messaging platform): they use a fake, and CI needs no key for it.
+  A test that calls one costs money on every run, fails wherever the key is
+  missing, and puts a key into CI.
+- Simplify within the agreed behaviour, the required checks and `AGENTS.md`'s
+  rules; the checks a ticket agreed on are not negotiable.
