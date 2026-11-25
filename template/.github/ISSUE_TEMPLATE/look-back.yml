@@ -25,7 +25,7 @@ body:
     id: mix
     attributes:
       label: 2. The mix of work
-      description: Since the last look back, roughly how much was feat, fix, refactor and chore. If plinth is installed, `/insights` in Claude Code helps.
+      description: Since the last look back, roughly how much was feat, fix, refactor and chore. Claude Code's built-in `/insights` helps.
     validations:
       required: true
 
@@ -77,7 +77,7 @@ body:
       description: |
         If so, move it one rung up: from telling it, to a line in `AGENTS.md`,
         to a check in CI that fails. A check that fails is stronger than a
-        rule that asks.
+        rule that asks. `/insights` helps here too.
     validations:
       required: true
 

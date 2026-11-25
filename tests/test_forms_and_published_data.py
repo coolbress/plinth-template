@@ -109,12 +109,12 @@ _HANDOVER = {
         "the old owner's membership is removed",
         "every CI/CD variable, deploy key and webhook holding the old owner's token is replaced",
         "CODEOWNERS, if the project has one, names the new owner",
-        "the trusted publisher names the new owner",
+        "a trusted publisher set up for this project, the publisher names the new owner",
     ),
 }
 _BEFORE_ARCHIVING = {
     "github": "Before archiving, every collaborator is removed, the agent's own account included",
-    "gitlab": "Before archiving, every member is removed, the agent's own account included",
+    "gitlab": "Before archiving, every member but the person who archives is removed",
 }
 
 
@@ -165,13 +165,15 @@ _IGNORED = (
     "export.csv",
     "reports/2026/sales.csv",
     "Screenshot 2026-11-26 at 10.00.00.png",
-    "docs/screenshot-1.jpg",
+    "screenshot-1.jpeg",
     "Screen Shot 2020-01-01 at 9.00.00 AM.png",
 )
 _KEPT = (
     "tests/fixtures/rows.csv",
     "src/probe/data/codes.csv",
     "docs/img/diagram.png",
+    "docs/img/Screenshot-home.png",
+    "src/probe/static/screenshot.png",
     "src/probe/screenshot.py",
     "notebooks/explore.ipynb",
 )

@@ -17,7 +17,7 @@
 - [ ] The people who use it are told what is happening and when.
 - [ ] The package is yanked or marked deprecated, or handed over, on the registry it was published to.
 - [ ] The container image and the running service are deleted, or handed over, so nothing keeps costing money.
-- [ ] Before archiving, every member is removed, the agent's own account included, so no account keeps access to an archived project.
+- [ ] Before archiving, every member but the person who archives is removed, the agent's own account included, so no other account keeps access to an archived project.
 - [ ] The repository is archived, or moved to the new owner. Archive last, after closing this issue; an archived project's issues cannot be changed.
 
 ## For a handover
@@ -28,7 +28,7 @@
 - [ ] Access is handed over wherever the project has it: the repository, where it runs, the package registry, the domain, a connected reviewer, an error tracker or uptime monitor.
 - [ ] After the move, the old owner's membership is removed, and every CI/CD variable, deploy key and webhook holding the old owner's token is replaced.
 - [ ] `CODEOWNERS`, if the project has one, names the new owner.
-- [ ] For a package published to PyPI (a `cli` or `library` project), the trusted publisher names the new owner and project path before the next release.
+- [ ] For a package published to PyPI through a trusted publisher set up for this project, the publisher names the new owner and project path before the next release; with an API token, the token is replaced instead.
 
 ## Not needed
 
