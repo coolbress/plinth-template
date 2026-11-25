@@ -2654,6 +2654,7 @@ def test_backend_release_runs_the_image_before_and_after_the_push(backend: Path)
         "Push the image",
         "Pull the pushed image and read its first log line",
         "Sign a record of how the image was built",
+        "Sign the SBOM of the image",
         "Say what was published",
     ]
     assert [n for n in steps if n in order] == order
@@ -2706,6 +2707,7 @@ def test_backend_release_without_a_signature_says_so_and_does_not_fail(backend: 
             "REF": "ghcr.io/someone/backend:0.1.0",
             "DIGEST": "sha256:" + "0" * 64,
             "ATTESTED": outcome,
+            "SBOM_ATTESTED": "skipped",
             "GITHUB_REPOSITORY": "someone/backend",
             "GITHUB_STEP_SUMMARY": str(summary),
         }
@@ -2715,6 +2717,75 @@ def test_backend_release_without_a_signature_says_so_and_does_not_fail(backend: 
         assert ("gh attestation verify oci://ghcr.io/someone/backend:0.1.0" in text) is signed
         assert ("::notice title=Published without a signed record::" in said) is not signed
         assert ("only on the GitHub Enterprise Cloud plan" in text) is not signed
+
+
+def test_backend_release_signs_the_sbom_under_the_same_guard(backend: Path) -> None:
+    """The SBOM made from the pushed image is attested to that image's name
+    and digest by the same pinned `actions/attest` as the build record, with
+    `sbom-path` (no predicate), and under the same private-repository guard
+    (coolbress/plinth-template#335)."""
+    steps = _image_steps(backend)
+    order = ["Make the SBOM of the pushed image", "Sign the SBOM of the image"]
+    assert [n for n in steps if n in order] == order
+    record = steps["Sign a record of how the image was built"]
+    sbom = steps["Sign the SBOM of the image"]
+    assert sbom["id"] == "attest-sbom"
+    assert sbom["uses"] == record["uses"]
+    assert sbom["if"] == record["if"]
+    assert sbom["continue-on-error"] == record["continue-on-error"]
+    assert sbom["with"] == {
+        "subject-name": "${{ steps.name.outputs.image }}",
+        "subject-digest": "${{ steps.push.outputs.digest }}",
+        "sbom-path": "sbom/sbom.spdx.json",
+    }
+    assert record["with"] == {
+        "subject-name": "${{ steps.name.outputs.image }}",
+        "subject-digest": "${{ steps.push.outputs.digest }}",
+    }
+    made = steps["Make the SBOM of the pushed image"]["run"]
+    assert "-o spdx-json=sbom/sbom.spdx.json" in made
+    said = steps["Say what was published"]["env"]
+    assert said["SBOM_ATTESTED"] == "${{ steps.attest-sbom.outcome }}"
+
+
+def test_backend_release_summary_says_whether_the_sbom_is_signed(backend: Path) -> None:
+    """Signed: the summary says so and gives the verify command with the SPDX
+    predicate type read from the file. Not signed: it says why."""
+    summary = backend / "summary.md"
+    sbom_dir = backend / "sbom"
+    sbom_dir.mkdir(exist_ok=True)
+    sbom_file = sbom_dir / "sbom.spdx.json"
+    document = '{"spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT"}'
+    sbom_file.write_text(document, encoding="utf-8")
+    signed_line = (
+        "Its SBOM is signed too, bound to the image's digest. Check it with "
+        "`gh attestation verify oci://ghcr.io/someone/backend:0.1.0 --repo someone/backend "
+        "--predicate-type https://spdx.dev/Document/v2.3`."
+    )
+    unsigned_line = (
+        "Its SBOM is not signed: GitHub signs attestations for a private repository "
+        "only on GitHub Enterprise Cloud. The file on the release is the same "
+        "SBOM, without a signature binding it to the image."
+    )
+    try:
+        for outcome, signed in (("success", True), ("failure", False), ("skipped", False)):
+            summary.unlink(missing_ok=True)
+            env = {
+                "REF": "ghcr.io/someone/backend:0.1.0",
+                "DIGEST": "sha256:" + "0" * 64,
+                "ATTESTED": outcome,
+                "SBOM_ATTESTED": outcome,
+                "GITHUB_REPOSITORY": "someone/backend",
+                "GITHUB_STEP_SUMMARY": str(summary),
+            }
+            _run_image_step(backend, "Say what was published", env)
+            text = summary.read_text(encoding="utf-8")
+            assert (signed_line in text) is signed
+            assert (unsigned_line in text) is not signed
+    finally:
+        sbom_file.unlink()
+        sbom_dir.rmdir()
+        summary.unlink(missing_ok=True)
 
 
 def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
@@ -4129,6 +4200,7 @@ def test_backend_sbom_is_of_the_pushed_image(backend: Path) -> None:
         "REF": "ghcr.io/someone/backend:0.1.0",
         "DIGEST": "sha256:" + "0" * 64,
         "ATTESTED": "success",
+        "SBOM_ATTESTED": "skipped",
         "GITHUB_REPOSITORY": "someone/backend",
         "GITHUB_STEP_SUMMARY": str(summary),
     }
@@ -6941,6 +7013,49 @@ def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> 
         "data/.gitignore",
         "data/README.md",
     }
+
+
+@pytest.mark.parametrize("archetype", sorted(SERVABLE))
+def test_an_xfail_test_that_passes_fails_the_run(tmp_path: Path, archetype: str) -> None:
+    """`xfail_strict = true` beside `--strict-markers`: a test marked as
+    expected to fail that passes is a failure, so the mark goes when the bug
+    it waited on is fixed (coolbress/plinth-template#335). The instance's own
+    pytest section, run on one test file; with the key turned off the same
+    run passes, which is what it did before."""
+    import tomllib
+
+    out = render(tmp_path / archetype, archetype=archetype)
+    pyproject = (out / "pyproject.toml").read_text(encoding="utf-8")
+    ini = tomllib.loads(pyproject)["tool"]["pytest"]["ini_options"]
+    assert ini["xfail_strict"] is True
+    assert ini["addopts"] == ["--strict-markers", "--strict-config"]
+    probe = tmp_path / f"probe-{archetype}"
+    (probe / "tests").mkdir(parents=True)
+    section = "[tool.pytest.ini_options]\n" + pyproject.split("[tool.pytest.ini_options]\n", 1)[1]
+    section = section.split("\n[", 1)[0]
+    section = re.sub(r"^DJANGO_SETTINGS_MODULE = .*\n", "", section, flags=re.MULTILINE)
+    (probe / "pyproject.toml").write_text(section, encoding="utf-8")
+    (probe / "tests" / "test_xpass.py").write_text(
+        "import pytest\n\n\n@pytest.mark.xfail(reason='waits on a fix')\n"
+        "def test_fixed_already() -> None:\n    assert True\n",
+        encoding="utf-8",
+    )
+
+    def run(*extra: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *extra],
+            cwd=probe,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    strict = run()
+    assert strict.returncode == 1, strict.stdout + strict.stderr
+    assert "[XPASS(strict)]" in strict.stdout
+    loose = run("-o", "xfail_strict=false")
+    assert loose.returncode == 0, loose.stdout + loose.stderr
+    assert "1 xpassed" in loose.stdout
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")

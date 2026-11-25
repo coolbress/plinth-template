@@ -117,6 +117,16 @@ request already scans the image itself: a high or critical vulnerability
 whose fix has been out for more than 14 days fails it, and the check's
 summary lists the rest.
 
+The same SBOM is signed too, bound to the image's digest, under the same
+rule as the record in step 4: on a public repository, or a private one on
+GitHub Enterprise Cloud. Check that the SBOM describes this image:
+
+```bash
+gh attestation verify oci://{{ image }}:0.2.0 --repo {{ owner if owner else '<your GitHub account>' }}/{{ project_name }} --predicate-type https://spdx.dev/Document/v2.3
+```
+
+The run summary prints this command with the SPDX version the file carries.
+
 ## When a release fails
 
 Nothing is pushed until the checks before it have passed. The run says

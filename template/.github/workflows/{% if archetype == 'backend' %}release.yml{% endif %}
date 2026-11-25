@@ -11,7 +11,8 @@
 # No stored secret. The push uses this run's own token (`packages: write`),
 # which GitHub makes for the run and which stops working when it ends. On a
 # public repository the image also gets a signed record of the workflow and
-# commit that built it (an attestation). GitHub signs these for private
+# commit that built it (an attestation), and its SBOM is signed the same
+# way, bound to the image's digest. GitHub signs these for private
 # repositories only on GitHub Enterprise Cloud, so a private repository on
 # another plan gets the image without the record, and the run says so. The
 # GitHub Release carries the image's software bill of materials (SBOM),
@@ -159,11 +160,24 @@ jobs:
         with:
           subject-name: ${{ steps.name.outputs.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
+      # The SBOM above, signed and bound to the image's digest, so a reader
+      # can tell it describes this image. The same action and guard as the
+      # record of how it was built.
+      - name: Sign the SBOM of the image
+        id: attest-sbom
+        if: ${{ !(github.event.repository.private && github.event.repository.owner.type == 'User') }}
+        continue-on-error: ${{ github.event.repository.private }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom/sbom.spdx.json
       - name: Say what was published
         env:
           REF: ${{ steps.name.outputs.ref }}
           DIGEST: ${{ steps.push.outputs.digest }}
           ATTESTED: ${{ steps.attest.outcome }}
+          SBOM_ATTESTED: ${{ steps.attest-sbom.outcome }}
         run: |
           set -euo pipefail
           {
@@ -172,6 +186,13 @@ jobs:
             echo "Fetch it with \`docker pull $REF\` (digest \`$DIGEST\`)."
             echo
             echo "The release carries its software bill of materials, \`sbom.spdx.json\`: every package in the image."
+            echo
+            if [ "$SBOM_ATTESTED" = success ]; then
+              spdx="$(python3 -c 'import json; print(json.load(open("sbom/sbom.spdx.json"))["spdxVersion"].split("-")[1])')"
+              echo "Its SBOM is signed too, bound to the image's digest. Check it with \`gh attestation verify oci://$REF --repo $GITHUB_REPOSITORY --predicate-type https://spdx.dev/Document/v$spdx\`."
+            else
+              echo "Its SBOM is not signed: GitHub signs attestations for a private repository only on GitHub Enterprise Cloud. The file on the release is the same SBOM, without a signature binding it to the image."
+            fi
             echo
             if [ "$ATTESTED" = success ]; then
               echo "It has a signed record of the workflow and commit that built it. Check it with \`gh attestation verify oci://$REF --repo $GITHUB_REPOSITORY\`."

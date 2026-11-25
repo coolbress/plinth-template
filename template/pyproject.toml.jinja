@@ -131,6 +131,9 @@ DJANGO_SETTINGS_MODULE = "{{ package_name }}.settings"
 # it is a typo, and a misspelt key in this section is ignored. Both are made
 # errors.
 addopts = ["--strict-markers", "--strict-config"]
+# A test marked `xfail` that passes is a failure too, so the mark is removed
+# when the bug it waited on is fixed.
+xfail_strict = true
 # Warnings are errors. A third-party warning that blocks gets one narrow
 # ignore here, with its reason.
 filterwarnings = ["error"]

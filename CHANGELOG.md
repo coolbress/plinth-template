@@ -6,6 +6,31 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Added
+
+- **A `backend` release signs its image's SBOM as an attestation** (#335).
+  `release.yml` gains a second `actions/attest` step, "Sign the SBOM of the
+  image", with `sbom-path: sbom/sbom.spdx.json` and the image's name and
+  digest as subject, at the same pinned commit as the record of how the
+  image was built and under the same guard: not asked for a private
+  repository owned by a personal account, `continue-on-error` for one owned
+  by an organization. The run summary says the SBOM is signed and prints
+  `gh attestation verify oci://<image> --repo <repo> --predicate-type
+  https://spdx.dev/Document/v<version>`, or says why it is not;
+  `docs/how-to/publish-a-release.md` says the same. The attestation is stored
+  on GitHub only (`push-to-registry` stays at its default, false, as for the
+  build record). No new action, so the Actions allowlist is unchanged.
+
+### Changed
+
+- **pytest fails a test marked `xfail` that passes** (#335):
+  `xfail_strict = true` in `[tool.pytest.ini_options]` of `pyproject.toml`,
+  for every archetype, beside `--strict-markers`, `--strict-config` and
+  `filterwarnings = ["error"]`. Remove the mark when the bug it waited on is
+  fixed; a test whose outcome varies takes `@pytest.mark.xfail(strict=False)`.
+  A project that edited the pytest section of its `pyproject.toml` may meet
+  a conflict there on `copier update`.
+
 ## [1.51.0] - 2026-11-25
 
 **A new project says what it is and which language its records are in, a `web` project can start with its own user model, a `data-ml` project records the hash of the data it trained on, `AGENTS.md` says how tests are written, and CI tests Python 3.14 in place of 3.13.** Two new questions, `description` and `records_language` (#331), and `custom_user_model` for `web` (#332), all defaulting to what 1.50.4 rendered. A `data-ml` model card gains "Intended use", "Bias" and Hugging Face-style front matter, and its choice reads "A model trained here (ML)" with the key unchanged (#334). `AGENTS.md` gains two lines: Hypothesis for pure functions, parsers and serializers, and no paid outside service in tests (#336). `extra-python-versions` moves from 3.13 to 3.14, replaced and not added, with the policy written down (#333). `copier update` needs no hands unless a project edited the lines these touch; each entry below names them. No job, check or action changes, so the Actions allowlist is unchanged; the extra Python version runs inside `ci / test`. `AGENTS.md` changes, so plinth's pin raise to this release owes an eval suite run. `plinth_sha`'s default moves from 8452dd9 (v2.43.0) to 9d0feb7 (v2.44.0), plinth's latest release, which this repository's own workflows call since #344; `plinth_gitlab_integrity`'s default is the same at both commits.
