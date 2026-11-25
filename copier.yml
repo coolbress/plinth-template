@@ -263,7 +263,7 @@ archetype:
     CLI: cli
     Library: library
     Backend or API service: backend
-    Data or ML: data-ml
+    A model trained here (ML): data-ml
     Web app with a database: web
   # The package name also names `tests/test_<package>.py`, beside the tests
   # this archetype ships: a `web` project named `access` would write

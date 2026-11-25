@@ -1,28 +1,33 @@
 """The training run as the release workflow runs it: `python -m <package> train`.
 
 It writes the three files a release publishes, the metrics parse as named
-numbers, the model loads back with skops trusting nothing extra and answers
-as it did, the card's results are filled in, the card says how the model
-was made (the scikit-learn and skops versions, the commit, the seed), and
-nothing is a pickle.
+numbers beside the data's SHA-256, the model loads back with skops trusting
+nothing extra and answers as it did, the card's results are filled in, the
+card says how the model was made (the scikit-learn and skops versions, the
+commit, the seed, the data's SHA-256), and nothing is a pickle.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from importlib.metadata import version
 from pathlib import Path
 
+import numpy as np
 import pytest
 import skops.io
 
+from {{ package_name }} import train as training
 from {{ package_name }}.train import (
+    DATA_SHA256,
     NO_COMMIT,
     OUTPUTS,
     RESULTS,
     SEED,
+    data_sha256,
     load_sample,
     source_commit,
     train,
@@ -53,9 +58,11 @@ def test_the_metrics_are_named_numbers_and_the_card_holds_them(tmp_path: Path) -
     metrics = train(tmp_path, CARD)
     written = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     assert written == metrics
-    assert written, "no metrics written"
+    assert set(written) - {DATA_SHA256}, "no metrics written"
     for name, value in written.items():
-        assert type(value) in (int, float), name
+        if name != DATA_SHA256:
+            assert type(value) in (int, float), name
+    assert re.fullmatch("[0-9a-f]{64}", str(written[DATA_SHA256])), written
     # The starting model on the starting sample; a real model sets its own floor.
     assert written["accuracy"] >= 0.9, written
     card = (tmp_path / "MODEL_CARD.md").read_text(encoding="utf-8")
@@ -83,7 +90,7 @@ def test_nothing_written_is_a_pickle(tmp_path: Path) -> None:
 
 #: The rows that say how a run was made. A release whose card lacks one
 #: cannot be loaded with a known scikit-learn, or made again.
-MADE_WITH = ("scikit-learn", "skops", "commit", "seed")
+MADE_WITH = ("scikit-learn", "skops", "commit", "seed", DATA_SHA256)
 
 
 def made_with_rows(card: str) -> dict[str, str]:
@@ -118,7 +125,43 @@ def test_the_card_says_how_the_model_was_made(tmp_path: Path) -> None:
     assert rows["seed"] == str(SEED)
     assert rows["commit"] == source_commit(Path.cwd())
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
-    assert not set(MADE_WITH) & set(metrics), "metrics.json holds numbers only"
+    assert rows[DATA_SHA256] == metrics[DATA_SHA256] == data_sha256(*load_sample())
+    assert set(MADE_WITH) & set(metrics) == {DATA_SHA256}, "metrics.json holds numbers and the hash"
+
+
+def _hash_of_a_run(out: Path) -> str:
+    train(out, CARD)
+    rows = made_with_rows((out / "MODEL_CARD.md").read_text(encoding="utf-8"))
+    metrics = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert rows[DATA_SHA256] == metrics[DATA_SHA256]
+    return rows[DATA_SHA256]
+
+
+def test_the_same_data_gives_the_same_hash_and_changed_data_another(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two runs on the sample agree; one value changed in one row, or one
+    row left out, gives another hash on the card and in `metrics.json`."""
+    first, second = _hash_of_a_run(tmp_path / "a"), _hash_of_a_run(tmp_path / "b")
+    assert first == second
+    features, labels = load_sample()
+    changed = features.copy()
+    changed[0, 0] += 0.1
+    monkeypatch.setattr(training, "load_sample", lambda: (changed, labels))
+    assert _hash_of_a_run(tmp_path / "c") != first
+    monkeypatch.setattr(training, "load_sample", lambda: (features[1:], labels[1:]))
+    assert _hash_of_a_run(tmp_path / "d") != first
+
+
+def test_the_hash_reads_the_values_their_shape_and_type() -> None:
+    a = np.arange(6, dtype=np.int64)
+    assert data_sha256(a) == data_sha256(a.copy())
+    assert data_sha256(a[::2]) == data_sha256(np.array([0, 2, 4], dtype=np.int64))
+    assert data_sha256(a) != data_sha256(a.reshape(2, 3))
+    assert data_sha256(a) != data_sha256(a.astype(np.float64))
+    assert data_sha256(a, a) != data_sha256(a)
+    with pytest.raises(TypeError, match="Python objects"):
+        data_sha256(np.array(["a", 1], dtype=object))
 
 
 def test_the_commit_is_the_one_checked_out(tmp_path: Path) -> None:

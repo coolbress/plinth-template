@@ -2736,12 +2736,44 @@ def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
 def test_data_ml_card_asks_about_personal_data(tmp_path: Path) -> None:
     out = render(tmp_path, archetype="data-ml")
     card = (out / "MODEL_CARD.md").read_text(encoding="utf-8")
-    assert card.startswith("# Model card: probe\n")
+    assert card.split("---\n", 2)[2].startswith("\n# Model card: probe\n")
     assert "**Does the training data hold personal information?**" in card
     assert "<!-- results: the training run writes the numbers here -->" in card
     train = (out / "src" / "probe" / "train.py").read_text(encoding="utf-8")
     assert 'OUTPUTS = ("model.skops", "metrics.json", "MODEL_CARD.md")' in train
     assert 'RESULTS = "<!-- results: the training run writes the numbers here -->"' in train
+
+
+@pytest.mark.parametrize(
+    ("license_", "hf_license"),
+    [("MIT", "mit"), ("Apache-2.0", "apache-2.0"), ("Proprietary", "other")],
+)
+def test_data_ml_card_has_metadata_intended_use_and_bias(
+    tmp_path: Path, license_: str, hf_license: str
+) -> None:
+    """#334: Hugging Face-style front matter that parses, with the licence
+    in Hugging Face's ids, and the intended use and bias sections beside
+    "Limits", in that order, with the results line between them."""
+    out = render(tmp_path, archetype="data-ml", license=license_)
+    card = (out / "MODEL_CARD.md").read_text(encoding="utf-8")
+    assert card.startswith("---\n"), card[:80]
+    _, front, body = card.split("---\n", 2)
+    meta = yaml.safe_load(front)
+    assert meta == {
+        "license": hf_license,
+        "library_name": "sklearn",
+        "tags": ["sklearn", "tabular-classification"],
+    }
+    headings = re.findall(r"^## (.+)$", body, re.MULTILINE)
+    assert headings == [
+        "The model",
+        "Intended use",
+        "The training data",
+        "Results",
+        "Bias",
+        "Limits",
+    ], headings
+    assert "SHA-256 of the training data" in body
 
 
 @pytest.mark.parametrize("archetype", ["cli", "backend", "web"])
@@ -2986,6 +3018,41 @@ def test_data_ml_release_writes_sums_that_match_the_files(data_ml: Path) -> None
 NOT_NUMBERS = "metrics.json is not a set of named numbers"
 NOT_MADE = "The card does not say how the model was made"
 
+#: The training data's SHA-256 as the training run writes it (#334).
+DATA_HASH = "ab" * 32
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        pytest.param(GOOD, id="no hash, a card without the new sections"),
+        pytest.param(
+            {
+                **GOOD,
+                "metrics.json": json.dumps({"accuracy": 0.97, "data_sha256": DATA_HASH}),
+                "MODEL_CARD.md": _card({**MADE, "data_sha256": DATA_HASH}),
+            },
+            id="the hash on the card and in metrics.json",
+        ),
+        pytest.param(
+            {
+                **GOOD,
+                "MODEL_CARD.md": "---\nlicense: mit\n---\n\n## Intended use\n\n" + _card(MADE),
+            },
+            id="a card with front matter",
+        ),
+    ],
+)
+def test_data_ml_release_takes_a_project_with_or_without_the_hash(
+    data_ml: Path, files: dict[str, str]
+) -> None:
+    """#334: an older project's `train.py` writes no hash and its card has no
+    "Intended use" or "Bias"; it still releases after `copier update` brings
+    the new `release.yml`. A new one's hash is accepted."""
+    done = _check_files(data_ml, files)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (data_ml / "release" / "SHA256SUMS").is_file()
+
 
 @pytest.mark.parametrize(
     ("files", "assets", "title"),
@@ -2997,6 +3064,22 @@ NOT_MADE = "The card does not say how the model was made"
         ({**GOOD, "metrics.json": "{}"}, "", NOT_NUMBERS),
         ({**GOOD, "metrics.json": '{"accuracy": "high"}'}, "", NOT_NUMBERS),
         ({**GOOD, "metrics.json": '{"passed": true}'}, "", NOT_NUMBERS),
+        # The hash is the one text value, under its own name and well formed;
+        # it does not stand in for the numbers (#334).
+        (
+            {**GOOD, "metrics.json": json.dumps({"accuracy": 0.97, "data": DATA_HASH})},
+            "",
+            NOT_NUMBERS,
+        ),
+        ({**GOOD, "metrics.json": json.dumps({"data_sha256": DATA_HASH})}, "", NOT_NUMBERS),
+        *(
+            (
+                {**GOOD, "metrics.json": json.dumps({"accuracy": 0.97, "data_sha256": bad})},
+                "",
+                NOT_NUMBERS,
+            )
+            for bad in (DATA_HASH[:-1], DATA_HASH.upper(), DATA_HASH + "\n", 1, None)
+        ),
         *(
             ({**GOOD, f"m{s}": "x"}, f"m{s} metrics.json", "A pickle is not published")
             for s in PICKLES
@@ -3032,6 +3115,30 @@ def test_data_ml_release_stops_before_any_upload(
     assert f"::error title={title}" in done.stdout
     assert "Nothing was uploaded" in done.stdout
     assert not (data_ml / "release" / "SHA256SUMS").exists()
+
+
+@pytest.mark.parametrize("front", ["---\nlicense: mit\ntags:\n  - sklearn\n---\n\n", ""])
+def test_data_ml_release_notes_leave_the_card_metadata_out(
+    data_ml: Path, tmp_path: Path, front: str
+) -> None:
+    """#334: the notes are the card and the metrics; the card's front matter
+    is metadata, which a release page would show as a rule and a heading."""
+    release = data_ml / "release"
+    shutil.rmtree(release, ignore_errors=True)
+    release.mkdir()
+    body = "# Model card: probe\n\n---\n\nkept\n"
+    (release / "MODEL_CARD.md").write_text(front + body, encoding="utf-8")
+    (release / "metrics.json").write_text('{"accuracy": 0.97}\n', encoding="utf-8")
+    step = _steps(data_ml, "publish")["Write the release notes from the card and the metrics"]
+    assert step["working-directory"] == "release"
+    env = {**os.environ, "RUNNER_TEMP": str(tmp_path)}
+    run = ["bash", "-c", step["run"]]
+    done = subprocess.run(run, cwd=release, env=env, capture_output=True, text=True, check=False)  # noqa: S603
+    assert done.returncode == 0, done.stdout + done.stderr
+    notes = (tmp_path / "notes.md").read_text(encoding="utf-8")
+    assert notes.startswith(("\n" if front else "") + body), notes
+    assert "license:" not in notes
+    assert '{"accuracy": 0.97}' in notes
 
 
 def test_data_ml_release_without_a_signature_says_so_and_does_not_fail(data_ml: Path) -> None:
@@ -8043,6 +8150,21 @@ ARCHETYPE_PRODUCES = (
     "about US $13 a month",
     "with no model trained is `cli`",
 )
+
+
+def test_the_data_ml_choice_reads_as_a_model_trained_here(tmp_path: Path) -> None:
+    """#334: "Data or ML" read as "works with data", and a collector that
+    trains nothing took it (coolbress/plinth#799 F37). The label changed; the
+    key every answers file records did not, so a render of the choice still
+    records `data-ml`."""
+    cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    choices = cfg["archetype"]["choices"]
+    assert choices["A model trained here (ML)"] == "data-ml"
+    assert "Data or ML" not in choices
+    assert list(choices.values()) == ["cli", "library", "backend", "data-ml", "web"]
+    out = render(tmp_path, archetype=choices["A model trained here (ML)"])
+    assert _answers(out)["archetype"] == "data-ml"
+    assert (out / "MODEL_CARD.md").is_file()
 
 
 def _release_triggers(out: Path) -> dict[Any, Any]:

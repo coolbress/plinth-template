@@ -1,8 +1,19 @@
+---{# Hugging Face's model-card metadata: its license ids are lower case,
+and "other" stands for a licence it does not list. #}
+license: {{ {'MIT': 'mit', 'Apache-2.0': 'apache-2.0'}.get(license, 'other') }}
+library_name: sklearn
+tags:
+  - sklearn
+  - tabular-classification
+---
+
 # Model card: {{ project_name }}
 
 What this model is, what it was trained on, and how well it did. Each
 release publishes a copy of this page with the results filled in, beside
-the model. Keep it true when you change the model or the data.
+the model. Keep it true when you change the model or the data, the
+metadata between the `---` lines at the top included: it is in the form
+Hugging Face reads (license, library, tags).
 
 ## The model
 
@@ -16,8 +27,18 @@ the model. Keep it true when you change the model or the data.
   to trust. Never a pickle: loading one runs whatever code is inside it.
   Load it with the scikit-learn version the results name: another version
   may refuse the file or answer differently.
-- **How to make it again:** the results name the commit and the seed. The
-  same code, data and seed give the same model.
+- **How to make it again:** the results name the commit, the seed and the
+  SHA-256 of the training data (`data_sha256`, also in `metrics.json`).
+  The same code, data and seed give the same model; a different data hash
+  means the data was not the same.
+
+## Intended use
+
+- **What it is for:** learning how a model is trained, checked and
+  released here, and a starting point to replace with your own. Say here
+  what your model is for and who is meant to use it.
+- **What it is not for:** any decision about a person, and anything the
+  sample does not cover. Say here what your model must not be used for.
 
 ## The training data
 
@@ -37,6 +58,16 @@ the model. Keep it true when you change the model or the data.
 ## Results
 
 <!-- results: the training run writes the numbers here -->
+
+## Bias
+
+- **Who or what the data leaves out:** the sample is 50 flowers of each of
+  three iris species and nothing else: no other species, and no flower
+  measured by another person or with another instrument. The model sorts
+  every flower into one of the three, even one that is none of them.
+- Say here which groups your data has too few of, or none, and whether the
+  results differ between groups. Measure it on the held-out part where you
+  can, and write the numbers here.
 
 ## Limits
 
