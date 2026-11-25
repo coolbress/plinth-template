@@ -5134,7 +5134,7 @@ def test_floor_documents_are_present(rendered: Path) -> None:
         ".gitattributes",
     ):
         assert (rendered / name).is_file(), f"{name} is not in the instance"
-    for form in ("bug", "feature", "task", "end-or-hand-over", "config"):
+    for form in ("bug", "feature", "task", "end-or-hand-over", "look-back", "config"):
         assert (rendered / ".github" / "ISSUE_TEMPLATE" / f"{form}.yml").is_file(), (
             f"{form}.yml missing"
         )
@@ -5850,7 +5850,7 @@ FORM_TYPES = {"markdown", "textarea", "input", "dropdown", "checkboxes"}
 FORM_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-@pytest.mark.parametrize("name", ["bug", "feature", "task", "end-or-hand-over"])
+@pytest.mark.parametrize("name", ["bug", "feature", "task", "end-or-hand-over", "look-back"])
 def test_issue_forms_follow_githubs_form_syntax(rendered: Path, name: str) -> None:
     """GitHub refuses a whole form for one bad element and offers nothing in
     its place, so each rendered form is checked against the syntax rules a
@@ -5886,9 +5886,21 @@ def test_issue_forms_follow_githubs_form_syntax(rendered: Path, name: str) -> No
     assert len(set(labels)) == len(labels), f"{name}: repeated label"
 
 
-# The end of a project (plinth #702): the six steps and three questions, the
-# same on both hosts. Matched by a word each, not by the sentence.
-END_STEPS = ("data", "Keys", "told", "yanked", "image", "archived")
+# The end of a project (plinth #702): the steps and three questions, the
+# same on both hosts. Matched by a word each, not by the sentence. #352 added
+# the export, billing, mirror and collaborator steps.
+END_STEPS = (
+    "export",
+    "Spend",
+    "mirror",
+    "data",
+    "Keys",
+    "told",
+    "yanked",
+    "image",
+    "archiving",
+    "archived",
+)
 END_QUESTIONS = (
     "What went well",
     "What the agent kept getting wrong",
@@ -5918,6 +5930,11 @@ def test_end_or_hand_over_form_lists_the_steps_and_asks_three_questions(
         assert question in asked, question
 
 
+# Steps whose words differ by host (#352): GitHub's issues and pull requests,
+# collaborators; GitLab's project export, members.
+HOST_WORDED = ("--mirror", "collaborator")
+
+
 def test_gitlab_end_or_hand_over_template_matches_the_github_form(
     rendered: Path, gitlab: Path
 ) -> None:
@@ -5933,6 +5950,8 @@ def test_gitlab_end_or_hand_over_template_matches_the_github_form(
     )
     steps = next(f for f in form["body"] if f.get("id") == "steps")
     for option in steps["attributes"]["options"]:
+        if any(w in option["label"] for w in HOST_WORDED):
+            continue  # each host's words: tests/test_forms_and_published_data.py
         # One word differs: GitLab has projects, not repositories, with issues.
         line = option["label"].replace("repository's issues", "project's issues")
         assert f"- [ ] {line}\n" in text, line
@@ -6128,7 +6147,14 @@ def test_on_gitlab_the_owner_answers_are_not_asked_and_both_files_follow_the_ans
     assert (out / "CODE_OF_CONDUCT.md").is_file()
 
 
-OWN_FORMS = ["bug.yml", "config.yml", "end-or-hand-over.yml", "feature.yml", "task.yml"]
+OWN_FORMS = [
+    "bug.yml",
+    "config.yml",
+    "end-or-hand-over.yml",
+    "feature.yml",
+    "look-back.yml",
+    "task.yml",
+]
 
 
 def test_the_answers_file_records_the_owner_answers(tmp_path: Path) -> None:
