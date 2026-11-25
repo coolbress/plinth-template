@@ -1,6 +1,7 @@
 name: Look back
 description: Seven fixed questions about the project since the last look back, and at most three tickets from them.
 title: "Look back YYYY-MM-DD"
+labels: ["task"]
 # One dated issue per look back (coolbress/plinth#1145): `/plinth:guide` finds
 # the last one by its title, so keep the title's first two words. Short answers;
 # the tickets are where the work goes.

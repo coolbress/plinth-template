@@ -54,6 +54,7 @@ LOOK_BACK = (
 def test_look_back_form_asks_the_seven_questions_and_the_tickets(github: Path) -> None:
     form = _form(github, "look-back")
     assert form["title"].startswith("Look back "), "the guide finds it by this title"
+    assert form["labels"] == ["task"], "plinth's floor check fails a form with no label"
     fields = [f for f in form["body"] if f["type"] == "textarea"]
     labels = [f["attributes"]["label"] for f in fields]
     assert labels == [*LOOK_BACK, "Tickets made (at most three)"]
