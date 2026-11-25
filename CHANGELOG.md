@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.51.0] - 2026-11-25
+
+**A new project says what it is and which language its records are in, a `web` project can start with its own user model, a `data-ml` project records the hash of the data it trained on, `AGENTS.md` says how tests are written, and CI tests Python 3.14 in place of 3.13.** Two new questions, `description` and `records_language` (#331), and `custom_user_model` for `web` (#332), all defaulting to what 1.50.4 rendered. A `data-ml` model card gains "Intended use", "Bias" and Hugging Face-style front matter, and its choice reads "A model trained here (ML)" with the key unchanged (#334). `AGENTS.md` gains two lines: Hypothesis for pure functions, parsers and serializers, and no paid outside service in tests (#336). `extra-python-versions` moves from 3.13 to 3.14, replaced and not added, with the policy written down (#333). `copier update` needs no hands unless a project edited the lines these touch; each entry below names them. No job, check or action changes, so the Actions allowlist is unchanged; the extra Python version runs inside `ci / test`. `AGENTS.md` changes, so plinth's pin raise to this release owes an eval suite run. `plinth_sha`'s default moves from 8452dd9 (v2.43.0) to 9d0feb7 (v2.44.0), plinth's latest release, which this repository's own workflows call since #344; `plinth_gitlab_integrity`'s default is the same at both commits.
+
 ### Added
 
 - **Two questions: `description` and `records_language`** (#331).
@@ -86,6 +90,9 @@ means `copier update` on an instance needs hands.
   eval suite run.
 
 ### Changed
+
+- **`plinth_sha`'s default is 9d0feb7 (plinth v2.44.0).** A project created
+  at this release calls plinth v2.44.0's reusable workflows.
 
 - **New projects test Python 3.14 in place of 3.13** (#333). CI tests the
   project's own version from `.python-version` (3.12) and, as the extra
