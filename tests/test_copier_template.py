@@ -1926,9 +1926,8 @@ _UNDO_WEB = {
 }
 
 _UNDO_POINTER = (
-    "Asked to undo a merged change: offer the revert in "
-    "[docs/how-to/undo-a-merged-change.md](docs/how-to/undo-a-merged-change.md), "
-    "which goes through the checks, before a fix written forward."
+    "a merge that broke `main` is undone first, with the revert in "
+    "[undo-a-merged-change.md](docs/how-to/undo-a-merged-change.md), then diagnosed."
 )
 
 
@@ -2112,15 +2111,13 @@ def test_every_render_says_how_to_keep_itself_current_in_order(
     assert len(agents) <= 60, "AGENTS.md is past its cap"
     pointer = (
         "Asked how to update this project: the three steps in order in "
-        "[docs/how-to/keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
+        "[keep-this-project-current.md](docs/how-to/keep-this-project-current.md)."
     )
-    assert any(ln.startswith("- Starting something new") and pointer in ln for ln in agents)
+    assert any(ln.startswith("- What exists") and pointer in ln for ln in agents)
 
 
 _LATEST_RELEASE_RULE = (
-    "Before saying plinth does not do something, or asking plinth for it, read plinth's "
-    "latest `CHANGELOG.md`, not the copy at this project's pin; if the feature is there, "
-    "the answer is raising the pin"
+    "Before saying plinth lacks something, or asking plinth for it: its latest release notes"
 )
 _LATEST_RELEASE_SECTION = "## Before saying plinth lacks something"
 
@@ -2140,7 +2137,8 @@ def test_a_session_reads_plinths_latest_release_before_asking_plinth(
     assert len(agents) <= 60, "AGENTS.md is past its cap"
     rule = [ln for ln in agents if _LATEST_RELEASE_RULE in ln]
     assert len(rule) == 1, "AGENTS.md does not say to read plinth's latest release first"
-    assert rule[0].startswith("- Starting something new"), "not beside the update line"
+    assert rule[0].startswith("- What exists"), "not beside the update line"
+    assert "if the feature is released, the answer is raising the pin" in rule[0]
     assert "keep-this-project-current.md" in rule[0]
 
     page = (out / KEEP_HOWTO).read_text(encoding="utf-8")
@@ -2174,35 +2172,32 @@ def test_a_session_reads_plinths_latest_release_before_asking_plinth(
         assert "uses:" not in flat
 
 
-_HYPOTHESIS_RULE = (
-    "- Pure functions, parsers and serializers get property-based tests with Hypothesis"
-)
+_HYPOTHESIS_RULE = "- Parsers, serializers and round-trip code, where a round trip or an invariant"
 _HYPOTHESIS_WHEN = "joins the `dev` group in `pyproject.toml` the first time one is written"
 _PAID_SERVICE_RULE = "- Tests never call a paid outside service"
 _PAID_SERVICE_FAKE = "they use a fake, and CI needs no key for it"
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
-def test_agents_md_says_how_tests_are_written(tmp_path: Path, host: str) -> None:
+def test_contributing_says_how_tests_are_written(tmp_path: Path, host: str) -> None:
     """No required check can ask for a property test or forbid a paid call in a
     test; both are things an agent does or does not do while writing one, so
-    `AGENTS.md` says them (#336). Hypothesis is not a default dependency: the
-    line says when it is added."""
+    `AGENTS.md` said them (#336); they are guidance, so they live in
+    `CONTRIBUTING.md`'s testing section, scoped by plinth #1144 (#352).
+    Hypothesis is not a default dependency: the line says when it is added."""
     out = render(tmp_path, host=host)
-    agents = (out / "AGENTS.md").read_text(encoding="utf-8").splitlines()
-    assert len(agents) <= 60, "AGENTS.md is past its cap"
+    section = (out / "CONTRIBUTING.md").read_text(encoding="utf-8").split("\n## Tests\n")[1]
+    bullets = ["- " + " ".join(b.split()) for b in section.split("\n- ")[1:]]
     for start, phrase in (
         (_HYPOTHESIS_RULE, _HYPOTHESIS_WHEN),
         (_PAID_SERVICE_RULE, _PAID_SERVICE_FAKE),
     ):
-        lines = [ln for ln in agents if ln.startswith(start)]
-        assert len(lines) == 1, f"AGENTS.md lacks: {start}"
+        lines = [ln for ln in bullets if ln.startswith(start)]
+        assert len(lines) == 1, f"CONTRIBUTING.md lacks: {start}"
         assert phrase in lines[0], f"the line lacks: {phrase}"
-    paid = next(ln for ln in agents if ln.startswith(_PAID_SERVICE_RULE))
+    paid = next(ln for ln in bullets if ln.startswith(_PAID_SERVICE_RULE))
     for example in ("an AI model's API", "a paid data source", "a messaging platform"):
         assert example in paid, f"the line does not name {example}"
-    # The next line follows them; an edit beside it once dropped its space.
-    assert any(ln.startswith("- `/implement` ends at a commit, so the ") for ln in agents)
     pyproject = (out / "pyproject.toml").read_text(encoding="utf-8")
     assert "hypothesis" not in pyproject.lower(), "Hypothesis became a default dependency"
     asks = (out / ".claude" / "permissions.md").read_text(encoding="utf-8")
@@ -2274,9 +2269,11 @@ def test_agents_names_the_guide_for_what_to_do_next(tmp_path: Path) -> None:
     assert len(guide) == 1, "AGENTS.md does not name /plinth:guide on one line"
     assert guide[0].startswith("- Asked what to do next"), guide[0]
     assert "type `/plinth:guide`" in guide[0], "the line does not say the person types it"
+    # Which tool now is the guide's; the arsenal says what exists (#352).
+    assert "which tool now" in guide[0], guide[0]
     arsenal = [ln for ln in agents if "/plinth:arsenal" in ln]
     assert len(arsenal) == 1, "AGENTS.md does not name /plinth:arsenal on one line"
-    assert "choosing a tool" in arsenal[0], "the arsenal line no longer covers choosing a tool"
+    assert arsenal[0].startswith("- What exists, and what it costs"), arsenal[0]
 
 
 def test_gitlab_agents_says_where_the_next_work_is_not_the_guide(gitlab: Path) -> None:
@@ -4565,11 +4562,15 @@ def test_a_trailing_wildcard_matches_the_bare_command_only_when_it_is_the_only_o
 def test_agents_md_says_what_the_force_push_deny_cannot_stop(tmp_path: Path, host: str) -> None:
     """No sentence promises a permission prompt: in auto mode a command no rule
     matches goes to the classifier, which let a force push through (plinth
-    #942). The host's protection is the boundary, and it covers `main` only."""
-    agents = " ".join((render(tmp_path / host, host=host) / "AGENTS.md").read_text().split())
-    assert not re.search(r"prompt stops|stopped by the (permission )?prompt", agents), agents
+    #942). The host's protection is the boundary, and it covers `main` only.
+    The spellings are in `.claude/permissions.md`, which `AGENTS.md` names (#352)."""
+    out = render(tmp_path / host, host=host)
+    agents = " ".join((out / "AGENTS.md").read_text().split())
+    page = " ".join((out / ".claude" / "permissions.md").read_text().split())
+    for text in (agents, page):
+        assert not re.search(r"prompt stops|stopped by the (permission )?prompt", text), text
     for words in ("`/usr/bin/git push --force`", "`sh -c", "alias", "`-uf`", "auto mode"):
-        assert words in agents, f"AGENTS.md does not name {words}"
+        assert words in page, f"permissions.md does not name {words}"
     branch = "A merge request's branch" if host == "gitlab" else "A pull request's branch"
     assert re.search(rf"{branch}[^.]*never[^.]*force push", agents), agents
 
@@ -4719,7 +4720,7 @@ def test_every_command_the_documents_name_is_allowed_or_asks_on_purpose(
     # The parser finds what the documents are known to say; otherwise an empty
     # result would pass.
     known = {"git fetch origin", "git worktree list", "git worktree remove"}
-    assert known <= set(told["AGENTS.md"]), told
+    assert known <= set(told["AGENTS.md"] + told["CONTRIBUTING.md"]), told
     assert any(c.startswith("git worktree add ") for c in told["CONTRIBUTING.md"])
     assert any(c.startswith(("gh pr merge ", "glab mr merge ")) for c in told["CONTRIBUTING.md"])
     for name, commands in told.items():
@@ -5148,31 +5149,21 @@ def test_agents_md_stays_short_and_says_what_matters(rendered: Path) -> None:
         f"AGENTS.md is {len(lines)} lines; everything in it is loaded every turn"
     )
     for must in (
-        "Starting something new, or choosing a tool: `/plinth:arsenal`",
+        "What exists, and what it costs: `/plinth:arsenal`",
         "/implement #N",
         "diagnosing-bugs",
-        "/plinth:arsenal",
         "Review findings:",
-        "Judge the class by what the diff does, not by the reviewer's severity label",
-        "a line of guidance that could say more exposes nothing, so it is never that class",
-        "rewrite once for the whole kind",
-        "Simplify within the agreed behaviour",
+        "(CONTRIBUTING.md#review-findings)",
         # a denied shell write is retried with the edit tools, not escalated (plinth #498)
         "Write files with the Edit and Write tools",
-        "Never ask the person to approve it or to loosen the deny list",
+        "Never ask the person to approve a denied call or to loosen the deny list",
         "## Code Review Rules",
         "irreversible or reaching others, recoverable with one command, or hypothetical",
-        "Assisted-by:",
-        # the default review sees the diff, not the authoring conversation (plinth #808)
-        "The default review is a fresh-context review",
-        "never this conversation",
-        "so it is not independent",
         "Do not invent types",
         "a description that no longer matches the diff",
         "Never ask for administration",
-        # the first-use rule and the term table it points at (plinth #809)
-        "plinth/blob/main/docs/reference/terms.md",
-        "keep the English term in brackets after the translation",
+        # the first-use rule, on the page that holds it (plinth #809, #352)
+        "(docs/agents/issue-tracker.md#everyday-terms)",
     ):
         assert must in text, f"AGENTS.md no longer says: {must}"
     assert "when planning" not in text.lower(), "the planning block moved out of AGENTS.md"
@@ -5319,6 +5310,9 @@ def test_several_open_requests_merge_one_at_a_time(tmp_path: Path, host: str) ->
     opening = f"- Merge only when the person says so for that {noun}"
     bullet = [line for line in agents if line.startswith(opening)]
     assert len(bullet) == 1, "AGENTS.md has no one merge bullet"
+    assert "step 7's command" in bullet[0], "the merge bullet does not point at step 7"
+    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    several = contributing.split("## Several sessions at once", 1)[1].split("## ", 1)[0]
     for rule in (
         f"When several {noun}s are open, only the session the person names, or the person,"
         " merges them, one at a time",
@@ -5326,8 +5320,7 @@ def test_several_open_requests_merge_one_at_a_time(tmp_path: Path, host: str) ->
         f"A session not told to merge does not bring its own {noun} up to date,"
         " even when it is behind",
     ):
-        assert rule in bullet[0], f"the merge bullet does not say: {rule}"
-    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+        assert rule in several, f"Several sessions at once does not say: {rule}"
     step7 = contributing.split("7. Merge when", 1)[1].split("## ", 1)[0]
     for must in (
         f"When several {noun}s are open",
@@ -5352,8 +5345,8 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     contributing = " ".join((rendered / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
     assert "the only line that marks AI" in contributing
     assert "Existing attribution is preserved" not in contributing
-    agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
-    assert "a tool's default `Co-Authored-By` for the AI and its generated-with line" in agents
+    dropped = "a tool's default `Co-Authored-By` for the AI and its generated-with line"
+    assert dropped in contributing
     template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
     assert "Keep any\n" not in template
     assert "generated-with line" in template
@@ -5374,13 +5367,13 @@ def test_assisted_by_has_one_example_and_one_line_per_model(tmp_path: Path, host
         if host == "github"
         else out / ".gitlab" / "merge_request_templates" / "Default.md"
     )
-    for path in (out / "AGENTS.md", out / "CONTRIBUTING.md", template):
+    for path in (out / "CONTRIBUTING.md", template):
         text = " ".join(path.read_text(encoding="utf-8").split())
         assert example in text, f"{path.name} has no Assisted-by example"
         assert "one line for each model the work used" in text, path.name
         assert "claude-fable-5-1" not in text, f"{path.name} keeps the old example"
-    agents = " ".join((out / "AGENTS.md").read_text(encoding="utf-8").split())
-    assert "the Linux kernel's form" in agents
+    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    assert "the Linux kernel's form" in contributing
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
@@ -5400,7 +5393,7 @@ def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
         if host == "github"
         else out / ".gitlab" / "merge_request_templates" / "Default.md"
     )
-    for path in (out / "AGENTS.md", out / "CONTRIBUTING.md", template):
+    for path in (out / "CONTRIBUTING.md", template):
         text = " ".join(path.read_text(encoding="utf-8").split())
         assert "which criteria it meets and which it leaves to a later one" in text, path.name
         assert f"lists every criterion with the {noun} that met it" in text, path.name
@@ -5826,18 +5819,20 @@ def test_change_forms_ask_what_should_happen_and_what_is_not_decided(
     assert "before any code is written" in unsure["attributes"]["description"]
 
 
-def test_agents_md_reads_the_two_fields_first(rendered: Path) -> None:
+def test_contributing_reads_the_two_fields_first(rendered: Path) -> None:
     """The agent reads both fields when the issue has them, asks about each
-    "Not sure yet" item before code, and ties each test to a line (#111)."""
+    "Not sure yet" item before code, and ties each test to a line (#111). The
+    rule is in `CONTRIBUTING.md`'s testing section, which `AGENTS.md` names (#352)."""
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
-    line = [ln for ln in agents.splitlines() if '"Not sure yet"' in ln]
-    assert len(line) == 1, "the two-fields rule is not one line of AGENTS.md"
+    assert '"Not sure yet": [CONTRIBUTING.md](CONTRIBUTING.md#tests)' in agents
+    text = " ".join((rendered / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    line = [text.split("## Tests", 1)[1]]
     for must in (
         'When the issue has "What should happen" and "Not sure yet" fields, read both first',
         "before writing code",
         'say in the pull request which "When … then …" line each test covers',
     ):
-        assert must in line[0], f"AGENTS.md's two-fields rule no longer says: {must}"
+        assert must in line[0], f"CONTRIBUTING.md's two-fields rule no longer says: {must}"
 
 
 def test_owner_issue_forms_leave_the_two_fields_to_the_owner(tmp_path: Path) -> None:
@@ -5846,7 +5841,7 @@ def test_owner_issue_forms_leave_the_two_fields_to_the_owner(tmp_path: Path) -> 
     out = render(tmp_path / "p", owner="someone", owner_has_issue_forms=True)
     # The exclude leaves the folder itself, empty: git does not commit it.
     assert not [p for p in (out / ".github").rglob("*") if "ISSUE_TEMPLATE" in p.parts[:-1]]
-    assert "When the issue has" in (out / "AGENTS.md").read_text(encoding="utf-8")
+    assert "When the issue has" in (out / "CONTRIBUTING.md").read_text(encoding="utf-8")
 
 
 # What GitHub's issue-form syntax accepts, from its documentation: the body's
@@ -6229,9 +6224,10 @@ def test_pr_template_ties_each_criterion_to_a_test(rendered: Path) -> None:
 
 def test_agents_md_ties_criteria_to_tests(rendered: Path) -> None:
     """The agent fills the criterion-to-test lines, and a resume reads the
-    unticked criteria first (plinth #299), within the file's line budget."""
+    unticked criteria first (plinth #299), within the file's line budget. The
+    criterion-to-test rule is in `CONTRIBUTING.md`'s testing section (#352)."""
     text = (rendered / "AGENTS.md").read_text(encoding="utf-8")
-    assert "the test that checks it" in text
+    assert "the test that checks it" in (rendered / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "unticked" in text
 
 
@@ -7697,8 +7693,8 @@ def test_gitlab_change_templates_have_the_two_fields(gitlab: Path, name: str) ->
     assert "then I see" in happen
     assert "For example: " in unsure
     assert "before any code is written" in unsure
-    agents = (gitlab / "AGENTS.md").read_text(encoding="utf-8")
-    assert 'say in the merge request which "When … then …" line each test covers' in agents
+    contributing = " ".join((gitlab / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    assert 'say in the merge request which "When … then …" line each test covers' in contributing
 
 
 @pytest.fixture(scope="module")
