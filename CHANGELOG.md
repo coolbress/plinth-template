@@ -20,6 +20,24 @@ means `copier update` on an instance needs hands.
   `docs/how-to/publish-a-release.md` says the same. The attestation is stored
   on GitHub only (`push-to-registry` stays at its default, false, as for the
   build record). No new action, so the Actions allowlist is unchanged.
+- **A `Look back` issue form on GitHub** (#352, second part): the title
+  `Look back YYYY-MM-DD`, by which `/plinth:guide` finds the last one
+  (coolbress/plinth#1145), seven fixed questions, and a "Tickets made (at most
+  three)" field. GitLab gets none: the guide reads GitHub only.
+- **The end-or-hand-over form saves before it deletes, and hands over access**
+  (#352): a final export of the data, the billing, and a mirror when the
+  account closes, before the deletion steps; collaborators (members on
+  GitLab) removed before archiving; and "For a handover", five steps from the
+  new owner joining first to the PyPI trusted publisher.
+- **`.gitignore` leaves out `*.log`, CSV files and top-level screenshots**
+  (#352). CSV files under `tests/` and `src/` stay committed: a package's
+  bundled table ignored would be left out of the build without a word.
+  Screenshots are ignored only at the top level, so one under `docs/` or
+  `src/` stays. A project that commits a CSV elsewhere adds a `!` line for it.
+- **`CONTRIBUTING.md` says what a commit or an issue publishes** (a log, a
+  screenshot, an attachment, notebook outputs) **and, in "Two people", who
+  approves** (#352): a merge waits for the other person's approval, and the
+  person who asked the agent for the change does not approve its pull request.
 
 ### Changed
 

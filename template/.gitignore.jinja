@@ -34,6 +34,19 @@ coverage.xml
 db.sqlite3
 {% if package_name == "staticfiles" %}src/*/{% endif %}staticfiles/
 
+# Logs, exported tables and screenshots carry real data, paths and tokens;
+# on a public repository a commit publishes them. A table a test reads lives
+# under tests/, and data/ keeps its own rules. A CSV a package ships stays
+# under src/: ignoring it would leave it out of the build without a word.
+# Screenshots only at the top level, where one dropped into the project lands:
+# one under docs/ or src/ is meant to be there.
+*.log
+*.csv
+!/tests/**/*.csv
+!/src/**/*.csv
+/[Ss]creenshot*
+/Screen Shot*
+
 # OS
 .DS_Store
 

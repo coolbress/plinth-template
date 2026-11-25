@@ -9,12 +9,26 @@
 
 ## Steps
 
+- [ ] A final export of the data is made, and kept or handed over, before the database is deleted.
+- [ ] Spend limits, billing alerts and the billing account are removed, or handed over.
+- [ ] When the account itself will close, a `git clone --mirror` of the repository and an export of the project (Settings, General, Advanced, Export project), which carries its issues and merge requests, are kept.
 - [ ] The data is deleted, or handed to the new owner.
 - [ ] Keys, tokens and passwords the project used are revoked, or handed over and then changed.
 - [ ] The people who use it are told what is happening and when.
 - [ ] The package is yanked or marked deprecated, or handed over, on the registry it was published to.
 - [ ] The container image and the running service are deleted, or handed over, so nothing keeps costing money.
+- [ ] Before archiving, every member but the person who archives is removed, the agent's own account included, so no other account keeps access to an archived project.
 - [ ] The repository is archived, or moved to the new owner. Archive last, after closing this issue; an archived project's issues cannot be changed.
+
+## For a handover
+
+<!-- Leave these unticked when the project stops for good. -->
+
+- [ ] Before the project moves, the new owner joins as a second person, restores the data into a new database, and ships one change through a merge request.
+- [ ] Access is handed over wherever the project has it: the repository, where it runs, the package registry, the domain, a connected reviewer, an error tracker or uptime monitor.
+- [ ] After the move, the old owner's membership is removed, and every CI/CD variable, deploy key and webhook holding the old owner's token is replaced.
+- [ ] `CODEOWNERS`, if the project has one, names the new owner.
+- [ ] For a package published to PyPI through a trusted publisher set up for this project, the publisher names the new owner and project path before the next release; with an API token, the token is replaced instead.
 
 ## Not needed
 
