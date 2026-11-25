@@ -8152,15 +8152,19 @@ ARCHETYPE_PRODUCES = (
 )
 
 
-def test_the_data_ml_choice_reads_as_a_model_trained_here() -> None:
+def test_the_data_ml_choice_reads_as_a_model_trained_here(tmp_path: Path) -> None:
     """#334: "Data or ML" read as "works with data", and a collector that
     trains nothing took it (coolbress/plinth#799 F37). The label changed; the
-    key every answers file records did not."""
+    key every answers file records did not, so a render of the choice still
+    records `data-ml`."""
     cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
     choices = cfg["archetype"]["choices"]
     assert choices["A model trained here (ML)"] == "data-ml"
     assert "Data or ML" not in choices
     assert list(choices.values()) == ["cli", "library", "backend", "data-ml", "web"]
+    out = render(tmp_path, archetype=choices["A model trained here (ML)"])
+    assert _answers(out)["archetype"] == "data-ml"
+    assert (out / "MODEL_CARD.md").is_file()
 
 
 def _release_triggers(out: Path) -> dict[Any, Any]:
