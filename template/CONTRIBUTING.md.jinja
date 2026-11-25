@@ -233,6 +233,15 @@ person, merges them, one at a time as step 7 says, and that session does not
 edit a description while it waits. A session not told to merge does not bring
 its own {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %} up to date, even when it is behind.
 
+## Two people
+
+When the project has a second person, two more rules hold:
+
+- A {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %} merges only after the other person approves it.
+- The person who asked the agent for a change does not approve the agent
+  account's {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %} for it: the approval is there so that someone who
+  did not ask for the change reads it. The agent never approves one.
+
 ## Coming back
 
 {% if host == 'gitlab' %}Coming back to the project, the person asks for the open issues
@@ -251,6 +260,15 @@ recent commits, as `AGENTS.md` says.
   changes so it does not happen again, about the system, not a person
   (the conditions follow the
   [Google SRE book, ch. 15](https://sre.google/sre-book/postmortem-culture/)).
+- On a public repository, a log, a screenshot or an issue attachment holding
+  real data publishes it: cut it to what shows the problem, or use made-up
+  values. `.gitignore` leaves out `*.log`, CSV files outside `tests/` and
+  `src/`, and screenshots at the top level under their usual English names;
+  anything else is yours to check before committing.
+- Notebooks are committed with their outputs, which can carry data rows,
+  paths and printed tokens, so clear outputs before committing (Jupyter's
+  "Clear All Outputs"; an optional tool such as nbstripout does it on every
+  commit, and is not installed).
 
 {% if host == 'gitlab' %}## Merge request size
 

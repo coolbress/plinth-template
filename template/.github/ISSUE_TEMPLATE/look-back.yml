@@ -1,0 +1,93 @@
+name: Look back
+description: Seven fixed questions about the project since the last look back, and at most three tickets from them.
+title: "Look back YYYY-MM-DD"
+labels: ["task"]
+# One dated issue per look back (coolbress/plinth#1145): `/plinth:guide` finds
+# the last one by its title, so keep the title's first two words. Short answers;
+# the tickets are where the work goes.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when a version was tagged, ten `feat:` pull requests merged,
+        or 30 days passed with at least one merge, whichever comes first since
+        the last look back. Put today's date in the title. Answer each question in
+        a few lines; "nothing" is an answer.
+
+  - type: textarea
+    id: shipping
+    attributes:
+      label: 1. Is shipping easy
+      description: The last tag, and the `feat:` and `fix:` merges since it. What made a release slow or hard?
+    validations:
+      required: true
+
+  - type: textarea
+    id: mix
+    attributes:
+      label: 2. The mix of work
+      description: Since the last look back, roughly how much was feat, fix, refactor and chore. Claude Code's built-in `/insights` helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: promised
+    attributes:
+      label: 3. What the last look back promised
+      description: Its tickets and the follow-ups of incident notes since, which are done and which are still open.
+    validations:
+      required: true
+
+  - type: textarea
+    id: remove
+    attributes:
+      label: 4. What can be removed
+      description: Code, dependencies, checks or documents nobody needs any more, each with a date to remove it by.
+    validations:
+      required: true
+
+  - type: textarea
+    id: docs-disagree
+    attributes:
+      label: 5. Where the documents disagree with the code
+      description: Where the README, `AGENTS.md` or `docs/how-to` say something the code no longer does.
+    validations:
+      required: true
+
+  - type: textarea
+    id: floor
+    attributes:
+      label: 6. Is the floor intact
+      description: |
+        The template and plinth versions, the required checks and the ruleset
+        (`/plinth:floor-check` reads these, if plinth is installed). Then two
+        nothing reads for you: when a restore of the data was last tried, and
+        whether it checked the data (a row count before and after); and
+        whether the last bills match what you expected, with the spend limits
+        still set. Claude Code's `/usage` (`w` for the last 7 days) shows
+        usage by skill, plugin and MCP server; on a private repository,
+        GitHub's billing page shows the month's Actions minutes against the
+        plan's included amount.
+    validations:
+      required: true
+
+  - type: textarea
+    id: agent-repeated
+    attributes:
+      label: 7. Did the agent repeat a mistake
+      description: |
+        If so, move it one rung up: from telling it, to a line in `AGENTS.md`,
+        to a check in CI that fails. A check that fails is stronger than a
+        rule that asks. `/insights` helps here too.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tickets
+    attributes:
+      label: Tickets made (at most three)
+      description: |
+        Each as `#N`, added as a sub-issue of this one, and small enough to
+        finish within two days. More than three means choosing.
+    validations:
+      required: false

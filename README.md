@@ -80,9 +80,10 @@ checksum of plinth's GitLab pipeline is.
 - README, LICENSE, CONTRIBUTING, CHANGELOG, SECURITY, `AGENTS.md` with the
   `CLAUDE.md` symlink, and the three `docs/agents` files the mattpocock skills
   read.
-- Forms: issue forms (bug, feature, task, end or hand over) and a pull request
-  template, unless the owner's `.github` publishes its own; GitLab gets the
-  same as issue and merge request templates.
+- Forms: issue forms (bug, feature, task, end or hand over, look back) and a
+  pull request template, unless the owner's `.github` publishes its own;
+  GitLab gets the same as issue and merge request templates, look back aside
+  (plinth's guide, which finds it, reads GitHub only).
 - `CODE_OF_CONDUCT.md`, the Contributor Covenant 3.0, only when asked for.
 - `docs/how-to/`: `keep-this-project-current.md`, the three updates in order;
   `undo-a-merged-change.md`, a revert through a pull request; and
