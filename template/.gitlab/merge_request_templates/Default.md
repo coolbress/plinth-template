@@ -1,39 +1,18 @@
 ## What and why
 
-<!-- The problem, what actually changed, the result, and why this approach. -->
+<!-- The problem, what actually changed, the result, and why this approach. CONTRIBUTING.md#land-a-change, step 5 -->
 
 ## What I checked myself
 
-<!-- What you ran, opened or read yourself before saying "merge", and what you saw: a command's output, a page, a number. A pasted output keeps home paths out: `~/...`, or the condition it shows. Or `Skipped: <reason>` when you did not check. Left empty, or "done" alone, the `pr-title` job warns; it does not fail. -->
+<!-- What you ran, opened or read yourself, and what you saw; or `Skipped: <reason>`. Left empty
+or "done" alone, the `pr-title` job warns. CONTRIBUTING.md#land-a-change, step 5 -->
 
 ## How it was verified
 
-<!-- For each acceptance criterion this merge request meets, name the test that checks it, or say why none does. When the issue is split across several merge requests, each one says which criteria it meets and which it leaves to a later one; the one that closes the issue lists every criterion with the merge request that met it. A test named here shows the criterion was exercised, not that it is proved. Then what you ran and what it showed — and what you did not verify, a line that is always there, as `Not verified: nothing` when that is true. A behaviour or bug change comes with the test that catches it (for a bug, the one that reproduces it before the fix), or say here why not. A review run in the same session that wrote the change is not an independent review; do not describe it as one. Put user-facing explanation and history where it belongs: README, CHANGELOG, or the page that covers it. -->
+<!-- For each acceptance criterion met, the test that checks it or why none does; what you ran and
+what it showed; then `Not verified: nothing`, or what was not. CONTRIBUTING.md#land-a-change, steps 5 and 6 -->
 
-Review: <!-- which review ran: fresh-context | third-party (<name>) | same-session (not independent) | none (<reason>) -->
+Review: <!-- which review ran: fresh-context | third-party (<name>) | same-session (not independent) | none (<reason>); CONTRIBUTING.md#land-a-change, step 6 -->
 
-<!--
-Then these two, in this order, at the end and with nothing after them:
-
-  Closes #N                     Only when this merge request completes the issue.
-                                `Part of #N` for partial work, `Related to #N`
-                                otherwise; omit the line when there is none.
-                                Any reference to another repository's issue
-                                or merge request, here or above:
-                                `group/project#N` for an issue,
-                                `group/project!N` for a merge request.
-                                `Closes` auto-closes on merge into the default
-                                branch, so the wrong verb closes unfinished
-                                work. A close, fix or resolve word before #N
-                                anywhere above closes it too.
-
-  Assisted-by: <agent>:<model>  When AI wrote or assisted, e.g.
-                                `Assisted-by: Claude:claude-opus-5-5`, one line
-                                for each model the work used. Keep a person's
-                                trailers with them in one block; remove a
-                                tool's default AI `Co-Authored-By` and
-                                generated-with line.
-
-This repository's CONTRIBUTING.md has the rest. Delete these comment lines:
-the squash commit is made from this description, comments included.
--->
+<!-- Last, in this order, nothing after: `Closes #N` (or `Part of #N`, `Related to #N`), then one
+`Assisted-by: <agent>:<model>` per model. Delete every comment. CONTRIBUTING.md#land-a-change, steps 3 and 5 -->

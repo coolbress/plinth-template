@@ -1037,17 +1037,15 @@ _REFERENCE_RULE = {
     "rendered": (
         "A reference to another repository's issue or pull request is `owner/repo#N`; "
         "a bare `#N`, or `plinth #N`, links to this repository's own `#N`.",
-        ".github/PULL_REQUEST_TEMPLATE.md",
-        "Any reference to another repository's issue or pull request, here or above: "
-        "`owner/repo#N`.",
+        "Any reference to another repository's issue or pull request, anywhere in the "
+        "description: `owner/repo#N`.",
     ),
     "gitlab": (
         "A reference to another repository's issue or merge request is `group/project#N` "
         "for an issue and `group/project!N` for a merge request; a bare `#N`, or "
         "`plinth #N`, links to this repository's own `#N`.",
-        ".gitlab/merge_request_templates/Default.md",
-        "Any reference to another repository's issue or merge request, here or above: "
-        "`group/project#N` for an issue, `group/project!N` for a merge request.",
+        "Any reference to another repository's issue or merge request, anywhere in the "
+        "description: `group/project#N` for an issue, `group/project!N` for a merge request.",
     ),
 }
 
@@ -1061,15 +1059,16 @@ def test_a_reference_to_another_repository_names_it(
     comments had to be rewritten (coolbress/plinth#825). The rule sits on the
     existing line, since `AGENTS.md` was at its line cap."""
     out: Path = request.getfixturevalue(instance)
-    rule, form_path, form_rule = _REFERENCE_RULE[instance]
+    rule, form_rule = _REFERENCE_RULE[instance]
     agents = (out / "AGENTS.md").read_text(encoding="utf-8")
     line = [ln for ln in agents.splitlines() if "follow [CONTRIBUTING.md]" in ln]
     assert len(line) == 1, "AGENTS.md has no one line on issues and their requests"
     assert rule in line[0], "AGENTS.md does not say how to reference another repository"
     tracker = (out / "docs" / "agents" / "issue-tracker.md").read_text(encoding="utf-8")
     assert rule in tracker, "issue-tracker.md does not say how to reference another repository"
-    form = " ".join((out / form_path).read_text(encoding="utf-8").split())
-    assert form_rule in form, f"{form_path} names the form only for the closing line"
+    # The description form's comment held it until it shrank to a pointer (#349).
+    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    assert form_rule in contributing, "CONTRIBUTING.md names the form only for the closing line"
 
 
 _COMPUTER_RULE = {
@@ -1127,10 +1126,12 @@ def test_a_record_keeps_the_persons_computer_out(
     assert "### Public records" in tracker, "the AGENTS.md link has no #public-records heading"
     for sentence in (opening, *_COMPUTER_SHARED, history):
         assert sentence in tracker, f"issue-tracker.md lacks: {sentence}"
-    form = " ".join((out / form_path).read_text(encoding="utf-8").split())
-    assert "A pasted output keeps home paths out: `~/...`, or the condition it shows." in form, (
-        f"{form_path} does not warn where outputs are pasted"
-    )
+    # Said in the description form's comment until it shrank to a pointer to
+    # CONTRIBUTING.md's step 5 (#349), which says it now.
+    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    assert "A pasted output keeps home paths out: `~/...`, or the condition it shows." in (
+        contributing
+    ), f"CONTRIBUTING.md, where {form_path} points, does not warn where outputs are pasted"
 
 
 def test_ci_keeps_the_caller_job_named_ci(rendered: Path) -> None:
@@ -5349,7 +5350,7 @@ def test_ai_attribution_is_assisted_by_only(rendered: Path) -> None:
     assert dropped in contributing
     template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
     assert "Keep any\n" not in template
-    assert "generated-with line" in template
+    assert "`Assisted-by: <agent>:<model>`" in template, "the form does not name the trailer"
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
@@ -5367,11 +5368,15 @@ def test_assisted_by_has_one_example_and_one_line_per_model(tmp_path: Path, host
         if host == "github"
         else out / ".gitlab" / "merge_request_templates" / "Default.md"
     )
+    # The form points at CONTRIBUTING.md for the example since #349.
+    form = " ".join(template.read_text(encoding="utf-8").split())
+    assert "`Assisted-by: <agent>:<model>` per model" in form, "the form drops one per model"
     for path in (out / "CONTRIBUTING.md", template):
         text = " ".join(path.read_text(encoding="utf-8").split())
-        assert example in text, f"{path.name} has no Assisted-by example"
-        assert "one line for each model the work used" in text, path.name
         assert "claude-fable-5-1" not in text, f"{path.name} keeps the old example"
+    text = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    assert example in text, "CONTRIBUTING.md has no Assisted-by example"
+    assert "one line for each model the work used" in text, "CONTRIBUTING.md"
     contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
     assert "the Linux kernel's form" in contributing
 
@@ -5393,7 +5398,9 @@ def test_a_split_ticket_divides_its_criteria_and_not_verified_is_always_there(
         if host == "github"
         else out / ".gitlab" / "merge_request_templates" / "Default.md"
     )
-    for path in (out / "CONTRIBUTING.md", template):
+    # The form points at CONTRIBUTING.md for the full text since #349.
+    assert "`Not verified: nothing`" in template.read_text(encoding="utf-8")
+    for path in (out / "CONTRIBUTING.md",):
         text = " ".join(path.read_text(encoding="utf-8").split())
         assert "which criteria it meets and which it leaves to a later one" in text, path.name
         assert f"lists every criterion with the {noun} that met it" in text, path.name
@@ -5430,7 +5437,151 @@ def test_the_description_form_asks_what_was_checked_and_which_review_ran(
         "none (<reason>)",
     ):
         assert answer in review[0], f"the Review: line does not offer {answer}"
-    assert text.index("Review:") < text.index("Then these two"), "Review: is below the ending"
+    assert text.index("Review:") < text.index("Last, in this order"), "Review: is below the ending"
+
+
+_FORM = {
+    "rendered": (".github/PULL_REQUEST_TEMPLATE.md", "pull request"),
+    "gitlab": (".gitlab/merge_request_templates/Default.md", "merge request"),
+}
+
+
+def _anchor(heading: str) -> str:
+    """GitHub's and GitLab's anchor for a Markdown heading's text."""
+    return re.sub(r"[^a-z0-9 -]", "", heading.strip().lower()).replace(" ", "-")
+
+
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_the_description_form_keeps_its_sections_with_short_comments_that_link_a_step(
+    request: pytest.FixtureRequest, instance: str
+) -> None:
+    """An agent read about 25 lines of guidance comments on every pull request,
+    text `CONTRIBUTING.md` already held (#349). The five sections stay: the
+    three headings, the `Review:` line and the ending; each one's comment is at
+    most two lines and names a `CONTRIBUTING.md` step that exists there, and
+    the two fields `ci / pr-title` reads are still in the form."""
+    out: Path = request.getfixturevalue(instance)
+    form_path, _ = _FORM[instance]
+    text = (out / form_path).read_text(encoding="utf-8")
+    headings = [ln for ln in text.splitlines() if ln.startswith("#")]
+    assert headings == ["## What and why", "## What I checked myself", "## How it was verified"]
+    assert "\n## What I checked myself\n" in text, "the field `pr-title` reads is gone"
+    assert len(re.findall(r"^Review: <!--", text, re.M)) == 1, "the `Review:` line is gone"
+    comments = re.findall(r"<!--.*?-->", text, re.S)
+    assert len(comments) == 5, f"one comment for each of the five sections, not {len(comments)}"
+    assert re.sub(r"<!--.*?-->", "", text, flags=re.S).rstrip().endswith("\n\nReview:"), (
+        "text other than the ending's comment follows the Review: line"
+    )
+    contributing = (out / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    sections = {
+        _anchor(m.group(1)): m.group(2)
+        for m in re.finditer(r"^## ([^\n]+)\n(.*?)(?=^## |\Z)", contributing, re.M | re.S)
+    }
+    lines = 0
+    for comment in comments:
+        lines += comment.count("\n") + 1
+        assert comment.count("\n") <= 1, f"a comment longer than two lines: {comment[:60]}"
+        link = re.search(r"CONTRIBUTING\.md#([a-z0-9-]+), steps? (\d+)(?: and (\d+))?", comment)
+        assert link, f"a comment that names no CONTRIBUTING.md step: {comment[:60]}"
+        assert link.group(1) in sections, f"CONTRIBUTING.md has no #{link.group(1)}"
+        for step in filter(None, link.group(2, 3)):
+            assert re.search(rf"^{step}\. ", sections[link.group(1)], re.M), (
+                f"CONTRIBUTING.md#{link.group(1)} has no step {step}"
+            )
+    assert lines <= 8, f"the comments are {lines} lines; the aim was about 8"
+
+
+# Each sentence the form's comments held before #349, as `CONTRIBUTING.md`
+# carries it: where CONTRIBUTING.md already said it in its own words, those
+# words; the rest were moved there.
+_MOVED = {
+    "rendered": (
+        'what you ran, opened or read yourself before saying "merge", and what you saw: '
+        "a command's output, a page, a number.",
+        "A pasted output keeps home paths out: `~/...`, or the condition it shows.",
+        "Or `Skipped: <reason>` when you did not check.",
+        'Left empty, or "done" alone, `ci / pr-title` warns; it does not fail.',
+        "a pull request names, for each one it meets, the test that checks it, or why none does.",
+        "each one says which criteria it meets and which it leaves to a later one, and the one "
+        "that closes the issue lists every criterion with the pull request that met it.",
+        "shows the criterion was exercised, not that it is proved.",
+        "What was run and what it showed",
+        "The not-verified line is always there, as `Not verified: nothing` when that is true",
+        "comes with the test that catches it (for a bug, the one that reproduces it before "
+        "the fix), in the same pull request;",
+        "a documentation, configuration or refactoring change that keeps behaviour does not "
+        "need one, say so in the description.",
+        "Any other change without one says in the description why not.",
+        "A review run in the same session that wrote the change is not an independent review; "
+        "do not describe it as one.",
+        "Put user-facing explanation and history where it belongs — `README.md`, "
+        "`CHANGELOG.md`, or the page that covers it",
+        "`Closes #N` only when the pull request completes that issue;",
+        "partial work links with `Part of #N`, related work with `Related to #N`.",
+        "With no issue to link, omit the line.",
+        "Any reference to another repository's issue or pull request, anywhere in the "
+        "description: `owner/repo#N`.",
+        "`Closes` drives GitHub's auto-close, so the wrong verb closes an unfinished issue.",
+        "So does a close, fix or resolve word (in any form) before `#N` anywhere in the "
+        "description",
+        "(the Linux kernel's form, e.g. `Assisted-by: Claude:claude-opus-5-5`), one line for "
+        "each model the work used.",
+        "A person's trailers (`Co-authored-by`, `Signed-off-by`) stay, in one contiguous block "
+        "at the end with `Assisted-by`;",
+        "remove a tool's default `Co-Authored-By` for the AI and its generated-with line.",
+        "Delete its comment lines — GitHub keeps HTML comments in the squash message.",
+    ),
+    "gitlab": (
+        'what you ran, opened or read yourself before saying "merge", and what you saw: '
+        "a command's output, a page, a number.",
+        "A pasted output keeps home paths out: `~/...`, or the condition it shows.",
+        "Or `Skipped: <reason>` when you did not check.",
+        'Left empty, or "done" alone, the `pr-title` job warns; it does not fail.',
+        "a merge request names, for each one it meets, the test that checks it, or why none does.",
+        "each one says which criteria it meets and which it leaves to a later one, and the one "
+        "that closes the issue lists every criterion with the merge request that met it.",
+        "shows the criterion was exercised, not that it is proved.",
+        "What was run and what it showed",
+        "The not-verified line is always there, as `Not verified: nothing` when that is true",
+        "comes with the test that catches it (for a bug, the one that reproduces it before "
+        "the fix), in the same merge request;",
+        "a documentation, configuration or refactoring change that keeps behaviour does not "
+        "need one, say so in the description.",
+        "Any other change without one says in the description why not.",
+        "A review run in the same session that wrote the change is not an independent review; "
+        "do not describe it as one.",
+        "Put user-facing explanation and history where it belongs — `README.md`, "
+        "`CHANGELOG.md`, or the page that covers it",
+        "`Closes #N` only when the merge request completes that issue;",
+        "partial work links with `Part of #N`, related work with `Related to #N`.",
+        "With no issue to link, omit the line.",
+        "Any reference to another repository's issue or merge request, anywhere in the "
+        "description: `group/project#N` for an issue, `group/project!N` for a merge request.",
+        "`Closes` drives GitLab's auto-close on merge into the default branch, so the wrong "
+        "verb closes an unfinished issue.",
+        "So does a close, fix or resolve word (in any form) before `#N` anywhere in the "
+        "description",
+        "(the Linux kernel's form, e.g. `Assisted-by: Claude:claude-opus-5-5`), one line for "
+        "each model the work used.",
+        "A person's trailers (`Co-authored-by`, `Signed-off-by`) stay, in one contiguous block "
+        "at the end with `Assisted-by`;",
+        "remove a tool's default `Co-Authored-By` for the AI and its generated-with line.",
+        "Delete its comment lines: the squash commit is made from the description, comments "
+        "included.",
+    ),
+}
+
+
+@pytest.mark.parametrize("instance", ["rendered", "gitlab"])
+def test_every_sentence_taken_out_of_the_form_is_in_contributing(
+    request: pytest.FixtureRequest, instance: str
+) -> None:
+    """The form's comments shrank to pointers (#349), so what they said has to
+    be where they point: each sentence they held is in `CONTRIBUTING.md`."""
+    out: Path = request.getfixturevalue(instance)
+    contributing = " ".join((out / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+    missing = [s for s in _MOVED[instance] if s not in contributing]
+    assert not missing, f"CONTRIBUTING.md lacks what the form said: {missing}"
 
 
 def test_text_others_write_is_data_and_named(rendered: Path, gitlab: Path) -> None:
@@ -5474,8 +5625,6 @@ def test_a_closing_word_in_a_sentence_is_named(rendered: Path) -> None:
     assert "anywhere in the description, a sentence included" in contributing
     agents = (rendered / "AGENTS.md").read_text(encoding="utf-8")
     assert "anywhere in the description closes that issue on merge" in agents
-    template = (rendered / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
-    assert "anywhere above" in template
 
 
 def test_task_form_asks_what_done_means(rendered: Path) -> None:

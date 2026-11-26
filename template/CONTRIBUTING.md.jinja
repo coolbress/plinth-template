@@ -83,6 +83,14 @@ one narrow ignore in `pyproject.toml`, with its reason.
    Assisted-by: <agent>:<model>
    ```
 
+   Under What I checked myself goes what you ran, opened or read yourself
+   before saying "merge", and what you saw: a command's output, a page, a
+   number. A pasted output keeps home paths out: `~/...`, or the condition it
+   shows. Or `Skipped: <reason>` when you did not check. Left empty, or "done"
+   alone, {% if host == 'gitlab' %}the `pr-title` job warns{% else %}`ci / pr-title` warns{% endif %}; it does not fail. A test named
+   under How it was verified shows the criterion was exercised, not that it
+   is proved.
+
    The not-verified line is always there, as `Not verified: nothing` when that
    is true: a small fix or a docs-only change drops it most often. When a
    ticket is split across several {% if host == 'gitlab' %}merge request{% else %}pull request{% endif %}s, each one says which
@@ -92,8 +100,12 @@ one narrow ignore in `pyproject.toml`, with its reason.
    The issue link goes after the verification section, directly above the
    attribution. {% if host == 'gitlab' %}`Closes #N` only when the merge request completes that issue;{% else %}`Closes #N` only when the pull request completes that issue;{% endif %}
    partial work links with `Part of #N`, related work with `Related to #N`.
-   {% if host == 'gitlab' %}`Closes` drives GitLab's auto-close,{% else %}`Closes` drives GitHub's auto-close,{% endif %} so the wrong verb closes an unfinished
-   issue. So does a close, fix or resolve word (in any form) before `#N`
+   {% if host == 'gitlab' %}Any reference to another repository's issue or merge request, anywhere in
+   the description: `group/project#N` for an issue, `group/project!N` for a
+   merge request. `Closes` drives GitLab's auto-close on merge into the
+   default branch,{% else %}Any reference to another repository's issue or pull request, anywhere in
+   the description: `owner/repo#N`. `Closes` drives GitHub's auto-close,{% endif %} so
+   the wrong verb closes an unfinished issue. So does a close, fix or resolve word (in any form) before `#N`
    anywhere in the description, a sentence included: "the two fixes #N
    decided" closes #N. Word such a sentence another way. With no issue to link, omit the line. A person's trailers
    (`Co-authored-by`, `Signed-off-by`) stay, in one contiguous block at the end
@@ -116,7 +128,8 @@ one narrow ignore in `pyproject.toml`, with its reason.
    the description is what lands on `main`.
 
    Say what was actually run, and name what was not. A review run in the same
-   session that wrote the change is not an independent review. When you change
+   session that wrote the change is not an independent review; do not
+   describe it as one. When you change
    behaviour, verify the boundaries and partial failures of the inputs and
    states it touches, record which paths you exercised and which you did not,
    and do not widen the result of a few cases into a guarantee about all of
@@ -298,10 +311,12 @@ push.{% endif %}
   fields, read both first: ask the person about each "Not sure yet" item before
   writing code, and {% if host == 'gitlab' %}say in the merge request{% else %}say in the pull request{% endif %} which "When … then …" line each
   test covers.
-- A change in behaviour or a bug fix {% if host == 'gitlab' %}comes with the test that catches it, in the
-  same merge request;{% else %}comes with the test that catches it, in the
-  same pull request;{% endif %} a documentation, configuration or refactoring change that
-  keeps behaviour does not need one, say so in the description.
+- A change in behaviour or a bug fix {% if host == 'gitlab' %}comes with the test that catches it (for a
+  bug, the one that reproduces it before the fix), in the same merge
+  request;{% else %}comes with the test that catches it (for a bug, the one
+  that reproduces it before the fix), in the same pull request;{% endif %} a documentation, configuration or refactoring change that
+  keeps behaviour does not need one, say so in the description. Any other
+  change without one says in the description why not.
 - Writing the failing test first is encouraged, not enforced.
 - A new behaviour has a test that actually runs it. The measure is not coverage
   but whether the test would fail if the behaviour broke.
