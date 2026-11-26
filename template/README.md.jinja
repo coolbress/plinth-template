@@ -25,7 +25,52 @@ dependency review and the merge request checks. Pass them locally first.{% else 
 Pass them locally first. The list of required checks is the repository's
 ruleset, so it is not repeated here.{% endif %}
 
-{% if archetype == 'web' %}## Run it on your computer
+{% if archetype == 'dashboard' %}## Run it on your computer
+
+```bash
+uv run streamlit run src/{{ package_name }}/app.py   # serve the page until Ctrl+C
+```
+
+Then open <http://localhost:8501/> in a browser. The page draws a sample
+table made in `src/{{ package_name }}/app.py`; put your own data in
+[`data/raw/`](data/README.md), which git never commits, and read it from
+there. [`.streamlit/config.toml`](.streamlit/config.toml) keeps the page to
+this computer, where Streamlit would also answer on a "Network URL" anyone on
+the same network can open, and turns off the usage statistics Streamlit sends
+by default.
+
+The page has no login and no database. Anyone who can reach its address can
+read it and every number it shows.
+
+## Where it runs
+
+{% if hosting == 'render' -%}
+On Render, from [`render.yaml`](render.yaml): one web service, about US $7 a
+month (Render's `0.5c-512mb` instance, its price on 2026-11-27 at
+<https://render.com/pricing>), besides the Claude subscription. Render has no
+spending cap. **The page has no login: anyone with its address can read it,
+and the data it shows.** Put nothing on it you would not publish.
+
+Once, in Render's dashboard: New > Blueprint, choose this repository, then
+in the Blueprint's Settings set Auto Sync to No. After that a commit on the
+default branch is deployed only once its checks pass. A change to
+`render.yaml` waits for you: press Manual Sync after it is merged and green.
+{%- else -%}
+On your computer only: nothing here deploys it, and nothing costs money.
+To put it online later, this project's template answer `hosting` becomes
+`render`, which adds `render.yaml` and the steps here; or use the free
+service below.
+{%- endif %}
+
+Streamlit Community Cloud runs a page like this one for free (its terms on
+2026-11-27): an app deployed from a public repository is public by default,
+one private app is allowed at a time
+([Share your app](https://docs.streamlit.io/deploy/streamlit-community-cloud/share-your-app)),
+an app with no traffic for 12 hours goes to sleep
+([Manage your app](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app)),
+and anyone with a public app's address can read it. plinth has not tried it.
+
+{% elif archetype == 'web' %}## Run it on your computer
 
 The first time, after `uv sync --locked`, give this computer a `.env`: debug
 on, and a secret key of its own. With no `DATABASE_URL` the app keeps its

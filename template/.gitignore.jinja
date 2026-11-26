@@ -29,6 +29,11 @@ coverage.xml
 .env.*
 !.env.example
 
+{% if archetype == 'dashboard' -%}
+# Streamlit's secrets file: passwords and keys the page reads, never committed.
+.streamlit/secrets.toml
+
+{% endif -%}
 # Django's local database (the web archetype, when DATABASE_URL is unset) and
 # its collected static files
 db.sqlite3

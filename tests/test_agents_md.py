@@ -225,7 +225,9 @@ def test_agents_md_points_at_the_issue_form_and_the_deny_page(tmp_path: Path, ho
 
 # `template/.claude/settings.json.jinja` at b32e488. #352 moved text and changed
 # no rule; a change to what is allowed or denied updates this on purpose.
-_SETTINGS_SHA256 = "c11ebe44e5d82667be158115337607e1140ff72948027e3b6cc389a98bd19586"
+# coolbress/plinth#1069 denied the Render CLI and `~/.render` to a dashboard
+# on Render too, as to a web app.
+_SETTINGS_SHA256 = "5be4679ac63605f73cf297e7216e1f33f317b594708ac1ea009b27da317ef662"
 
 
 def test_settings_json_is_the_one_352_started_from() -> None:

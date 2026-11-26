@@ -15,7 +15,13 @@ git. Write that down for every file you add to `raw/`:
 
 - **`raw/<file>`**: where it came from (a link or the person who gave it),
   its licence, the date it was fetched, and whether it holds personal
-  information. `MODEL_CARD.md` asks the same question of the training data.
+  information.{% if archetype == 'data-ml' %} `MODEL_CARD.md` asks the same question of the training data.{% endif %}
 
+{% if archetype == 'dashboard' -%}
+The page in `src/` draws a sample table it makes itself, so this folder
+starts empty. Put the file your page reads in `raw/` and read it from there:
+a CSV committed by mistake is the commonest way a dashboard leaks its data.
+{%- else -%}
 The sample model in `src/` uses a dataset that ships with scikit-learn, so
 this folder starts empty.
+{%- endif %}

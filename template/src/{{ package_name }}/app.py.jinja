@@ -1,0 +1,30 @@
+"""The page: a table and one chart of it, served by Streamlit.
+
+Run it with
+
+    uv run streamlit run src/{{ package_name }}/app.py
+
+and it opens at http://localhost:8501, on this computer only
+(`.streamlit/config.toml`). It has no login: whoever can reach its address can
+read everything it shows.
+"""
+
+import streamlit as st
+
+
+def load_table() -> dict[str, list[object]]:
+    """The table the page shows: a sample made here, so nothing is committed.
+
+    Replace it with your own data read from `data/raw/`, which git never
+    commits (`data/README.md` says what to write down for each file).
+    """
+    return {
+        "month": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+        "sales": [120, 135, 150, 145, 170, 190],
+    }
+
+
+st.title("{{ project_name }}")
+table = load_table()
+st.dataframe(table)
+st.bar_chart(table, x="month", y="sales")

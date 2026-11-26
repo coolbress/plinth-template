@@ -199,7 +199,7 @@ def test_service_archetypes_include_them(tmp_path: Path, archetype: str) -> None
 #: What this generator can actually build. It emits a Python package; a
 #: single-page front end or a mobile app would come out as a plain Python
 #: package, so they are not offered. `web` is a server-rendered Django app.
-SERVABLE = {"cli", "library", "backend", "data-ml", "web"}
+SERVABLE = {"cli", "library", "backend", "data-ml", "web", "dashboard"}
 
 
 def _offered() -> set[str]:
@@ -730,10 +730,11 @@ def test_the_hosting_questions_are_asked_so_their_answers_are_recorded() -> None
     reach one at an update: `when: false` would lose the choice (#22)."""
     cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
     hosting, where = cfg["hosting"], cfg["hosting_elsewhere"]
-    assert hosting["when"] == "{{ archetype == 'web' }}"
+    # Asked of a dashboard too, which has `local` (coolbress/plinth#1069).
+    assert hosting["when"] == "{{ archetype in ['web', 'dashboard'] }}"
     assert where["when"] == "{{ archetype == 'web' and hosting == 'elsewhere' }}"
-    assert hosting["default"] == "render"
-    assert sorted(hosting["choices"].values()) == ["elsewhere", "render"]
+    assert hosting["default"] == "{{ 'local' if archetype == 'dashboard' else 'render' }}"
+    assert sorted(hosting["choices"].values()) == ["elsewhere", "local", "render"]
     assert sorted(where["choices"].values()) == sorted(ELSEWHERE)
     assert "default" not in where, "an unchecked place is never chosen by pressing Enter"
     # The wording a cold read settled on (coolbress/plinth#679's Findings).
@@ -842,7 +843,7 @@ def test_somewhere_else_names_the_place_and_says_plinth_did_not_check_it(
 
 @pytest.mark.parametrize(
     ("archetype", "host"),
-    [(a, "github") for a in sorted(SERVABLE - {"web"})]
+    [(a, "github") for a in sorted(SERVABLE - {"web", "dashboard"})]
     + [("cli", "gitlab"), ("backend", "gitlab")],
 )
 def test_other_archetypes_neither_ask_nor_record_where_it_runs(
@@ -6894,6 +6895,7 @@ def _refusal(dest: Path, **answers: str) -> str | None:
         ("data-ml", "train"),
         ("cli", "entry-point"),
         ("library", "built-wheel"),
+        ("dashboard", "dashboard-page"),
     ],
 )
 def test_a_name_whose_test_a_shipped_test_takes_is_refused(
@@ -6965,7 +6967,7 @@ def test_a_package_named_like_an_excluded_root_folder_still_renders(
         str(p.relative_to(proj)) for p in (proj / "src").rglob("*")
     )
     assert not (proj / "dist").exists()
-    assert (proj / "data").is_dir() == (archetype == "data-ml")
+    assert (proj / "data").is_dir() == (archetype in {"data-ml", "dashboard"})
 
 
 @pytest.mark.parametrize("name", ["dist", "build", "htmlcov", "staticfiles"])
@@ -7155,10 +7157,11 @@ def test_a_name_that_is_not_a_distribution_name_is_refused(tmp_path: Path, bad: 
 #: `archetype != 'web'`, the model files `archetype != 'data-ml'`
 #: (coolbress/plinth#716), and the release workflow is left out for `web`
 #: (coolbress/plinth#706), so the sets are {cli, library},
-#: {backend}, {data-ml} and {web}. `data-ml` has its own dependencies and
+#: {backend}, {data-ml}, {web} and {dashboard} (coolbress/plinth#1069), whose
+#: Streamlit page, test and lockfile are its own. `data-ml` has its own dependencies and
 #: lockfile as well, so it runs its own checks; one representative each
 #: covers the rest.
-E2E_ARCHETYPES = ("cli", "library", "backend", "data-ml", "web")
+E2E_ARCHETYPES = ("cli", "library", "backend", "data-ml", "web", "dashboard")
 
 
 def test_the_e2e_representatives_still_cover_every_archetype(tmp_path: Path) -> None:
@@ -7230,13 +7233,21 @@ def test_an_xfail_test_that_passes_fails_the_run(tmp_path: Path, archetype: str)
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
-@pytest.mark.parametrize("archetype", E2E_ARCHETYPES)
-def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str) -> None:
+@pytest.mark.parametrize(
+    ("archetype", "host"),
+    # A dashboard on GitLab as well: its page runs locally there (#1069).
+    [(a, "github") for a in E2E_ARCHETYPES] + [("dashboard", "gitlab")],
+)
+def test_generated_project_passes_its_own_checks(tmp_path: Path, archetype: str, host: str) -> None:
     """A render that succeeds and a generated repository that is green are two
     different sentences. `uv.lock` carries the project name; a mismatch fails
     the first pull request behind a wall that then stays shut."""
     out = render(
-        tmp_path / f"e2e-{archetype}", project_name="my.app", archetype=archetype, owner="someone"
+        tmp_path / f"e2e-{archetype}-{host}",
+        project_name="my.app",
+        archetype=archetype,
+        owner="someone",
+        host=host,
     )
     for step in (
         ["uv", "sync", "--locked", "--quiet"],
@@ -8435,6 +8446,9 @@ ARCHETYPE_PRODUCES = (
     "web: a web app with logins and a database",
     "about US $13 a month",
     "with no model trained is `cli`",
+    "dashboard: a page of tables and charts, made with Streamlit",
+    "No login and no database",
+    "anyone with its address can read it",
 )
 
 
@@ -8447,7 +8461,7 @@ def test_the_data_ml_choice_reads_as_a_model_trained_here(tmp_path: Path) -> Non
     choices = cfg["archetype"]["choices"]
     assert choices["A model trained here (ML)"] == "data-ml"
     assert "Data or ML" not in choices
-    assert list(choices.values()) == ["cli", "library", "backend", "data-ml", "web"]
+    assert list(choices.values()) == ["cli", "library", "backend", "data-ml", "web", "dashboard"]
     out = render(tmp_path, archetype=choices["A model trained here (ML)"])
     assert _answers(out)["archetype"] == "data-ml"
     assert (out / "MODEL_CARD.md").is_file()
@@ -8924,3 +8938,142 @@ def test_a_web_project_with_its_own_user_model_passes_its_own_checks(tmp_path: P
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "(2 silenced)" in done.stdout + done.stderr
+
+
+# ── the dashboard archetype (coolbress/plinth#1069) ───────────────────────
+
+#: The Streamlit Community Cloud line's terms, each with the page it is read
+#: from; the README dates the line.
+COMMUNITY_CLOUD = (
+    "Streamlit Community Cloud runs a page like this one for free (its terms on 2026-11-27)",
+    "an app deployed from a public repository is public by default",
+    "one private app is allowed at a time",
+    "https://docs.streamlit.io/deploy/streamlit-community-cloud/share-your-app",
+    "an app with no traffic for 12 hours goes to sleep",
+    "https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app",
+    "anyone with a public app's address can read it",
+)
+RENDER_COST = "about US $7 a month"
+NO_LOGIN = "The page has no login: anyone with its address can read it"
+
+
+def _flat(path: Path) -> str:
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_a_dashboard_is_a_page_its_test_and_its_data_folder(tmp_path: Path, host: str) -> None:
+    """A Streamlit page and the headless test that runs it; no entry point,
+    image, release workflow or Render file, and nothing to deploy by default."""
+    out = render(tmp_path / host, archetype="dashboard", host=host)
+    page = (out / "src" / "probe" / "app.py").read_text(encoding="utf-8")
+    assert "st.dataframe(table)" in page
+    assert "st.bar_chart(" in page
+    test = (out / "tests" / "test_dashboard_page.py").read_text(encoding="utf-8")
+    assert "from streamlit.testing.v1 import AppTest" in test
+    assert 'APP = SRC / "probe" / "app.py"' in test
+    for absent in (
+        "src/probe/__main__.py",
+        "tests/test_entry_point.py",
+        "tests/entry_point.expected",
+        "Dockerfile",
+        ".env.example",
+        "render.yaml",
+        ".github/workflows/release.yml",
+        "docs/how-to/publish-a-release.md",
+    ):
+        assert not (out / absent).exists(), absent
+    assert _answers(out)["hosting"] == "local"
+    assert "streamlit" in (out / "pyproject.toml").read_text(encoding="utf-8")
+    # The page stays on this computer and sends no usage statistics.
+    config = (out / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+    assert 'address = "localhost"' in config
+    assert "gatherUsageStats = false" in config
+    assert ".streamlit/secrets.toml" in (out / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_a_dashboards_data_stays_out_of_git(tmp_path: Path) -> None:
+    """The folder data-ml has: only its README and `.gitignore` are kept, and
+    the README asks each file's source, licence, date and personal
+    information. The sample the page reads is made in code."""
+    out = render(tmp_path, archetype="dashboard")
+    assert (out / "data" / ".gitignore").read_text(encoding="utf-8").splitlines()[-3:] == [
+        "*",
+        "!.gitignore",
+        "!README.md",
+    ]
+    readme = _flat(out / "data" / "README.md")
+    for asked in (
+        "where it came from",
+        "its licence",
+        "the date it was fetched",
+        "whether it holds personal information",
+    ):
+        assert asked in readme, asked
+    assert "draws a sample table it makes itself" in readme
+    assert "MODEL_CARD.md" not in readme
+    assert "scikit-learn" not in readme
+    assert "def load_table()" in (out / "src" / "probe" / "app.py").read_text(encoding="utf-8")
+
+
+def test_a_dashboard_on_render_says_what_it_costs_and_that_it_has_no_login(
+    tmp_path: Path,
+) -> None:
+    """With Render, the Blueprint for one web service that deploys after the
+    checks pass, and the README's cost and warning; on the computer, neither."""
+    online = render(tmp_path / "render", archetype="dashboard", hosting="render")
+    blueprint = yaml.safe_load((online / "render.yaml").read_text(encoding="utf-8"))
+    assert set(blueprint) == {"services"}, "a dashboard has no database"
+    (service,) = blueprint["services"]
+    assert service["runtime"] == "python"
+    assert service["plan"] == "0.5c-512mb"
+    assert service["autoDeployTrigger"] == "checksPass"
+    assert service["buildCommand"] == "uv sync --locked --no-dev"
+    assert "streamlit run src/probe/app.py" in service["startCommand"]
+    assert "--server.port $PORT --server.address 0.0.0.0" in service["startCommand"]
+    assert service["healthCheckPath"] == "/_stcore/health"
+    readme = _flat(online / "README.md")
+    assert RENDER_COST in readme
+    assert NO_LOGIN in readme
+    assert "Bash(render:*)" in (online / ".claude" / "settings.json").read_text(encoding="utf-8")
+    assert "The page is on Render, with no login" in (online / "AGENTS.md").read_text(
+        encoding="utf-8"
+    )
+
+    local = render(tmp_path / "local", archetype="dashboard")
+    assert not (local / "render.yaml").exists()
+    readme = _flat(local / "README.md")
+    assert RENDER_COST not in readme
+    assert NO_LOGIN not in readme
+    assert "On your computer only" in readme
+    assert "Bash(render:*)" not in (local / ".claude" / "settings.json").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("hosting", ["local", "render"])
+def test_a_dashboards_readme_names_streamlit_community_cloud(tmp_path: Path, hosting: str) -> None:
+    readme = _flat(render(tmp_path, archetype="dashboard", hosting=hosting) / "README.md")
+    for phrase in COMMUNITY_CLOUD:
+        assert phrase in readme, phrase
+    assert "uv run streamlit run src/probe/app.py" in readme
+
+
+@pytest.mark.parametrize(
+    ("answers", "refused"),
+    [
+        ({"archetype": "dashboard", "hosting": "elsewhere"}, "A dashboard runs on your computer"),
+        ({"archetype": "web", "hosting": "local"}, "A web app runs on Render"),
+        (
+            {"archetype": "dashboard", "hosting": "render", "host": "gitlab"},
+            "A dashboard on Render is GitHub only",
+        ),
+    ],
+)
+def test_where_it_runs_refuses_another_archetypes_answer(
+    tmp_path: Path, answers: dict[str, str], refused: str
+) -> None:
+    assert refused in (_refusal(tmp_path, project_name="probe", **answers) or "")
+
+
+def test_a_web_app_still_defaults_to_render(tmp_path: Path) -> None:
+    """The dashboard's default is its own; a web app's is as it was."""
+    assert _answers(render(tmp_path, archetype="web"))["hosting"] == "render"

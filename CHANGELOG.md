@@ -8,6 +8,24 @@ means `copier update` on an instance needs hands.
 
 ### Added
 
+- **A sixth archetype, `dashboard`: a page of tables and charts made with
+  Streamlit** (coolbress/plinth#1069). `src/<package>/app.py` draws a sample
+  table and one chart; `tests/test_dashboard_page.py` runs it with Streamlit's
+  `AppTest`, with no browser, and fails when the page raises.
+  `.streamlit/config.toml` keeps the page on localhost and turns off
+  Streamlit's usage statistics; `.gitignore` adds `.streamlit/secrets.toml`.
+  It has `data/` as `data-ml` does, no container, no release workflow, no
+  login and no database. The `hosting` question is asked of it with `local`
+  (the default) or `render`, which renders a `render.yaml` for one web
+  service (about US $7 a month) and the README's warning that anyone with
+  the address can read the page; Render is GitHub only, `local` renders on
+  GitLab too. The README names Streamlit Community Cloud with its terms. The
+  name `dashboard_page` is reserved for it, as each archetype's shipped tests
+  are. **What an existing project gets** from `copier update`: nothing. Every
+  other archetype renders byte for byte as before and records the same
+  answers; `hosting` keeps a web app's choices and default, and refuses
+  `local` for one. No job, check or action changes, so the Actions allowlist
+  is unchanged.
 - **A `backend` release signs its image's SBOM as an attestation** (#335).
   `release.yml` gains a second `actions/attest` step, "Sign the SBOM of the
   image", with `sbom-path: sbom/sbom.spdx.json` and the image's name and
