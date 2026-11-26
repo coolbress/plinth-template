@@ -41,6 +41,18 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **The pull-request form's guidance comments are short pointers to
+  `CONTRIBUTING.md`** (#349): `.github/PULL_REQUEST_TEMPLATE.md` and, on
+  GitLab, `.gitlab/merge_request_templates/Default.md` go from about 25 lines
+  of comments to 9, each comment at most two lines and naming its step in
+  `CONTRIBUTING.md#land-a-change`. The three headings, the `Review:` line and
+  the closing and `Assisted-by` lines at the end are unchanged, and so are the
+  two fields `ci / pr-title` reads. What the comments said moved to step 5
+  (what goes under What I checked myself, home paths in a pasted output,
+  another repository's `owner/repo#N`), step 6 and the Tests section, which
+  now hold it all. A project that edited its form gets a conflict on
+  `copier update`: keep your sections and take the shorter comments, or keep
+  yours.
 - **`AGENTS.md` keeps under `## Always` only what a machine holds** (#352,
   first part). Each bullet there names a required check, the ruleset (the
   protected branch on GitLab) or a deny rule in `.claude/settings.json`. A new
