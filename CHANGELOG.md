@@ -23,8 +23,10 @@ means `copier update` on an instance needs hands.
   name `dashboard_page` is reserved for it, as each archetype's shipped tests
   are. **What an existing project gets** from `copier update`: nothing. Every
   other archetype renders byte for byte as before and records the same
-  answers; `hosting` keeps a web app's choices and default, and refuses
-  `local` for one. No job, check or action changes, so the Actions allowlist
+  answers; `hosting` keeps a web app's default and help. Asked
+  interactively, a web app's list also shows `On your computer`, which the
+  validator refuses for it: the door reads the choices as plain `Label:
+  value` lines, which copier's per-choice switch would change. No job, check or action changes, so the Actions allowlist
   is unchanged.
 - **A `backend` release signs its image's SBOM as an attestation** (#335).
   `release.yml` gains a second `actions/attest` step, "Sign the SBOM of the
