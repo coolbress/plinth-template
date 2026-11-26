@@ -71,7 +71,7 @@
       "Bash(gh auth status --show-token*)",
       "Bash(gh auth status -t*)",
       "Bash(gh repo delete:*)",{% endif %}
-{% if archetype == 'web' %}      "Bash(render:*)",
+{% if archetype == 'web' or (archetype == 'dashboard' and hosting == 'render') %}      "Bash(render:*)",
       "Read(~/.render/**)",
 {% endif %}      "Bash(cat)",
       "Bash(tee:*)",
@@ -100,7 +100,7 @@
         "./.env.development",
         "./.env.test",
         "./.env.staging",
-        "./.env.production"{% if archetype == 'web' %},
+        "./.env.production"{% if archetype == 'web' or (archetype == 'dashboard' and hosting == 'render') %},
         "~/.render"{% endif %}
       ]
     }

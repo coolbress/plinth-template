@@ -28,13 +28,14 @@ but the first:
   under the title (empty keeps a placeholder), and the language its issues,
   pull requests, commit messages and documents are written in, named in
   English (`English` by default), which `AGENTS.md` states;
-- the kind of project, one of five, by what it produces: `cli`, a command
+- the kind of project, one of six, by what it produces: `cli`, a command
   run in a terminal, also a tool that runs on a schedule on the owner's
   machine (a data collector, a pipeline); `library`, a package other code
   imports; `backend`, a service in a container that answers requests;
   `data-ml`, a model trained here with a model card, which on GitHub a `v*`
-  tag publishes as release files; or `web`, a server-rendered Django app with Postgres, GitHub
-  only. Data work with no model trained is `cli`;
+  tag publishes as release files; `web`, a server-rendered Django app with Postgres, GitHub
+  only; or `dashboard`, a Streamlit page of tables and charts with no login
+  and no database. Data work with no model trained is `cli`;
 - `plinth_sha`, the commit of coolbress/plinth the CI calls; Enter takes the
   one this release was tested with;
 - the host, GitHub or GitLab;
@@ -59,6 +60,9 @@ user model of a database that has one. GitLab asks ten: the owner's
 `.github` files, visibility and the third-party reviewer are not asked, and the
 checksum of plinth's GitLab pipeline is.
 
+`dashboard` adds where the page runs: on the person's computer (Enter), or
+on Render, GitHub only, which renders `render.yaml`.
+
 ## What an instance gets
 
 - `.github/workflows/ci.yml` calling plinth's reusable `python-ci.yml` at a
@@ -73,7 +77,7 @@ checksum of plinth's GitLab pipeline is.
   project's template is behind the tag its plinth commit was tested with,
   listing the update steps in order; it closes the issue once the project is
   current. It never updates anything itself.
-- `release.yml` on GitHub, for every kind but `web`: a version tag publishes the
+- `release.yml` on GitHub, for every kind but `web` and `dashboard`: a version tag publishes the
   package to PyPI (`cli`, `library`; every package of a uv workspace, each at
   its own version), the image to GitHub's container registry
   (`backend`), or the training run's files to a GitHub Release (`data-ml`).
@@ -105,6 +109,11 @@ checksum of plinth's GitLab pipeline is.
   `.dockerignore` and `.env.example`. `data-ml` adds `MODEL_CARD.md`, `data/`
   and a training entry point; `web` adds the Django project and, on Render,
   `render.yaml`.
+- For `dashboard`: the page `src/<package>/app.py`, its test
+  `tests/test_dashboard_page.py` (Streamlit's `AppTest`, no browser),
+  `.streamlit/config.toml` (the page on localhost, no usage statistics),
+  `data/` as `data-ml` has it, and, on Render, `render.yaml` for one web
+  service.
 
 ## Layout
 

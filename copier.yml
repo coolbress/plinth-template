@@ -31,7 +31,7 @@ _preserve_symlinks: true
 # shipped tests' but `tree_hygiene`, which every archetype refuses; the
 # template's own test fails when the two disagree. Measured with copier 9.19.1.
 _skip_if_exists:
-  - "{% if package_name in ['access', 'built_wheel', 'entry_point', 'pages', 'passwords', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
+  - "{% if package_name in ['access', 'built_wheel', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
@@ -68,6 +68,13 @@ _exclude:
   # `==`, not `not in`, because plinth's floor checker reads the first
   # `not in` list above as the image archetypes.
   - "{% if archetype == 'library' %}src/{{ package_name }}/__main__.py{% endif %}"
+  # A `dashboard` has none either: Streamlit runs its page, `app.py`, which
+  # no other archetype has (coolbress/plinth#1069).
+  - "{% if archetype == 'dashboard' %}src/{{ package_name }}/__main__.py{% endif %}"
+  - "{% if archetype != 'dashboard' %}src/{{ package_name }}/app.py{% endif %}"
+  # Its Streamlit settings: the page on this computer only, and no usage
+  # statistics sent.
+  - "{% if archetype != 'dashboard' %}/.streamlit{% endif %}"
   # The output the entry point's test compares with; a `library` instead
   # tests its public name imported from the built wheel. `web` tests its own
   # entry point in `tests/test_<package>.py`.
@@ -78,7 +85,7 @@ _exclude:
   # as the release workflows' do. An `_exclude` line matches the rendered
   # path, so it also left out the project's own `tests/test_<package>.py`
   # when the package was named `access` (coolbress/plinth-template#258).
-  - "{% if archetype in ['library', 'web'] %}tests/entry_point.expected{% endif %}"
+  - "{% if archetype in ['library', 'web', 'dashboard'] %}tests/entry_point.expected{% endif %}"
   # The web archetype's Django project: its settings, routes, the ASGI
   # application the entry point serves, the pre-deploy step, and Django's
   # command line.
@@ -99,8 +106,10 @@ _exclude:
   - "{% if archetype != 'data-ml' %}src/{{ package_name }}/train.py{% endif %}"
   - "{% if archetype != 'data-ml' %}/MODEL_CARD.md{% endif %}"
   # Where its data lives: `data/.gitignore` keeps all of it out of git but
-  # the README that says what is there and where it came from.
-  - "{% if archetype != 'data-ml' %}/data{% endif %}"
+  # the README that says what is there and where it came from. A `dashboard`
+  # reads its tables from there too: the CSV a page reads is the commonest
+  # thing it leaks (coolbress/plinth#1069).
+  - "{% if archetype != 'data-ml' and archetype != 'dashboard' %}/data{% endif %}"
   # Publishing on a version tag, and the person's steps around it: a `cli` or
   # `library` publishes its package to PyPI (coolbress/plinth#703), a
   # `backend` its image to GHCR (coolbress/plinth#706), a `data-ml` its
@@ -108,13 +117,14 @@ _exclude:
   # three workflows are three source files whose names render to
   # `release.yml` for their archetypes and to nothing otherwise, and copier
   # writes no file whose name renders empty. `web` has none: it deploys on
-  # green. Written `==`, not `not in`, for the floor checker's sake (above).
+  # green, and so has `dashboard`, which runs on the person's computer or on
+  # Render. Written `==`, not `not in`, for the floor checker's sake (above).
   # On GitLab the workflow is already out with `.github`, and its how-to goes
   # with it.
-  - "{% if archetype == 'web' or host == 'gitlab' %}docs/how-to/publish-a-release.md{% endif %}"
+  - "{% if archetype == 'web' or archetype == 'dashboard' or host == 'gitlab' %}docs/how-to/publish-a-release.md{% endif %}"
   # The directory stays: `undo-a-merged-change.md` is in every render (#199).
   # Render's Blueprint, only where the app runs on Render (`hosting` below).
-  - "{% if archetype != 'web' or hosting != 'render' %}/render.yaml{% endif %}"
+  - "{% if (archetype != 'web' and archetype != 'dashboard') or hosting != 'render' %}/render.yaml{% endif %}"
   # The owner's shared community-health files, when they publish them. GitHub
   # applies `owner/.github`'s copy to a repository that has none of its own, so
   # writing ours would silently replace the owner's convention. The door answers
@@ -234,7 +244,9 @@ license:
 # src/<package>/, plinth's python-ci). The choices are only what it can
 # actually build: a single-page front end or a mobile app would come out as a
 # plain Python package, so they are not offered. `web` is a server-rendered
-# Django app with Postgres, on GitHub only (plinth #604).
+# Django app with Postgres, on GitHub only (plinth #604). `dashboard` is a
+# Streamlit page of tables and charts, with no login and no database
+# (coolbress/plinth#1069).
 #
 # The yes/no axes (published, cloud, handles user data) are not asked here:
 # they change later and are not a kind of project.
@@ -256,6 +268,9 @@ archetype:
       about US $13 a month on Render (a $7 web service and a $6 Postgres),
       besides the Claude subscription. Free Postgres is not supported
       (deleted after 30 days, no backups), and Render has no spending cap.
+    - dashboard: a page of tables and charts, made with Streamlit, that runs
+      on your computer. No login and no database: put online (Render, about
+      US $7 a month), anyone with its address can read it.
     When unsure, choose the narrowest. Data processing, collection or a
     pipeline with no model trained is `cli`.
   default: cli
@@ -265,6 +280,7 @@ archetype:
     Backend or API service: backend
     A model trained here (ML): data-ml
     Web app with a database: web
+    A page of tables and charts (dashboard): dashboard
   # The package name also names `tests/test_<package>.py`, beside the tests
   # this archetype ships: a `web` project named `access` would write
   # `tests/test_access.py` twice, and copier stops on the second write
@@ -282,6 +298,7 @@ archetype:
       'backend': ['entry_point', 'tree_hygiene'],
       'data-ml': ['entry_point', 'train', 'tree_hygiene'],
       'web': ['access', 'pages', 'passwords', 'tree_hygiene'],
+      'dashboard': ['dashboard_page', 'tree_hygiene'],
     } -%}
     {%- if pkg in shipped.get(archetype, []) -%}
     The package name '{{ pkg }}' derived from '{{ project_name }}' would name the
@@ -340,8 +357,8 @@ host:
     GitHub. Choose GitHub, or another archetype for GitLab.
     {%- endif -%}
 
-# Where a `web` app runs (coolbress/plinth #639). plinth builds and checks one
-# place, Render; the others are listed, not built: they leave out
+# Where a `web` app or a `dashboard` runs (coolbress/plinth #639, #1069).
+# plinth builds and checks one place, Render; the others are listed, not built: they leave out
 # `render.yaml`, and the README carries the chosen place's steps and what the
 # person takes on, from plinth's how-to "Choose where a web app runs".
 #
@@ -350,10 +367,25 @@ host:
 # an instance would lose its choice at the first `copier update` (#22). The
 # first is asked whenever the archetype is `web`, the second whenever the
 # first is `elsewhere`. On any other archetype neither is asked or recorded.
+#
+# A `dashboard` is asked the first with two answers of its own: `local`, the
+# default, renders nothing to deploy, and `render` renders a `render.yaml`
+# for one web service. `elsewhere` is a web app's answer only, and `local` a
+# dashboard's; the validator refuses the other pairs, `--data` included. A
+# dashboard on Render is GitHub only, like `web`: nothing was tried on GitLab.
+# The web app's help and default are as they were.
 hosting:
   type: str
-  when: "{{ archetype == 'web' }}"
+  when: "{{ archetype in ['web', 'dashboard'] }}"
   help: |
+    {% if archetype == 'dashboard' -%}
+    Where will the page run?
+    On your computer (recommended): free. Only you see it, at a local
+    address, while it runs.
+    Render: about $7 a month. It puts the page online at an https:// address.
+    The page has no login, so anyone with the address can read it and the
+    data it shows.
+    {%- else -%}
     Where will your app run?
     Render (recommended): about $13 a month. It puts your app online at a
     secure https:// address (the padlock in the browser), puts out a new
@@ -362,10 +394,21 @@ hosting:
     plinth has tried every step of this.
     Somewhere else: another hosting service, a server you rent or a computer
     at home. plinth has not tried them, and does not deploy there.
-  default: render
+    {%- endif %}
+  default: "{{ 'local' if archetype == 'dashboard' else 'render' }}"
   choices:
-    Render (recommended): render
+    "Render{{ '' if archetype == 'dashboard' else ' (recommended)' }}": render
     Somewhere else: elsewhere
+    "On your computer{{ ' (recommended)' if archetype == 'dashboard' else '' }}": local
+  validator: >-
+    {%- if archetype == 'dashboard' and hosting == 'elsewhere' -%}
+    A dashboard runs on your computer (local) or on Render (render).
+    {%- elif archetype == 'web' and hosting == 'local' -%}
+    A web app runs on Render (render) or somewhere else (elsewhere).
+    {%- elif archetype == 'dashboard' and hosting == 'render' and host == 'gitlab' -%}
+    A dashboard on Render is GitHub only: nothing was tried on GitLab. Choose
+    local, or GitHub.
+    {%- endif -%}
 
 # No default: a place plinth has not checked is never chosen by pressing
 # Enter or by leaving the answer out of `--data`.

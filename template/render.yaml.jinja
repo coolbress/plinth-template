@@ -1,4 +1,31 @@
-# Render Blueprint: one web service and one Postgres, both on paid plans.
+{% if archetype == 'dashboard' %}# Render Blueprint: one web service on a paid plan, the Streamlit page. No
+# database, and no login: anyone with the service's address can read the page.
+# Create it once in Render's dashboard (New > Blueprint, this repository),
+# then set the Blueprint's Auto Sync to No in its Settings: Render applies a
+# push that changes this file at once, redeploying without waiting for the
+# checks that `autoDeployTrigger` waits for. Sync it by hand (Manual Sync)
+# after such a change is merged and its checks have passed on the default
+# branch. No Render API key and no production value lives in this file or the
+# agent's session. Spec: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: "{{ project_name }}"
+    # Render's own Python, at the version `.python-version` names. A
+    # `uv.lock` in the root makes Render install uv (render.com/docs/uv-version).
+    runtime: python
+    # About US $7 a month (0.5 CPU, 512 MB). `free` sleeps after 15 minutes
+    # without a visit and takes about a minute to wake, and is not used.
+    plan: 0.5c-512mb
+    # Deploy a commit to the default branch only after its checks pass.
+    autoDeployTrigger: checksPass
+    # The lockfile as is, without the development tools.
+    buildCommand: uv sync --locked --no-dev
+    startCommand: >-
+      uv run --no-sync streamlit run src/{{ package_name }}/app.py
+      --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    # Streamlit's own health route; it answers once the server is up.
+    healthCheckPath: /_stcore/health
+{% else %}# Render Blueprint: one web service and one Postgres, both on paid plans.
 # Create them once in Render's dashboard (New > Blueprint, this repository),
 # then set the Blueprint's Auto Sync to No in its Settings: Render applies a
 # push that changes this file at once, redeploying without waiting for the
@@ -49,3 +76,4 @@ databases:
     # Only Render's private network: the app reaches it through
     # `connectionString`, and nothing on the internet can try a password.
     ipAllowList: []
+{% endif %}

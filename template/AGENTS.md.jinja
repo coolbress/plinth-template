@@ -28,6 +28,7 @@ While changing code, run the tests of what changed (`uv run pytest tests/test_<m
 - `.claude/settings.json` denies force push, `rm -rf`, `{% if gl %}glab{% else %}gh{% endif %} repo delete`, reading or sourcing `.env`, `{% if gl %}glab{% else %}gh{% endif %}`'s token, and shell writes (a `cat` heredoc, `tee`, `sed -i`). Write files with the Edit and Write tools; ask the person for a `.env` value. Never ask the person to approve a denied call or to loosen the deny list; [.claude/permissions.md](.claude/permissions.md) says which spellings each rule catches.
 {% if archetype == 'web' and hosting != 'render' %}- The deny list covers the Render CLI and `~/.render/`; no host's key is in this session. Production runs on a place plinth does not deploy to and has not checked (`README.md`, "Where it runs"); deploying and its credentials are the person's: never paste one here.
 {% elif archetype == 'web' %}- Production is Render's: the deny list covers the Render CLI and `~/.render/`; no Render API key is in this session; credentials live in Render and GitHub secrets, never pasted here. A `render.yaml` change waits for the person's Manual Sync.
+{% elif archetype == 'dashboard' and hosting == 'render' %}- The page is on Render, with no login: anyone with its address reads what it shows. The deny list covers the Render CLI and `~/.render/`; no Render API key is in this session. A `render.yaml` change waits for the person's Manual Sync.
 {% endif %}
 ## Ask first
 

@@ -44,6 +44,11 @@ dependencies = [
     "scikit-learn>=1.9",
     "skops>=0.16",
 ]
+{%- elif archetype == 'dashboard' %}
+dependencies = [
+    # The page, its table and its chart; `AppTest` runs it in the tests.
+    "streamlit>=1.50",
+]
 {%- else %}
 dependencies = []
 {%- endif %}

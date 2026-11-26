@@ -53,6 +53,11 @@ Run `tests/test_built_wheel.py` alone: the pytest command in `AGENTS.md`'s
 code block without `scripts/heavy.sh`, with the file and `-v` after it. It builds the wheel and calls the
 package's public name from it, as a person who installs the package does, not
 from the source tree.
+{%- elif archetype == 'dashboard' -%}
+Run `tests/test_dashboard_page.py` alone: the pytest command in `AGENTS.md`'s
+code block without `scripts/heavy.sh`, with the file and `-v` after it. It runs
+the page in `src/{{ package_name }}/app.py` as Streamlit does, with no browser,
+and checks that it raises nothing and shows the table and the chart.
 {%- else -%}
 Run `tests/test_entry_point.py` alone: the pytest command in `AGENTS.md`'s
 code block without `scripts/heavy.sh`, with the file and `-v` after it. It runs
@@ -73,6 +78,8 @@ Put what you ran and saw in the report, not a summary of it:
 A failure here stops the commit like any other.
 {%- if archetype == 'library' %} A change to the public name or how
 the package is built changes this test with it, in the same change.
+{%- elif archetype == 'dashboard' %} A change to what the page
+shows changes this test with it, in the same change.
 {%- else %} A change to the entry point
 changes this test with it, in the same change. A diff in the failure means
 what the program prints changed: when that is the intended change, the new

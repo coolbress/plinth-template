@@ -1,0 +1,12 @@
+# Streamlit's settings for this page (docs.streamlit.io/develop/api-reference/configuration/config.toml).
+# A flag on the command line wins over this file: render.yaml passes its own
+# address and port.
+
+[server]
+# Only this computer reaches the page. Without it Streamlit also answers on a
+# "Network URL" that anyone on the same network can open while it runs.
+address = "localhost"
+
+[browser]
+# Streamlit sends usage statistics from the browser unless told not to.
+gatherUsageStats = false
