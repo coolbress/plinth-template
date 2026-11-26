@@ -5488,7 +5488,7 @@ def test_the_description_form_keeps_its_sections_with_short_comments_that_link_a
             assert re.search(rf"^{step}\. ", sections[link.group(1)], re.M), (
                 f"CONTRIBUTING.md#{link.group(1)} has no step {step}"
             )
-    assert lines <= 9, f"the comments are {lines} lines; the aim was about 8"
+    assert lines <= 8, f"the comments are {lines} lines; the aim was about 8"
 
 
 # Each sentence the form's comments held before #349, as `CONTRIBUTING.md`
@@ -5511,6 +5511,7 @@ _MOVED = {
         "the fix), in the same pull request;",
         "a documentation, configuration or refactoring change that keeps behaviour does not "
         "need one, say so in the description.",
+        "Any other change without one says in the description why not.",
         "A review run in the same session that wrote the change is not an independent review; "
         "do not describe it as one.",
         "Put user-facing explanation and history where it belongs — `README.md`, "
@@ -5546,6 +5547,7 @@ _MOVED = {
         "the fix), in the same merge request;",
         "a documentation, configuration or refactoring change that keeps behaviour does not "
         "need one, say so in the description.",
+        "Any other change without one says in the description why not.",
         "A review run in the same session that wrote the change is not an independent review; "
         "do not describe it as one.",
         "Put user-facing explanation and history where it belongs — `README.md`, "

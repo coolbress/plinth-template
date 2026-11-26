@@ -315,7 +315,8 @@ push.{% endif %}
   bug, the one that reproduces it before the fix), in the same merge
   request;{% else %}comes with the test that catches it (for a bug, the one
   that reproduces it before the fix), in the same pull request;{% endif %} a documentation, configuration or refactoring change that
-  keeps behaviour does not need one, say so in the description.
+  keeps behaviour does not need one, say so in the description. Any other
+  change without one says in the description why not.
 - Writing the failing test first is encouraged, not enforced.
 - A new behaviour has a test that actually runs it. The measure is not coverage
   but whether the test would fail if the behaviour broke.

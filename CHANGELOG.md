@@ -44,7 +44,7 @@ means `copier update` on an instance needs hands.
 - **The pull-request form's guidance comments are short pointers to
   `CONTRIBUTING.md`** (#349): `.github/PULL_REQUEST_TEMPLATE.md` and, on
   GitLab, `.gitlab/merge_request_templates/Default.md` go from about 25 lines
-  of comments to 9, each comment at most two lines and naming its step in
+  of comments to 8, each comment at most two lines and naming its step in
   `CONTRIBUTING.md#land-a-change`. The three headings, the `Review:` line and
   the closing and `Assisted-by` lines at the end are unchanged, and so are the
   two fields `ci / pr-title` reads. What the comments said moved to step 5
