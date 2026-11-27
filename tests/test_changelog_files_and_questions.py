@@ -14,8 +14,9 @@ A file is named by its path under `template/` as the instance has it: no
 `.jinja`, a `{% if %}` name as the name it renders, `{{ package_name }}` as
 `<package>`, and the answers file as `.copier-answers.yml`.
 
-Sections released before this rule stay as published (decisions in force):
-the rule holds from the first release after v1.51.0, and for `[Unreleased]`.
+Sections released before this rule stay as published (decisions in force),
+v1.52.0 among them, cut before the rule landed: it holds from the first
+release after v1.52.0, and for `[Unreleased]`.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ import yaml  # type: ignore[import-untyped]
 from template_render import TEMPLATE_ROOT
 
 HEADING = "### Files and questions"
-LAST_BEFORE_THE_RULE = (1, 51, 0)
+LAST_BEFORE_THE_RULE = (1, 52, 0)
 CHANGELOG = TEMPLATE_ROOT / "CHANGELOG.md"
 _ITEM = re.compile(
     r"^- (?:`(?P<file>[^`]+)`|question `(?P<question>[A-Za-z_][A-Za-z0-9_]*)`|(?P<none>None\.))$"
@@ -208,6 +209,6 @@ def test_a_section_without_the_heading_or_with_a_stray_line_is_refused() -> None
     assert questions == {"records_language"}
     assert bad == ["- AGENTS.md"]
     assert _items(["- None.", "- `AGENTS.md`"])[2] == ["`- None.` with other items"]
-    assert _ruled("[1.51.0]", "x") is False
-    assert _ruled("[1.52.0]", "x") is True
+    assert _ruled("[1.52.0]", "x") is False
+    assert _ruled("[1.53.0]", "x") is True
     assert _ruled("[Unreleased]", "\n") is False

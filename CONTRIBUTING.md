@@ -143,7 +143,7 @@ and plinth pins one.
    `template/` as the instance has it: no `.jinja`, a `{% if %}` name as the
    name it renders, `{{ package_name }}` as `<package>`), `` - question
    `<name>` `` for each question it adds to `copier.yml`, or `- None.`.
-   `tests/test_changelog_files_and_questions.py` fails a section from v1.52.0
+   `tests/test_changelog_files_and_questions.py` fails a section from v1.53.0
    on without it, a line under it that is no item, and a question that is not
    a key in `copier.yml`. Whether the list is the release's whole diff of
    `template/` needs the last tag, which CI's checkout lacks, so there it
