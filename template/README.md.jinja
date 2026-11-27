@@ -530,6 +530,37 @@ your data.
 {%- endif %}
 {%- endif %}
 
+{% endif %}{% if archetype == 'cli' and scheduled_run | string | lower == 'true' %}## Runs on a schedule
+
+[`.github/workflows/schedule.yml`](.github/workflows/schedule.yml) runs
+`python -m {{ package_name }}` on GitHub every day at 06:17 UTC, while your
+computer is off, and once more whenever you press Actions > Scheduled run >
+Run workflow. Change the time in its `cron:` line.
+
+**Where the results are.** Each run writes what the command prints to
+`data/processed/result.txt` and keeps that folder as the run's artifact:
+open the run in the Actions tab and download `results` under Artifacts.
+GitHub keeps an artifact for the repository's retention period, 90 days
+unless it was changed in Settings > Actions. Nothing is committed: `main`
+takes a change only through a pull request with green checks, and the
+workflow's token can only read. On your computer the same line is
+`uv run python -m {{ package_name }} > data/processed/result.txt`, and
+[`data/`](data/README.md) is never committed.
+
+What GitHub does not promise:
+
+- A scheduled run can start late when GitHub Actions is busy, and under heavy load a queued run can be dropped: that day has no artifact, and Run workflow makes one by hand. The shortest interval is every 5 minutes.
+- In a public repository, GitHub turns a scheduled workflow off after 60 days with no activity in the repository. If the runs stop, turn `Scheduled run` back on in the Actions tab.
+- In a private repository, runs use the plan's included Actions amount: on GitHub Free, US $12 of use a month and 500 MB of artifact storage, shared with Packages ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions), read 2026-11-27). In a public repository, standard runners are free.
+- In a public repository, the run's log and its artifact are public: anyone signed in to GitHub can read them. Never collect personal data into them, and never print fetched records to the log: a log line that prints them publishes them.
+
+`tests/test_scheduled_run.py` runs the workflow's line once, so a change that
+breaks it fails a pull request instead of the next morning's run. When the
+command fetches from a site or an API, give that test a fake source. The
+workflow installs the project without its development tools
+(`uv sync --no-dev`), and the test runs with them: a package the command
+imports goes in with `uv add`, never `uv add --dev`.
+
 {% endif %}{% if archetype in ['cli', 'library'] and host != 'gitlab' and license == 'Proprietary' %}## Releasing
 
 A version tag (`v0.1.0`) builds this package and makes a GitHub Release that

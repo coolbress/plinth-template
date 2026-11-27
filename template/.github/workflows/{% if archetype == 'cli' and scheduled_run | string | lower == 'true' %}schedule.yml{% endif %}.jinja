@@ -1,0 +1,72 @@
+# Runs this command on GitHub on a schedule, while the computer that made it
+# is off, and keeps what it wrote as the run's artifact: a zip on the run's
+# page (Actions > Scheduled run > the run > Artifacts), kept for the
+# repository's artifact retention, 90 days unless changed in its settings.
+# Nothing is committed: `main` takes a change only through a pull request
+# with green checks, and this token can read, not write.
+#
+# Not a check and not part of `ci`: no pull request waits for it. A run by
+# hand is Actions > Scheduled run > Run workflow.
+#
+# What GitHub does not promise: a scheduled run can start late when GitHub
+# Actions is busy, and under heavy load a queued run can be dropped; the
+# shortest interval is every 5 minutes;
+# in a public repository GitHub turns this workflow off after 60 days with no
+# activity in the repository. Turn it back on in the Actions tab. On a
+# private repository each run uses the plan's included Actions amount.
+#
+# On a public repository the run's log and its artifact are public too: never
+# collect personal data into them, and never print fetched records to the log.
+name: Scheduled run
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # 06:17 UTC every day; https://crontab.guru reads one
+  workflow_dispatch:
+
+# Nothing for the file; the one job asks for what it uses.
+permissions: {}
+
+# A run by hand waits for the scheduled one, never runs beside it.
+concurrency:
+  group: scheduled-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read  # to check out this repository; nothing here writes
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # nothing here pushes
+{% raw %}      - name: Install uv (official release, SHA256 verified)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          UV_VERSION: "0.13.7"
+          UV_SHA256: "c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83"
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/uv"; mkdir -p "$d"
+          f="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} -o "$d/$f" \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/$f"
+          echo "${UV_SHA256}  $d/$f" | sha256sum -c -
+          tar -xzf "$d/$f" -C "$d" --strip-components=1 "${f%.tar.gz}/uv" "${f%.tar.gz}/uvx"
+          echo "$d" >> "$GITHUB_PATH"
+      - name: Install the project, as the lockfile has it
+        run: uv sync --locked --no-dev
+{% endraw %}      # The command and where its output goes; `tests/test_scheduled_run.py`
+      # runs the same line. Change them together.
+      - name: Run the command
+        run: |
+          set -euo pipefail
+          mkdir -p data/processed
+          uv run --no-sync python -m {{ package_name }} > data/processed/result.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: results
+          path: data/processed/
+          if-no-files-found: error

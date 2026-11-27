@@ -8,6 +8,25 @@ means `copier update` on an instance needs hands.
 
 ### Added
 
+- **A `cli` can run on GitHub on a schedule: the question `scheduled_run`,
+  off by default** (coolbress/plinth#1070). Asked of a `cli` only. Yes
+  renders `.github/workflows/schedule.yml`, which runs `python -m <package>`
+  every day at 06:17 UTC and by hand (Run workflow), writes what it prints to
+  `data/processed/result.txt` and uploads that folder as the run's artifact.
+  It calls GitHub's own actions only, and its token can read and not write,
+  so nothing is committed. It also renders the `data/` folder `data-ml` has,
+  `tests/test_scheduled_run.py`, which runs the workflow's line once, and a
+  README section: where the results are, that a run can start late, the
+  5-minute minimum, the 60-day rule on a public repository, a private
+  repository's included Actions amount on GitHub Free, and that a public
+  repository's run logs and artifacts are public. GitHub only: on GitLab the
+  answer yes is refused, since a pipeline schedule was not tried. A project
+  named `scheduled_run` is refused yes, since its own test and the shipped one
+  would have the same name. **What an existing project gets** through
+  `/plinth:template-update`: `scheduled_run: false` in `.copier-answers.yml`
+  for a `cli`, nothing for any other archetype, and no other file changes.
+  Turning it on later is an answer change: `copier update --data
+  scheduled_run=true`. No job, check or action changes.
 - **`AGENTS.md` ends with `## This project`, a section the template never
   changes** (#358). Its one line says this project's own rules go there and
   that a template update never changes the section; a test pins its text, so

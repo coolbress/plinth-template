@@ -9180,3 +9180,220 @@ def test_a_project_with_its_own_this_project_heading_gets_a_second_at_the_end(
     assert own + "## Always\n" in after
     assert after.count("\n## This project\n") == 2
     assert after.endswith(THIS_PROJECT), after[-300:]
+
+
+# ── a `cli` that runs on a schedule (coolbress/plinth#1070) ───────────────
+
+#: What the README says GitHub does not promise, each read on GitHub's pages on
+#: 2026-11-27, and the line about what a public repository publishes.
+SCHEDULE_FACTS = (
+    "A scheduled run can start late when GitHub Actions is busy, and under heavy load a"
+    " queued run can be dropped",
+    "The shortest interval is every 5 minutes.",
+    "In a public repository, GitHub turns a scheduled workflow off after 60 days"
+    " with no activity in the repository.",
+    "turn `Scheduled run` back on in the Actions tab",
+    "In a private repository, runs use the plan's included Actions amount: on"
+    " GitHub Free, US $12 of use a month and 500 MB of artifact storage",
+    "In a public repository, the run's log and its artifact are public",
+    "Never collect personal data into them, and never print fetched records to"
+    " the log: a log line that prints them publishes them.",
+)
+SCHEDULE_FILES = (".github/workflows/schedule.yml", "tests/test_scheduled_run.py")
+
+#: The release a `cli` project made before the question was rendered from.
+BEFORE_THE_SCHEDULE = "v1.51.0"
+
+
+def test_the_schedule_question_is_asked_of_a_cli_only_and_is_off_by_default() -> None:
+    question = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["scheduled_run"]
+    assert question["when"] == "{{ archetype == 'cli' }}"
+    assert question["default"] is False
+    assert question["type"] == "bool"
+    asked = " ".join(question["help"].split())
+    assert "even while this computer is off" in asked
+    assert "not commits" in asked
+
+
+@pytest.mark.parametrize("archetype", sorted(SERVABLE - {"cli"}))
+def test_no_other_archetype_gets_the_schedule_even_when_asked_for_it(
+    tmp_path: Path, archetype: str
+) -> None:
+    """Not asked, not recorded, and its files left out whatever `--data` says."""
+    out = render(tmp_path, archetype=archetype, scheduled_run=True)
+    assert "scheduled_run" not in _answers(out)
+    for name in SCHEDULE_FILES:
+        assert not (out / name).exists(), name
+    assert "## Runs on a schedule" not in (out / "README.md").read_text(encoding="utf-8")
+
+
+def test_a_cli_without_the_schedule_renders_what_it_did_before_the_question(
+    tmp_path: Path,
+) -> None:
+    unasked = render(tmp_path / "unasked")
+    off = render(tmp_path / "off", scheduled_run=False)
+    assert _tree(unasked) == _tree(off)
+    assert _answers(off)["scheduled_run"] is False
+    for name in (*SCHEDULE_FILES, "data"):
+        assert not (off / name).exists(), name
+
+
+def test_a_scheduled_cli_has_its_workflow_test_data_folder_and_readme(tmp_path: Path) -> None:
+    out = render(tmp_path / "on", scheduled_run=True)
+    workflow = yaml.safe_load((out / SCHEDULE_FILES[0]).read_text(encoding="utf-8"))
+    # PyYAML reads the key `on` as True.
+    triggers = workflow[True]
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert workflow["permissions"] == {}
+    (job,) = workflow["jobs"].values()
+    assert job["permissions"] == {"contents": "read"}
+    actions = [step["uses"].split("@")[0] for step in job["steps"] if "uses" in step]
+    assert actions == ["actions/checkout", "actions/upload-artifact"], "GitHub's own actions only"
+    run = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "uv run --no-sync python -m probe > data/processed/result.txt" in run
+    assert "git push" not in run
+    (upload,) = [step for step in job["steps"] if "upload-artifact" in step.get("uses", "")]
+    assert upload["with"]["path"] == "data/processed/"
+    assert upload["with"]["if-no-files-found"] == "error"
+    test = (out / SCHEDULE_FILES[1]).read_text(encoding="utf-8")
+    assert 'PACKAGE = "probe"' in test
+    readme = _flat(out / "README.md")
+    for fact in SCHEDULE_FACTS:
+        assert fact in readme, fact
+    assert "download `results` under Artifacts" in readme
+    assert "The scheduled run (`.github/workflows/schedule.yml`)" in _flat(
+        out / "data" / "README.md"
+    )
+
+
+def test_a_scheduled_cli_keeps_its_data_out_of_git_as_data_ml_does(tmp_path: Path) -> None:
+    on = render(tmp_path / "on", scheduled_run=True)
+    model = render(tmp_path / "model", archetype="data-ml")
+    assert (on / "data" / ".gitignore").read_bytes() == (model / "data" / ".gitignore").read_bytes()
+    assert sorted(p.name for p in (on / "data").iterdir()) == [".gitignore", "README.md"]
+
+
+@pytest.mark.parametrize(
+    ("answers", "refused"),
+    [
+        ({"host": "gitlab"}, "A scheduled run is GitHub only"),
+        ({"project_name": "scheduled-run"}, "ships a test by that name"),
+    ],
+)
+def test_the_schedule_is_refused_where_it_was_not_tried_or_would_collide(
+    tmp_path: Path, answers: dict[str, str], refused: str
+) -> None:
+    given = {"project_name": "probe", "archetype": "cli", "scheduled_run": "true", **answers}
+    assert refused in (_refusal(tmp_path, **given) or "")
+
+
+def test_a_project_named_scheduled_run_renders_without_the_schedule(tmp_path: Path) -> None:
+    out = render(tmp_path, project_name="scheduled-run")
+    assert "def test_" in (out / "tests" / "test_scheduled_run.py").read_text(encoding="utf-8")
+    assert not (out / SCHEDULE_FILES[0]).exists()
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_scheduled_cli_with_a_long_name_passes_ruff(tmp_path: Path) -> None:
+    out = render(tmp_path, project_name=LONG_NAME, scheduled_run=True)
+    lock = (out / "uv.lock").read_text(encoding="utf-8")
+    pinned = re.search(r'name = "ruff"\nversion = "([^"]+)"', lock)
+    assert pinned, "uv.lock pins no ruff"
+    ruff = ["uv", "tool", "run", "--quiet", f"ruff@{pinned.group(1)}"]
+    for step in (["check", "."], ["format", "--check", "."]):
+        done = subprocess.run(  # noqa: S603
+            [*ruff, *step], cwd=out, capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, f"ruff {' '.join(step)}\n{done.stdout}\n{done.stderr}"
+
+
+#: Where the question renders anything, as paths or folders of a `cli`
+#: project. Without the answer, each is what `BEFORE_THE_SCHEDULE` rendered. A
+#: later release that changes one of these files for every project names it
+#: in `CHANGED_SINCE` here; the rest still hold.
+SCHEDULE_PATHS = ("README.md", "data/", ".github/workflows/", "tests/")
+CHANGED_SINCE: tuple[str, ...] = ()
+
+
+def _touched(tree: dict[str, bytes]) -> dict[str, bytes]:
+    return {
+        name: body
+        for name, body in tree.items()
+        if name.startswith(SCHEDULE_PATHS) and name not in CHANGED_SINCE
+    }
+
+
+@pytest.fixture(scope="module")
+def schedule_releases(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """`BEFORE_THE_SCHEDULE` as released and, on top of it, this tree as `v9.0.0`."""
+    tpl = tmp_path_factory.mktemp("schedule-releases") / "tpl"
+    _clone_of_the_release(tpl, BEFORE_THE_SCHEDULE)
+    for entry in tpl.iterdir():
+        if entry.name != ".git":
+            shutil.rmtree(entry) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-q", "--allow-empty", "-m", "this tree")
+    _git(tpl, "tag", "-a", "-m", "this tree", "v9.0.0")
+    return tpl
+
+
+def _copy_at(tpl: Path, dest: Path, ref: str, **answers: str) -> Path:
+    import copier
+
+    copier.run_copy(
+        str(tpl), str(dest), data=answers, defaults=True, quiet=True, unsafe=False, vcs_ref=ref
+    )
+    return dest
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_without_the_answer_a_cli_render_is_the_last_release_s_where_the_question_reaches(
+    tmp_path: Path, schedule_releases: Path, host: str
+) -> None:
+    given = {"project_name": "probe", "license": "MIT", "archetype": "cli", "host": host}
+    before = _copy_at(schedule_releases, tmp_path / "before", BEFORE_THE_SCHEDULE, **given)
+    now = _copy_at(schedule_releases, tmp_path / "now", "v9.0.0", **given)
+    old, new = _touched(_tree(before)), _touched(_tree(now))
+    assert old, "nothing compared: the paths no longer match the render"
+    assert new == old, sorted(k for k in old.keys() | new.keys() if old.get(k) != new.get(k))
+
+
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_an_existing_cli_project_updates_with_its_schedule_files_unchanged(
+    tmp_path: Path, schedule_releases: Path, host: str
+) -> None:
+    """A `cli` made at the last release, updated with its answers unchanged: the
+    answers file gains `scheduled_run: false` and its new commit, nothing
+    conflicts, and every file the question reaches is byte for byte what it was.
+    What the other changes since that release bring is theirs."""
+    import copier
+
+    given = {"project_name": "probe", "license": "MIT", "archetype": "cli", "host": host}
+    proj = _copy_at(schedule_releases, tmp_path / "proj", BEFORE_THE_SCHEDULE, **given)
+    assert "scheduled_run" not in _answers(proj)
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    before = _tree(proj)
+    lines_before = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    lines_after = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
+    added = sorted(line for line in lines_after - lines_before if not line.startswith("_commit:"))
+    assert added == ["scheduled_run: false"], added
+    assert {line for line in lines_before - lines_after if not line.startswith("_commit:")} == set()
+    after = _tree(proj)
+    assert not [name for name, body in after.items() if b"<<<<<<<" in body]
+    assert _touched(after) == _touched(before), sorted(
+        k for k in before.keys() | after.keys() if before.get(k) != after.get(k)
+    )

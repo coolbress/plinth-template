@@ -31,7 +31,7 @@ _preserve_symlinks: true
 # shipped tests' but `tree_hygiene`, which every archetype refuses; the
 # template's own test fails when the two disagree. Measured with copier 9.19.1.
 _skip_if_exists:
-  - "{% if package_name in ['access', 'built_wheel', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
+  - "{% if package_name in ['access', 'built_wheel', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'scheduled_run', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
@@ -109,7 +109,10 @@ _exclude:
   # the README that says what is there and where it came from. A `dashboard`
   # reads its tables from there too: the CSV a page reads is the commonest
   # thing it leaks (coolbress/plinth#1069).
-  - "{% if archetype != 'data-ml' and archetype != 'dashboard' %}/data{% endif %}"
+  - "{% if archetype != 'data-ml' and archetype != 'dashboard' and not (archetype == 'cli' and scheduled_run | string | lower == 'true') %}/data{% endif %}"
+  # A `cli` that runs on a schedule (`scheduled_run` below): its workflow
+  # writes there and uploads it (coolbress/plinth#1070). The workflow's and
+  # its test's source names render empty without the answer.
   # Publishing on a version tag, and the person's steps around it: a `cli` or
   # `library` publishes its package to PyPI (coolbress/plinth#703), a
   # `backend` its image to GHCR (coolbress/plinth#706), a `data-ml` its
@@ -256,9 +259,10 @@ archetype:
     What kind of project this is, by what it produces:
     - cli: a command people install and run in a terminal; also the choice
       for a tool that runs on a schedule on the owner's machine (a data
-      collector, a pipeline). On GitHub its release workflow runs only when
-      a tag is pushed (`v*`, or a member's `<prefix>-v*`), so a project that
-      never tags publishes nothing.
+      collector, a pipeline), or on GitHub while that machine is off (asked
+      below). On GitHub its release workflow runs only when a tag is pushed
+      (`v*`, or a member's `<prefix>-v*`), so a project that never tags
+      publishes nothing.
     - library: a package other code imports.
     - backend: a service that keeps running and answers requests, in a
       container.
@@ -355,6 +359,45 @@ host:
     {%- if host == 'gitlab' and archetype == 'web' -%}
     The web archetype is GitHub only: its deployment and checks are built for
     GitHub. Choose GitHub, or another archetype for GitLab.
+    {%- endif -%}
+
+# Whether a `cli` runs on GitHub on a schedule as well (coolbress/plinth#1070):
+# `true` renders `.github/workflows/schedule.yml`, which runs the entry point
+# on a `schedule:` trigger and uploads what it wrote as the run's artifact,
+# the `data/` folder `data-ml` has, a test that runs the entry point as the
+# workflow does, and README lines saying where the results are and what the
+# schedule cannot promise. Nothing is committed to `main`: its ruleset
+# refuses a push, and the workflow's token cannot write.
+#
+# Asked, not `when: false`, for the reason `plinth_sha` is: only an answer
+# that was asked is recorded. Asked of a `cli` only; on any other archetype
+# it is neither asked nor recorded, and its files are left out whatever
+# `--data` says. The default is `false` for the projects that exist: a `cli`
+# made before this question takes it at its next update, and every file but
+# `.copier-answers.yml`, which records the answer, renders as it did.
+#
+# GitHub only: a GitLab pipeline schedule was not tried. A project named
+# `scheduled_run` is refused `true`: its own test and the shipped one would
+# both be `tests/test_scheduled_run.py`.
+scheduled_run:
+  type: bool
+  when: "{{ archetype == 'cli' }}"
+  help: |
+    Where does the command run?
+    No (press Enter): on this computer, when you run it. It stops when the
+    computer is off.
+    Yes: also on GitHub, on a schedule, even while this computer is off. Its
+    results are a download on each run's page, not commits.
+  default: false
+  validator: >-
+    {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
+    {%- if scheduled_run | string | lower == 'true' and host == 'gitlab' -%}
+    A scheduled run is GitHub only: a GitLab pipeline schedule was not tried.
+    Answer no, or choose GitHub.
+    {%- elif scheduled_run | string | lower == 'true' and pkg == 'scheduled_run' -%}
+    The package name '{{ pkg }}' would name the project's test
+    tests/test_scheduled_run.py, and a scheduled run ships a test by that name.
+    Choose another repository name, for example '{{ project_name }}-app'.
     {%- endif -%}
 
 # Where a `web` app or a `dashboard` runs (coolbress/plinth #639, #1069).
