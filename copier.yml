@@ -332,7 +332,7 @@ plinth_sha:
     Commit of coolbress/plinth whose reusable workflows this project calls.
     Press Enter for the one this template release was tested with; on an
     update, pass the pin the repository has now.
-  default: "9d0feb70c9d5296f2b559c0de8c3a31a00d8a4c3"
+  default: "50a45c30d5a8f0700ac6e6426a8b6c15e96018b7"
   # A branch, a tag or a short SHA can move or be ambiguous, and on GitLab a
   # moved ref fails every pipeline against the recorded checksum.
   validator: >-
@@ -524,7 +524,7 @@ plinth_gitlab_integrity:
     include's integrity). Press Enter for the default pin's; with another pin,
     pass that commit's (curl the file, then openssl dgst -sha256 -binary |
     openssl base64 -A).
-  default: "Kr/asySfpINvGLHN9K8TyZdk51eES7/LovZq3A++pYs="
+  default: "XXPLpWYPmlQ0OP0IjIIk27+E0e5StXfMtHZRotaZoL4="
   validator: >-
     {%- if host == 'gitlab' and not (plinth_gitlab_integrity | regex_search('^[A-Za-z0-9+/]{43}=$')) -%}
     plinth_gitlab_integrity is not a base64 SHA-256 (44 characters ending in =).
