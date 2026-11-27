@@ -135,32 +135,50 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_the_unreleased_list_is_the_template_diff_since_the_last_tag() -> None:
-    """Checked where the last tag is in the clone: by hand, in the release step
-    (CONTRIBUTING.md, Cut a release, step 2). CI's checkout has no tags, so
-    there it is skipped, saying so."""
-    sections = _sections(CHANGELOG.read_text(encoding="utf-8"))
-    body = next((b for t, b in sections if t == "[Unreleased]"), "")
-    last = next((t for t, _ in sections if _version(t)), None)
-    if not body.strip() or last is None:
-        pytest.skip("no [Unreleased] entries, or no released section to compare from")
-    tag = "v" + last.strip("[]")
-    if _git("rev-parse", "-q", "--verify", f"refs/tags/{tag}").returncode != 0:
+def _tagged(tag: str) -> bool:
+    return _git("rev-parse", "-q", "--verify", f"refs/tags/{tag}").returncode == 0
+
+
+def _to_check(sections: list[tuple[str, str]]) -> tuple[str, str, str] | None:
+    """(title, body, tag to compare from): the newest numbered section while it
+    has no tag yet, the release being cut, against the section before it;
+    otherwise `[Unreleased]` against the newest numbered section's tag."""
+    numbered = [(t, b) for t, b in sections if _version(t)]
+    if numbered and not _tagged("v" + numbered[0][0].strip("[]")) and len(numbered) > 1:
+        return numbered[0][0], numbered[0][1], "v" + numbered[1][0].strip("[]")
+    unreleased = next((b for t, b in sections if t == "[Unreleased]"), "")
+    if numbered and unreleased.strip():
+        return "[Unreleased]", unreleased, "v" + numbered[0][0].strip("[]")
+    return None
+
+
+def test_the_list_is_the_template_diff_since_the_last_tag() -> None:
+    """The release being cut (its section written, its tag not yet made) or
+    else `[Unreleased]`, against the tag before it. Checked where that tag is
+    in the clone: by hand, in the release step (CONTRIBUTING.md, Cut a
+    release, step 2). CI's checkout has no tags, so there it is skipped,
+    saying so."""
+    target = _to_check(_sections(CHANGELOG.read_text(encoding="utf-8")))
+    if target is None:
+        pytest.skip("no section to compare: no [Unreleased] entries and no untagged release")
+    title, body, tag = target
+    if not _tagged(tag):
         pytest.skip(f"{tag} is not in this clone (CI fetches no tags); run it in the release step")
     diff = _git("diff", "--name-only", "--no-renames", f"{tag}..HEAD", "--", "template/")
     assert diff.returncode == 0, diff.stderr
     changed = {rendered_name(p) for p in diff.stdout.splitlines() if p}
     old = _git("show", f"{tag}:copier.yml")
     assert old.returncode == 0, old.stderr
-    added = _questions((TEMPLATE_ROOT / "copier.yml").read_text(encoding="utf-8")) - _questions(
-        old.stdout
-    )
+    now = _questions((TEMPLATE_ROOT / "copier.yml").read_text(encoding="utf-8"))
+    added = now - _questions(old.stdout)
     files, questions, _ = _items(_block(body) or [])
     assert files == changed, (
-        f"listed but not changed: {sorted(files - changed)}; "
+        f"{title} lists but {tag}..HEAD did not change: {sorted(files - changed)}; "
         f"changed but not listed: {sorted(changed - files)}"
     )
-    assert questions == added, f"listed: {sorted(questions)}; added since {tag}: {sorted(added)}"
+    assert questions == added, (
+        f"{title} lists {sorted(questions)}; added since {tag}: {sorted(added)}"
+    )
 
 
 @pytest.mark.parametrize(

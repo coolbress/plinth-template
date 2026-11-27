@@ -149,7 +149,8 @@ and plinth pins one.
    `template/` needs the last tag, which CI's checkout lacks, so there it
    skips: before tagging, run it in a clone that has the tags
    (`uv run pytest tests/test_changelog_files_and_questions.py`), and fix the
-   list until it passes. A pull request that changes `template/` adds its
+   list until it passes. While the new section has no tag, it is the one
+   compared, against the tag before it. A pull request that changes `template/` adds its
    files to `[Unreleased]`'s list as it goes; the release step checks the
    whole.
 3. Tag from the merged `main` once its CI is green, `vX.Y.Z`, MAJOR when
