@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -126,10 +127,10 @@ def test_each_question_it_names_is_a_question_in_copier_yml() -> None:
     assert unknown == [], f"not a key in copier.yml: {unknown}"
 
 
-def _git(*args: str) -> subprocess.CompletedProcess[str]:
+def _git(*args: str, cwd: Path = TEMPLATE_ROOT) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         ["git", *args],  # noqa: S607
-        cwd=TEMPLATE_ROOT,
+        cwd=cwd,
         capture_output=True,
         text=True,
         check=False,
@@ -153,6 +154,31 @@ def _to_check(sections: list[tuple[str, str]]) -> tuple[str, str, str] | None:
     return None
 
 
+def _changed_since(tag: str, cwd: Path = TEMPLATE_ROOT) -> set[str]:
+    """The rendered names of the files `template/` changed since `tag`. Read
+    NUL-separated (`-z`): without it git quotes a path holding `"`, such as
+    `{{ "" }}.env.example.jinja`, and the name would not map."""
+    diff = _git(
+        "diff", "--name-only", "-z", "--no-renames", f"{tag}..HEAD", "--", "template/", cwd=cwd
+    )
+    assert diff.returncode == 0, diff.stderr
+    return {rendered_name(p) for p in diff.stdout.split("\0") if p}
+
+
+def test_a_changed_path_with_a_quote_maps_to_its_rendered_name(tmp_path: Path) -> None:
+    def git(*args: str) -> None:
+        assert _git(*args, cwd=tmp_path).returncode == 0
+
+    git("init", "-q")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "a")
+    git("tag", "base")
+    (tmp_path / "template").mkdir()
+    (tmp_path / "template" / '{{ "" }}.env.example.jinja').write_text("x\n", encoding="utf-8")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "b")
+    assert _changed_since("base", cwd=tmp_path) == {".env.example"}
+
+
 def test_the_list_is_the_template_diff_since_the_last_tag() -> None:
     """The release being cut (its section written, its tag not yet made) or
     else `[Unreleased]`, against the tag before it. Checked where that tag is
@@ -165,9 +191,7 @@ def test_the_list_is_the_template_diff_since_the_last_tag() -> None:
     title, body, tag = target
     if not _tagged(tag):
         pytest.skip(f"{tag} is not in this clone (CI fetches no tags); run it in the release step")
-    diff = _git("diff", "--name-only", "--no-renames", f"{tag}..HEAD", "--", "template/")
-    assert diff.returncode == 0, diff.stderr
-    changed = {rendered_name(p) for p in diff.stdout.splitlines() if p}
+    changed = _changed_since(tag)
     old = _git("show", f"{tag}:copier.yml")
     assert old.returncode == 0, old.stderr
     now = _questions((TEMPLATE_ROOT / "copier.yml").read_text(encoding="utf-8"))
