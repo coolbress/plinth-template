@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.52.0] - 2026-11-27
+
+**A sixth archetype, `dashboard` (a Streamlit page of tables and charts), an `AGENTS.md` that keeps under Always only what a machine holds and ends with a `## This project` section the template never changes, shorter pull-request form comments, a signed SBOM for a `backend` image, and strict `xfail`.** `AGENTS.md` moves from 14,260 to 7,963 bytes on the `cli` render, with the guidance moved to the page that owns it (#352, #358); the pull-request form's comments go from about 25 lines to 8 (#349); GitHub gains a `Look back` issue form, and the end-or-hand-over form saves before it deletes (#352). `copier update` needs no hands unless a project edited the lines these touch; each entry below names them. No job, check or action changes, so the Actions allowlist is unchanged: the SBOM signature uses the `actions/attest` commit `release.yml` already pins. `AGENTS.md` changes, so plinth's pin raise to this release owes an eval suite run. `plinth_sha`'s default moves from 9d0feb7 (v2.44.0) to 50a45c3 (v2.45.0), plinth's latest release, which this repository's own workflows call since #366, and `plinth_gitlab_integrity`'s default moves with it.
+
 ### Added
 
 - **`AGENTS.md` ends with `## This project`, a section the template never
@@ -80,6 +84,12 @@ means `copier update` on an instance needs hands.
 
 ### Changed
 
+- **`plinth_sha`'s default is 50a45c3 (plinth v2.45.0), and
+  `plinth_gitlab_integrity`'s is `XXPLpWYPmlQ0OP0IjIIk27+E0e5StXfMtHZRotaZoL4=`,
+  the checksum of `gitlab/python-ci.yml` at that commit.** A project created
+  at this release calls plinth v2.45.0's reusable workflows, and a GitLab one
+  includes its pipeline. An existing project keeps its own pin and checksum
+  on `copier update`.
 - **The pull-request form's guidance comments are short pointers to
   `CONTRIBUTING.md`** (#349): `.github/PULL_REQUEST_TEMPLATE.md` and, on
   GitLab, `.gitlab/merge_request_templates/Default.md` go from about 25 lines
