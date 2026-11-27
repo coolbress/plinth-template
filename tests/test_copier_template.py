@@ -7276,7 +7276,10 @@ LONG_NAME = "a-subscription-tracker-for-households-and-team"
 def test_a_long_package_name_passes_ruff(tmp_path: Path, archetype: str) -> None:
     """`ci / lint` is green from the first commit with a long name too: the
     rendered project's own ruff, at the version its lockfile pins."""
-    out = render(tmp_path / archetype, project_name=LONG_NAME, archetype=archetype)
+    # A `cli` with every file it can have: the scheduled run's test carries the
+    # name too (coolbress/plinth#1070).
+    extra: dict[str, Any] = {"scheduled_run": True} if archetype == "cli" else {}
+    out = render(tmp_path / archetype, project_name=LONG_NAME, archetype=archetype, **extra)
     lock = (out / "uv.lock").read_text(encoding="utf-8")
     pinned = re.search(r'name = "ruff"\nversion = "([^"]+)"', lock)
     assert pinned, "uv.lock pins no ruff"
@@ -9215,7 +9218,9 @@ def test_the_schedule_question_is_asked_of_a_cli_only_and_is_off_by_default() ->
     assert "not commits" in asked
 
 
-@pytest.mark.parametrize("archetype", sorted(SERVABLE - {"cli"}))
+#: Its files' conditions are `archetype == 'cli'`: one archetype without a
+#: `data/` folder and one with its own.
+@pytest.mark.parametrize("archetype", ["library", "dashboard"])
 def test_no_other_archetype_gets_the_schedule_even_when_asked_for_it(
     tmp_path: Path, archetype: str
 ) -> None:
@@ -9238,8 +9243,13 @@ def test_a_cli_without_the_schedule_renders_what_it_did_before_the_question(
         assert not (off / name).exists(), name
 
 
-def test_a_scheduled_cli_has_its_workflow_test_data_folder_and_readme(tmp_path: Path) -> None:
-    out = render(tmp_path / "on", scheduled_run=True)
+@pytest.fixture(scope="module")
+def scheduled(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return render(tmp_path_factory.mktemp("scheduled"), scheduled_run=True)
+
+
+def test_a_scheduled_cli_has_its_workflow_test_data_folder_and_readme(scheduled: Path) -> None:
+    out = scheduled
     workflow = yaml.safe_load((out / SCHEDULE_FILES[0]).read_text(encoding="utf-8"))
     # PyYAML reads the key `on` as True.
     triggers = workflow[True]
@@ -9266,8 +9276,10 @@ def test_a_scheduled_cli_has_its_workflow_test_data_folder_and_readme(tmp_path: 
     )
 
 
-def test_a_scheduled_cli_keeps_its_data_out_of_git_as_data_ml_does(tmp_path: Path) -> None:
-    on = render(tmp_path / "on", scheduled_run=True)
+def test_a_scheduled_cli_keeps_its_data_out_of_git_as_data_ml_does(
+    tmp_path: Path, scheduled: Path
+) -> None:
+    on = scheduled
     model = render(tmp_path / "model", archetype="data-ml")
     assert (on / "data" / ".gitignore").read_bytes() == (model / "data" / ".gitignore").read_bytes()
     assert sorted(p.name for p in (on / "data").iterdir()) == [".gitignore", "README.md"]
@@ -9291,20 +9303,6 @@ def test_a_project_named_scheduled_run_renders_without_the_schedule(tmp_path: Pa
     out = render(tmp_path, project_name="scheduled-run")
     assert "def test_" in (out / "tests" / "test_scheduled_run.py").read_text(encoding="utf-8")
     assert not (out / SCHEDULE_FILES[0]).exists()
-
-
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
-def test_a_scheduled_cli_with_a_long_name_passes_ruff(tmp_path: Path) -> None:
-    out = render(tmp_path, project_name=LONG_NAME, scheduled_run=True)
-    lock = (out / "uv.lock").read_text(encoding="utf-8")
-    pinned = re.search(r'name = "ruff"\nversion = "([^"]+)"', lock)
-    assert pinned, "uv.lock pins no ruff"
-    ruff = ["uv", "tool", "run", "--quiet", f"ruff@{pinned.group(1)}"]
-    for step in (["check", "."], ["format", "--check", "."]):
-        done = subprocess.run(  # noqa: S603
-            [*ruff, *step], cwd=out, capture_output=True, text=True, check=False
-        )
-        assert done.returncode == 0, f"ruff {' '.join(step)}\n{done.stdout}\n{done.stderr}"
 
 
 #: Where the question renders anything, as paths or folders of a `cli`
@@ -9356,25 +9354,15 @@ def _copy_at(tpl: Path, dest: Path, ref: str, **answers: str) -> Path:
 
 
 @pytest.mark.parametrize("host", ["github", "gitlab"])
-def test_without_the_answer_a_cli_render_is_the_last_release_s_where_the_question_reaches(
-    tmp_path: Path, schedule_releases: Path, host: str
-) -> None:
-    given = {"project_name": "probe", "license": "MIT", "archetype": "cli", "host": host}
-    before = _copy_at(schedule_releases, tmp_path / "before", BEFORE_THE_SCHEDULE, **given)
-    now = _copy_at(schedule_releases, tmp_path / "now", "v9.0.0", **given)
-    old, new = _touched(_tree(before)), _touched(_tree(now))
-    assert old, "nothing compared: the paths no longer match the render"
-    assert new == old, sorted(k for k in old.keys() | new.keys() if old.get(k) != new.get(k))
-
-
-@pytest.mark.parametrize("host", ["github", "gitlab"])
 def test_an_existing_cli_project_updates_with_its_schedule_files_unchanged(
     tmp_path: Path, schedule_releases: Path, host: str
 ) -> None:
     """A `cli` made at the last release, updated with its answers unchanged: the
     answers file gains `scheduled_run: false` and its new commit, nothing
-    conflicts, and every file the question reaches is byte for byte what it was.
-    What the other changes since that release bring is theirs."""
+    conflicts, and every file the question reaches is byte for byte what it was:
+    the update applies the difference between the release's render and this
+    tree's, so none in those files. What the other changes since that release
+    bring is theirs."""
     import copier
 
     given = {"project_name": "probe", "license": "MIT", "archetype": "cli", "host": host}
