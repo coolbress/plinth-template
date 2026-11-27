@@ -1,0 +1,54 @@
+"""The scheduled run as `.github/workflows/schedule.yml` runs it, once, here.
+
+The workflow runs the entry point with its output in
+`data/processed/result.txt` and uploads that folder. This test runs the same
+line in a temporary folder and reads the file back, so a change that breaks
+the scheduled run fails a pull request, not the next morning's run.
+
+The sample reads nothing. When the command fetches from a site or an API,
+give this test a fake source (a local file, or a stub server on localhost) so
+it never reaches the network, and keep it printing only what is safe to
+publish: on a public repository the run's log and its artifact are public.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "schedule.yml"
+
+#: What `python -m` runs.
+PACKAGE = "{{ package_name }}"
+
+#: The line the workflow runs, where `uv run --no-sync` runs this interpreter.
+COMMAND = f"python -m {PACKAGE} > data/processed/result.txt"
+
+
+def test_the_workflow_runs_the_line_this_test_runs() -> None:
+    assert f"uv run --no-sync {COMMAND}" in WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_one_run_writes_its_result_where_the_workflow_uploads_it(tmp_path: Path) -> None:
+    out = tmp_path / "data" / "processed"
+    out.mkdir(parents=True)
+    with (out / "result.txt").open("w", encoding="utf-8") as result:
+        done = subprocess.run(  # noqa: S603
+            [sys.executable, "-m", PACKAGE],
+            stdout=result,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=60,
+            cwd=tmp_path,
+        )
+    assert done.returncode == 0, done.stderr
+    assert (out / "result.txt").read_text(encoding="utf-8") == "Hello, world!\n"
+
+
+def test_the_workflow_asks_for_no_write_permission() -> None:
+    """Its token reads the repository and writes nothing: no commit, no tag."""
+    granted = re.findall(r"(?m)^\s+([a-z-]+): (read|write)\b", WORKFLOW.read_text(encoding="utf-8"))
+    assert granted == [("contents", "read")], granted
