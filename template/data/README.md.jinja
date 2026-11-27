@@ -21,6 +21,11 @@ git. Write that down for every file you add to `raw/`:
 The page in `src/` draws a sample table it makes itself, so this folder
 starts empty. Put the file your page reads in `raw/` and read it from there:
 a CSV committed by mistake is the commonest way a dashboard leaks its data.
+{%- elif archetype == 'cli' -%}
+The scheduled run (`.github/workflows/schedule.yml`) writes its result to
+`processed/` on GitHub's runner and keeps that folder as the run's artifact;
+on this computer, the same command writes it here. Put the files the command
+reads in `raw/`.
 {%- else -%}
 The sample model in `src/` uses a dataset that ships with scikit-learn, so
 this folder starts empty.
