@@ -35,7 +35,9 @@ means `copier update` on an instance needs hands.
   login and no database. The `hosting` question is asked of it with `local`
   (the default) or `render`, which renders a `render.yaml` for one web
   service (about US $7 a month) and the README's warning that anyone with
-  the address can read the page; Render is GitHub only, `local` renders on
+  the address can read the page. Its start command is one line, not a `>-`
+  block scalar, so `/plinth:floor-check` reads the file's health check and
+  deploy trigger. Render is GitHub only, `local` renders on
   GitLab too. The README names Streamlit Community Cloud with its terms. The
   name `dashboard_page` is reserved for it, as each archetype's shipped tests
   are. **What an existing project gets** from `copier update`: nothing. Every
