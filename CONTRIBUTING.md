@@ -136,7 +136,7 @@ and plinth pins one.
    project's pin moves to. Outside the window neither compares or reads
    anything: Dependabot raises the workflows' pins, plinth releases again,
    and the default waits for the next release.
-   The section opens with `### Files and questions`, that text exactly:
+   Its first `###` heading, after the summary, is `### Files and questions`, that text exactly:
    coolbress/plinth's update plan quotes the block under it for each release
    a project's update crosses. One item per line: `` - `<path>` `` for each
    rendered file the release changes, adds or deletes (its path under
