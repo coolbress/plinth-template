@@ -15,12 +15,16 @@ means `copier update` on an instance needs hands.
   section sits right after `## Where you are`, whose bullets 1.52.0
   rewrites. Updating a copy of it from v1.50.3 to v1.52.0 (copier 9.18.2)
   left one conflict in `AGENTS.md`. The "before updating" side holds the old
-  `## Where you are` bullets and the project's whole section; the "after
-  updating" side holds only the new bullets. Taking the template's side
-  drops the project's rules. **What such a project does:** keep the
-  template's bullets, move its own lines under the `## This project` at the
-  end of the file, and delete the first heading. From then on its rules sit
-  where no update reaches. No file in `template/` changes.
+  `## Where you are` bullets, a bullet the project had added among them, and
+  the project's whole section; the "after updating" side holds only the new
+  bullets. Taking the template's side drops the project's lines. **What such
+  a project does:** keep the "after updating" side, move every line of its
+  own from the "before updating" side (the bullets of its section, and any
+  it added among the template's) under the `## This project` at the end of
+  the file, then delete the conflict markers and what is left of the
+  "before updating" side, its first `## This project` heading included.
+  From then on its rules sit where no update reaches. No file in `template/`
+  changes.
 
 ## [1.52.0] - 2026-11-27
 
