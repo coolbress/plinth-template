@@ -9029,9 +9029,16 @@ def test_a_dashboard_on_render_says_what_it_costs_and_that_it_has_no_login(
     assert service["plan"] == "0.5c-512mb"
     assert service["autoDeployTrigger"] == "checksPass"
     assert service["buildCommand"] == "uv sync --locked --no-dev"
-    assert "streamlit run src/probe/app.py" in service["startCommand"]
-    assert "--server.port $PORT --server.address 0.0.0.0" in service["startCommand"]
+    assert service["startCommand"] == (
+        "uv run --no-sync streamlit run src/probe/app.py"
+        " --server.port $PORT --server.address 0.0.0.0 --server.headless true"
+    )
     assert service["healthCheckPath"] == "/_stcore/health"
+    # coolbress/plinth's floor check reads block YAML with no block scalar
+    # (`key: >-`, `key: |`); a file with one is not read at all.
+    text = (online / "render.yaml").read_text(encoding="utf-8")
+    scalars = [ln for ln in text.splitlines() if re.search(r":\s*[|>][-+0-9]*\s*(#.*)?$", ln)]
+    assert not scalars, scalars
     readme = _flat(online / "README.md")
     assert RENDER_COST in readme
     assert NO_LOGIN in readme

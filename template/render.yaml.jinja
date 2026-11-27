@@ -20,9 +20,9 @@ services:
     autoDeployTrigger: checksPass
     # The lockfile as is, without the development tools.
     buildCommand: uv sync --locked --no-dev
-    startCommand: >-
-      uv run --no-sync streamlit run src/{{ package_name }}/app.py
-      --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    # One line: coolbress/plinth's floor check reads block YAML with no block
+    # scalar (`>-`, `|`) and does not read a file that has one.
+    startCommand: uv run --no-sync streamlit run src/{{ package_name }}/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
     # Streamlit's own health route; it answers once the server is up.
     healthCheckPath: /_stcore/health
 {% else %}# Render Blueprint: one web service and one Postgres, both on paid plans.
