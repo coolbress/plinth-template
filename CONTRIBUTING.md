@@ -136,6 +136,22 @@ and plinth pins one.
    project's pin moves to. Outside the window neither compares or reads
    anything: Dependabot raises the workflows' pins, plinth releases again,
    and the default waits for the next release.
+   The section opens with `### Files and questions`, that text exactly:
+   coolbress/plinth's update plan quotes the block under it for each release
+   a project's update crosses. One item per line: `` - `<path>` `` for each
+   rendered file the release changes, adds or deletes (its path under
+   `template/` as the instance has it: no `.jinja`, a `{% if %}` name as the
+   name it renders, `{{ package_name }}` as `<package>`), `` - question
+   `<name>` `` for each question it adds to `copier.yml`, or `- None.`.
+   `tests/test_changelog_files_and_questions.py` fails a section from v1.52.0
+   on without it, a line under it that is no item, and a question that is not
+   a key in `copier.yml`. Whether the list is the release's whole diff of
+   `template/` needs the last tag, which CI's checkout lacks, so there it
+   skips: before tagging, run it in a clone that has the tags
+   (`uv run pytest tests/test_changelog_files_and_questions.py`), and fix the
+   list until it passes. A pull request that changes `template/` adds its
+   files to `[Unreleased]`'s list as it goes; the release step checks the
+   whole.
 3. Tag from the merged `main` once its CI is green, `vX.Y.Z`, MAJOR when
    `copier update` on an instance needs hands. Merge nothing between the
    release pull request and the tag: a later commit on `main` is outside the

@@ -6,6 +6,33 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Files and questions
+
+- `.claude/permissions.md`
+- `.claude/settings.json`
+- `.claude/skills/verify/SKILL.md`
+- `.github/ISSUE_TEMPLATE/end-or-hand-over.yml`
+- `.github/ISSUE_TEMPLATE/look-back.yml`
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `.github/workflows/release.yml`
+- `.gitignore`
+- `.gitlab/issue_templates/End-or-hand-over.md`
+- `.gitlab/merge_request_templates/Default.md`
+- `.streamlit/config.toml`
+- `AGENTS.md`
+- `CONTRIBUTING.md`
+- `README.md`
+- `data/.gitignore`
+- `data/README.md`
+- `docs/agents/issue-tracker.md`
+- `docs/how-to/publish-a-release.md`
+- `pyproject.toml`
+- `render.yaml`
+- `src/<package>/app.py`
+- `tests/test_dashboard_page.py`
+- `tests/test_entry_point.py`
+- `uv.lock`
+
 ### Added
 
 - **`AGENTS.md` ends with `## This project`, a section the template never
