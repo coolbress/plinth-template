@@ -543,7 +543,8 @@ open the run in the Actions tab and download `results` under Artifacts.
 GitHub keeps an artifact for the repository's retention period, 90 days
 unless it was changed in Settings > Actions. Nothing is committed: `main`
 takes a change only through a pull request with green checks, and the
-workflow's token can only read. On your computer the same line is
+workflow's token can only read. On your computer the same run is
+`mkdir -p data/processed` (a fresh clone has no such folder) and then
 `uv run python -m {{ package_name }} > data/processed/result.txt`, and
 [`data/`](data/README.md) is never committed.
 

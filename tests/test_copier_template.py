@@ -9278,6 +9278,11 @@ def test_a_scheduled_cli_has_its_workflow_test_data_folder_and_readme(scheduled:
     for fact in SCHEDULE_FACTS:
         assert fact in readme, fact
     assert "download `results` under Artifacts" in readme
+    # A fresh clone has no data/processed/, so the local run makes it first.
+    assert (
+        "`mkdir -p data/processed` (a fresh clone has no such folder) and then "
+        "`uv run python -m probe > data/processed/result.txt`"
+    ) in readme
     assert "The scheduled run (`.github/workflows/schedule.yml`)" in _flat(
         out / "data" / "README.md"
     )
