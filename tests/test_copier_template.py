@@ -9077,3 +9077,106 @@ def test_where_it_runs_refuses_another_archetypes_answer(
 def test_a_web_app_still_defaults_to_render(tmp_path: Path) -> None:
     """The dashboard's default is its own; a web app's is as it was."""
     assert _answers(render(tmp_path, archetype="web"))["hosting"] == "render"
+
+
+#: The section a project's own rules go in (coolbress/plinth-template#358): the
+#: rendered `AGENTS.md` ends with it, and no later release changes it, so an
+#: update never meets a project's lines there. Changing this text is the change
+#: this test exists to stop: every project that wrote under it would conflict.
+THIS_PROJECT = (
+    "\n## This project\n\nThis project's own rules: a template update never changes this section.\n"
+)
+
+
+@pytest.mark.parametrize("answers", _every_agents_md_render(), ids=lambda a: "-".join(a.values()))
+def test_every_agents_md_ends_with_the_section_the_template_never_changes(
+    tmp_path: Path, answers: dict[str, str]
+) -> None:
+    text = (render(tmp_path, **answers) / "AGENTS.md").read_text(encoding="utf-8")
+    assert text.endswith(THIS_PROJECT), text[-300:]
+    assert text.count("\n## This project\n") == 1
+
+
+def _update_agents(
+    tmp_path: Path,
+    old: Callable[[Path], None],
+    new: Callable[[Path], None],
+    edit: Callable[[str], str],
+) -> str:
+    """A `cli` project rendered at `v9.0.0`, its `AGENTS.md` changed by `edit` and
+    committed, updated to `v9.1.0`; its `AGENTS.md` afterwards."""
+    import copier
+
+    tpl = _two_tag_template(tmp_path, old, new)
+    proj = tmp_path / "proj"
+    data = {"project_name": "proj", "license": "MIT", "archetype": "cli", "owner": "someone"}
+    copier.run_copy(
+        str(tpl), str(proj), data=data, defaults=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    agents = proj / "AGENTS.md"
+    agents.write_text(edit(agents.read_text(encoding="utf-8")), encoding="utf-8")
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render, and the project's own line")
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.1.0"
+    )
+    assert _answers(proj)["_commit"] == "v9.1.0"
+    return agents.read_text(encoding="utf-8")
+
+
+def _agents_source(tpl: Path) -> Path:
+    return tpl / "template" / "AGENTS.md.jinja"
+
+
+def _rewrite_other_sections(tpl: Path) -> None:
+    """A later release that changes `## Always` and `## Code Review Rules`."""
+    src = _agents_source(tpl)
+    text = src.read_text(encoding="utf-8")
+    text = text.replace("## Always\n\n", "## Always\n\n- A rule a later release adds.\n", 1)
+    text = text.replace("they are the thing under review.\n", "they are what is under review.\n", 1)
+    src.write_text(text, encoding="utf-8")
+
+
+def test_an_update_keeps_a_projects_line_under_this_project_without_conflict(
+    tmp_path: Path,
+) -> None:
+    own = "- Run `make demo` before a release.\n"
+    after = _update_agents(
+        tmp_path, lambda _: None, _rewrite_other_sections, lambda text: text + own
+    )
+    assert "<<<<<<<" not in after, after
+    assert ">>>>>>>" not in after, after
+    assert "- A rule a later release adds." in after
+    assert "they are what is under review." in after
+    assert after.endswith(THIS_PROJECT + own), after[-400:]
+
+
+def _without_this_project(tpl: Path) -> None:
+    """The template before coolbress/plinth-template#358: no closing section."""
+    src = _agents_source(tpl)
+    text = src.read_text(encoding="utf-8")
+    assert text.endswith(THIS_PROJECT)
+    src.write_text(text[: -len(THIS_PROJECT)], encoding="utf-8")
+
+
+def test_a_project_with_its_own_this_project_heading_gets_a_second_at_the_end(
+    tmp_path: Path,
+) -> None:
+    """A project that already has a `## This project` of its own after `## Where you
+    are`, as coolbress/nexusbt does, updated to the release that adds the closing
+    section: no conflict, its own section stays where it is, and a second one
+    closes the file. Its person moves the lines into the closing one and deletes
+    the first (measured here with copier, #358)."""
+    own = "## This project\n\n- Our own rule.\n\n"
+    after = _update_agents(
+        tmp_path,
+        _without_this_project,
+        lambda _: None,
+        lambda text: text.replace("## Always\n", own + "## Always\n", 1),
+    )
+    assert "<<<<<<<" not in after, after
+    assert ">>>>>>>" not in after, after
+    assert own + "## Always\n" in after
+    assert after.count("\n## This project\n") == 2
+    assert after.endswith(THIS_PROJECT), after[-300:]
