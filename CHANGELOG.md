@@ -15,13 +15,16 @@ means `copier update` on an instance needs hands.
   on every update, where one beside a template line met a conflict. To make
   room within the file's 60 lines and 8,192 bytes, `main is protected` joins
   the paragraph after the commands, `## Agent skills` is one bullet, the
-  review-findings and tests bullets are one, and three phrases are shorter.
+  review-findings and tests bullets are one, and two phrases are shorter.
   **What an existing project gets** through `/plinth:template-update`: the
   section at the end, and those lines rewritten; a line the project changed
   among them is a conflict as before. A project that already has its own
   `## This project` elsewhere in the file keeps it where it is, with no
   conflict, and gets a second one at the end: move its lines into the last
-  one and delete the first. No job, check or action changes.
+  one and delete the first. A project that added lines after `## Code Review
+  Rules`, at the end of the file, meets one conflict there, this once: keep
+  both sides, its lines under the new heading. No job, check or action
+  changes.
 - **A sixth archetype, `dashboard`: a page of tables and charts made with
   Streamlit** (coolbress/plinth#1069). `src/<package>/app.py` draws a sample
   table and one chart; `tests/test_dashboard_page.py` runs it with Streamlit's
