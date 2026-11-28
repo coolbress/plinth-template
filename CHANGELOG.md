@@ -36,6 +36,26 @@ means `copier update` on an instance needs hands.
   Turning it on later is an answer change: `copier update --data
   scheduled_run=true`. No job, check or action changes.
 
+### Fixed
+
+- **1.52.0's entry for `## This project` said too little about a project
+  that already has its own such section elsewhere in `AGENTS.md`** (#358).
+  It said that section stays where it is with no conflict. That holds only
+  when the update leaves the lines around it alone. coolbress/nexusbt's
+  section sits right after `## Where you are`, whose bullets 1.52.0
+  rewrites. Updating a copy of it from v1.50.3 to v1.52.0 (copier 9.18.2)
+  left one conflict in `AGENTS.md`. The "before updating" side holds the old
+  `## Where you are` bullets, a bullet the project had added among them, and
+  the project's whole section; the "after updating" side holds only the new
+  bullets. Taking the template's side drops the project's lines. **What such
+  a project does:** keep the "after updating" side, move every line of its
+  own from the "before updating" side (the bullets of its section, and any
+  it added among the template's) under the `## This project` at the end of
+  the file, then delete the conflict markers and what is left of the
+  "before updating" side, its first `## This project` heading included.
+  From then on its rules sit where no update reaches. No file in `template/`
+  changes.
+
 ## [1.52.0] - 2026-11-27
 
 **A sixth archetype, `dashboard` (a Streamlit page of tables and charts), an `AGENTS.md` that keeps under Always only what a machine holds and ends with a `## This project` section the template never changes, shorter pull-request form comments, a signed SBOM for a `backend` image, and strict `xfail`.** `AGENTS.md` moves from 14,260 to 7,963 bytes on the `cli` render, with the guidance moved to the page that owns it (#352, #358); the pull-request form's comments go from about 25 lines to 8 (#349); GitHub gains a `Look back` issue form, and the end-or-hand-over form saves before it deletes (#352). `copier update` needs no hands unless a project edited the lines these touch; each entry below names them. No job, check or action changes, so the Actions allowlist is unchanged: the SBOM signature uses the `actions/attest` commit `release.yml` already pins. `AGENTS.md` changes, so plinth's pin raise to this release owes an eval suite run. `plinth_sha`'s default moves from 9d0feb7 (v2.44.0) to 50a45c3 (v2.45.0), plinth's latest release, which this repository's own workflows call since #366, and `plinth_gitlab_integrity`'s default moves with it.

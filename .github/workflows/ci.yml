@@ -66,4 +66,8 @@ jobs:
       # pytest stops 2 minutes before the limit: at the default 10, the 1.48.0
       # release pull request stopped at 8 min 4 s and its re-run passed at
       # 8 min 0 s. The spread between runs of one tree is the runner's.
-      test-timeout-minutes: 15
+      # Raised to 20 (2026-11-28): the suite grew, main's runs took 6 min 40 s
+      # to 10 min 22 s, and two runs of one commit (cfaf05a, #363) started
+      # 12 s apart took 9 min 22 s (passed) and 13 min 3 s (stopped at 15's
+      # limit, no test failed).
+      test-timeout-minutes: 20
