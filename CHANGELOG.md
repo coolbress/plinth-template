@@ -53,7 +53,9 @@ means `copier update` on an instance needs hands.
   source name moved. **What an existing project gets** through
   `/plinth:template-update`: `calls_claude: false` in `.copier-answers.yml`
   for a `cli`, `dashboard` or `backend`, nothing for any other archetype, and
-  no other file changes. Turning it on later is an answer change:
+  no other file changes. A project named `claude` keeps its own
+  `tests/test_claude.py` as it is on later updates, as one named
+  `scheduled_run` does. Turning it on later is an answer change:
   `copier update --data calls_claude=true`. No job, check or action
   changes.
 

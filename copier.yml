@@ -30,6 +30,9 @@ _preserve_symlinks: true
 # a change to the code and its test arrive together. The names are the
 # shipped tests' but `tree_hygiene`, which every archetype refuses; the
 # template's own test fails when the two disagree. Measured with copier 9.19.1.
+# `scheduled_run` and `claude` are listed only because a shipped test takes
+# the name: no `_exclude` line ever left their own test out, but the same
+# keeping applies to them.
 _skip_if_exists:
   - "{% if package_name in ['access', 'built_wheel', 'claude', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'scheduled_run', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
 
