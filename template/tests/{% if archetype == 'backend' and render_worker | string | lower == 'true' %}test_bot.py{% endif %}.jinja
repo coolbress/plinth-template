@@ -1,5 +1,6 @@
 """The bot's handler and loop with fake messages (`FakeClient`): no token, no
-network. A handler that writes a file or logs a message's text fails here."""
+network. A handler that opens a file to write, logs a message's text or prints
+it fails here; one that writes through `os.open` or a database does not."""
 
 from __future__ import annotations
 
@@ -60,7 +61,10 @@ def _logged(record: logging.LogRecord) -> str:
 
 
 def test_a_handler_stores_nothing_and_logs_no_message_text(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     opened: list[str] = []
     real_open = io.open
@@ -80,6 +84,7 @@ def test_a_handler_stores_nothing_and_logs_no_message_text(
     assert list(tmp_path.iterdir()) == []
     leaked = [r for r in caplog.records if TEXT in _logged(r)]
     assert leaked == [], "a log line carries a message's text"
+    assert TEXT not in "".join(capsys.readouterr()), "a handler printed a message's text"
 
 
 def test_the_token_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9814,11 +9814,8 @@ def test_without_the_answer_a_backend_renders_what_it_did_before_the_question(
 
 def test_a_worker_has_its_entry_point_its_test_and_its_token(tmp_path: Path) -> None:
     out = render(tmp_path, archetype="backend", render_worker=True)
-    for name in WORKER_FILES:
-        assert (out / name).is_file(), name
-    assert 'os.environ.get("BOT_TOKEN")' in (out / "src" / "probe" / "bot.py").read_text(
-        encoding="utf-8"
-    )
+    assert all((out / name).is_file() for name in WORKER_FILES)
+    assert 'os.environ.get("BOT_TOKEN")' in (out / WORKER_FILES[0]).read_text(encoding="utf-8")
     env = (out / ".env.example").read_text(encoding="utf-8")
     assert re.findall(r"^([A-Z_]+)=", env, re.MULTILINE) == ["BOT_TOKEN"]
     assert "never into a chat" in " ".join(env.split())
@@ -9898,9 +9895,7 @@ def test_the_projects_own_tests_catch_a_break_of_the_worker_rules(
 
 
 def test_an_existing_backend_updates_with_every_file_unchanged(tmp_path: Path) -> None:
-    """A `backend` made at the last release, updated to this tree with its
-    answers unchanged: the answers file gains `render_worker: false` and its
-    new commit, and every other file is byte for byte what it was."""
+    """Made at the last release and updated: only `render_worker: false` is new."""
     import copier
 
     tpl = tmp_path / "tpl"

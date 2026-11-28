@@ -7,7 +7,8 @@ A test calls the handler with a fake message (`tests/test_bot.py`): no token,
 no network. The token is read from `BOT_TOKEN` in the environment only.
 
 Nothing is stored, no message history and no user list, and the logs carry
-sizes, timings and errors, never a message's text. Storing data is a later
+sizes, timings and errors, not a message's text, though a handler's traceback
+can. Storing data is a later
 choice, which brings keeping it safe, deleting it on request, and a notice.
 """
 
@@ -53,7 +54,7 @@ def token() -> str:
     """The platform's token, from the environment and nowhere else."""
     value = os.environ.get("BOT_TOKEN")
     if not value:
-        raise MissingTokenError("BOT_TOKEN is not set: in .env here, in the host's secrets elsewhere")
+        raise MissingTokenError("BOT_TOKEN is not set: in .env here, the host's secrets elsewhere")
     return value
 
 
@@ -65,8 +66,8 @@ def answer(message: Message) -> str | None:
 
 
 def run(client: Client, handler: Handler = answer) -> None:
-    """Hand each message to `handler` and send its reply; one that raises is
-    logged without the message's text, and the next message is handled."""
+    """Hand each message to `handler` and send its reply; a handler that raises
+    is logged, and the next message is handled."""
     for message in client.messages():
         started = time.monotonic()
         try:

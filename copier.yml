@@ -464,11 +464,11 @@ calls_claude:
 # request. `true` adds `src/<package>/bot.py`, the worker's entry point,
 # whose handler sits apart from the platform's client (its source name
 # renders empty without the answer); `tests/test_bot.py`, which calls it
-# with fake messages and fails when it writes a file or logs a message's
-# text; and `BOT_TOKEN` in `.env.example`. Render's Blueprint and the README
-# lines on the cost, the token and a privacy notice come with the next part
-# of that issue. Without it a `backend` is a container image only, as
-# before.
+# with fake messages and fails when it opens a file to write, or logs or
+# prints a message's text; and `BOT_TOKEN` in `.env.example`. Render's
+# Blueprint and the README lines on the cost, the token and a privacy notice
+# come with the next part of that issue. Without it a `backend` is a
+# container image only, as before.
 #
 # Asked, not `when: false`, for the reason `plinth_sha` is. Asked of a
 # `backend` only, not through `hosting`, which a `backend` is not asked: the

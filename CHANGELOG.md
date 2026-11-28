@@ -21,13 +21,14 @@ means `copier update` on an instance needs hands.
   (`python -m <package>.bot`), whose handler `answer(message)` sits apart
   from the platform's client and whose `run(client)` hands each message to
   it; `tests/test_bot.py`, which calls the handler with fake messages, needs
-  no token, and fails when a handler writes a file or logs a message's text;
+  no token, and fails when a handler opens a file to write, or logs or
+  prints a message's text;
   and `BOT_TOKEN` in `.env.example`, read from the environment only. No
-  platform's client is chosen: the worker logs that none is connected and
-  stops. Render's Blueprint, the README on the cost and the token, the
+  platform's client is chosen: the worker stops, without a token on the
+  token and with one logging that no client is connected. Render's Blueprint, the README on the cost and the token, the
   privacy notice and a how-to per platform come in the next parts. GitHub
-  only: on GitLab the answer yes is refused, and so is a project named
-  `bot`. **What an existing project gets** through
+  only: on GitLab the answer yes is refused, and so is yes for a project
+  named `bot`. **What an existing project gets** through
   `/plinth:template-update`: `render_worker: false` in `.copier-answers.yml`
   for a `backend`, nothing for any other archetype, and no other file
   changes. No job, check or action changes.
