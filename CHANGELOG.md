@@ -8,14 +8,36 @@ means `copier update` on an instance needs hands.
 
 ### Files and questions
 
+- `.env.example`
 - `.github/workflows/schedule.yml`
 - `README.md`
 - `data/README.md`
 - `docs/how-to/publish-a-release.md`
+- `pyproject.toml`
+- `render.yaml`
+- `tests/conftest.py`
 - `tests/test_scheduled_run.py`
+- `uv.lock`
+- question `calls_claude`
 - question `scheduled_run`
 
 ### Added
+
+- **A `cli`, `dashboard` or `backend` can call Claude: the question
+  `calls_claude`, off by default, its first part** (coolbress/plinth#1071).
+  Yes adds the `anthropic` dependency and a `tests/conftest.py` that fails
+  any test which makes one of the SDK's clients (`Anthropic`, its async twin,
+  and the Bedrock, Vertex and Foundry ones), even inside `except Exception`,
+  and keeps `ANTHROPIC_API_KEY` out of the test run, so the tests and CI need
+  no key. `.env.example` lists the key (a `cli` and a `dashboard` get the file
+  for it); a `dashboard` on Render names it in `render.yaml`, and a scheduled
+  `cli` reads it from a repository secret. GitHub only: on GitLab the answer
+  yes is refused, and so is a project named `anthropic`. `tests/conftest.py`
+  of a `web` project is unchanged; only its source name moved. **What an
+  existing project gets** through `/plinth:template-update`: `calls_claude:
+  false` in `.copier-answers.yml` for a `cli`, `dashboard` or `backend`,
+  nothing for any other archetype, and no other file changes. No job, check
+  or action changes.
 
 - **A `cli` can run on GitHub on a schedule: the question `scheduled_run`,
   off by default** (coolbress/plinth#1070). Asked of a `cli` only. Yes

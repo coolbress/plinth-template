@@ -7310,9 +7310,11 @@ LONG_NAME = "a-subscription-tracker-for-households-and-team"
 def test_a_long_package_name_passes_ruff(tmp_path: Path, archetype: str) -> None:
     """`ci / lint` is green from the first commit with a long name too: the
     rendered project's own ruff, at the version its lockfile pins."""
-    # A `cli` with every file it can have: the scheduled run's test carries the
-    # name too (coolbress/plinth#1070).
+    # Each archetype with every file it can have: the scheduled run's test and
+    # the Claude test carry the name too (coolbress/plinth#1070, #1071).
     extra: dict[str, Any] = {"scheduled_run": True} if archetype == "cli" else {}
+    if archetype in ("cli", "dashboard", "backend"):
+        extra["calls_claude"] = True
     out = render(tmp_path / archetype, project_name=LONG_NAME, archetype=archetype, **extra)
     lock = (out / "uv.lock").read_text(encoding="utf-8")
     pinned = re.search(r'name = "ruff"\nversion = "([^"]+)"', lock)
@@ -9356,6 +9358,9 @@ def test_a_project_named_scheduled_run_renders_without_the_schedule(tmp_path: Pa
 #: later release that changes one of these files for every project names it
 #: in `CHANGED_SINCE` here; the rest still hold.
 SCHEDULE_PATHS = ("README.md", "data/", ".github/workflows/", "tests/")
+#: Questions added after this one, which the same update records for a `cli`
+#: with their defaults (coolbress/plinth#1071).
+ASKED_AFTER_THE_SCHEDULE = ("calls_claude: false",)
 CHANGED_SINCE: tuple[str, ...] = ()
 
 
@@ -9423,11 +9428,236 @@ def test_an_existing_cli_project_updates_with_its_schedule_files_unchanged(
         str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
     )
     lines_after = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
-    added = sorted(line for line in lines_after - lines_before if not line.startswith("_commit:"))
+    added = sorted(
+        line
+        for line in lines_after - lines_before
+        if not line.startswith("_commit:") and line not in ASKED_AFTER_THE_SCHEDULE
+    )
     assert added == ["scheduled_run: false"], added
     assert {line for line in lines_before - lines_after if not line.startswith("_commit:")} == set()
     after = _tree(proj)
     assert not [name for name, body in after.items() if b"<<<<<<<" in body]
     assert _touched(after) == _touched(before), sorted(
+        k for k in before.keys() | after.keys() if before.get(k) != after.get(k)
+    )
+
+
+# ── a project that calls Claude (coolbress/plinth#1071) ────────────────────
+
+#: The archetypes the question is asked of.
+CALLS_CLAUDE = ("cli", "dashboard", "backend")
+#: The release a project made before the question was rendered from.
+BEFORE_CALLS_CLAUDE = "v1.52.0"
+
+
+def test_the_claude_question_is_asked_of_three_archetypes_and_is_off_by_default() -> None:
+    question = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["calls_claude"]
+    assert question["when"] == "{{ archetype in ['cli', 'dashboard', 'backend'] }}"
+    assert question["default"] is False
+    assert question["type"] == "bool"
+    assert "never paste it into a chat" in " ".join(question["help"].split())
+
+
+@pytest.mark.parametrize("archetype", ["library", "data-ml", "web"])
+def test_no_other_archetype_calls_claude_even_when_asked_for_it(
+    tmp_path: Path, archetype: str
+) -> None:
+    """Not asked, not recorded, and nothing of it rendered whatever `--data` says."""
+    out = render(tmp_path, archetype=archetype, calls_claude=True)
+    assert "calls_claude" not in _answers(out)
+    assert "anthropic" not in (out / "pyproject.toml").read_text(encoding="utf-8")
+    env = out / ".env.example"
+    assert not env.exists() or "ANTHROPIC_API_KEY" not in env.read_text(encoding="utf-8")
+    conftest = out / "tests" / "conftest.py"
+    assert archetype == "web" or not conftest.exists()
+    if conftest.exists():
+        assert "anthropic" not in conftest.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("archetype", CALLS_CLAUDE)
+def test_without_the_answer_a_project_renders_what_it_did_before_the_question(
+    tmp_path: Path, archetype: str
+) -> None:
+    unasked = render(tmp_path / "unasked", archetype=archetype)
+    off = render(tmp_path / "off", archetype=archetype, calls_claude=False)
+    assert _tree(unasked) == _tree(off)
+    assert _answers(off)["calls_claude"] is False
+    assert not (off / "tests" / "conftest.py").exists()
+
+
+@pytest.mark.parametrize("archetype", CALLS_CLAUDE)
+def test_a_project_that_calls_claude_has_the_sdk_its_guard_and_its_key(
+    tmp_path: Path, archetype: str
+) -> None:
+    out = render(tmp_path, archetype=archetype, calls_claude=True)
+    assert '"anthropic>=' in (out / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'name = "anthropic"' in (out / "uv.lock").read_text(encoding="utf-8")
+    conftest = (out / "tests" / "conftest.py").read_text(encoding="utf-8")
+    assert 'os.environ.pop("ANTHROPIC_API_KEY", None)' in conftest
+    # The key is the one secret the file names; the rest are a backend's commented lines.
+    env = (out / ".env.example").read_text(encoding="utf-8")
+    keys = re.findall(r"^([A-Z_]+)=", env, re.MULTILINE)
+    assert keys == ["ANTHROPIC_API_KEY"], keys
+    assert "never paste it" in " ".join(env.split())
+
+
+def test_the_key_goes_to_the_place_the_project_runs(tmp_path: Path) -> None:
+    """A dashboard on Render: `render.yaml` names the key for Render to ask; a
+    scheduled `cli`: the workflow reads it from a repository secret."""
+    page = render(tmp_path / "page", archetype="dashboard", hosting="render", calls_claude=True)
+    (service,) = yaml.safe_load((page / "render.yaml").read_text(encoding="utf-8"))["services"]
+    assert service["envVars"] == [{"key": "ANTHROPIC_API_KEY", "sync": False}]
+    cli = render(tmp_path / "cli", scheduled_run=True, calls_claude=True)
+    workflow = yaml.safe_load((cli / SCHEDULE_FILES[0]).read_text(encoding="utf-8"))
+    (job,) = workflow["jobs"].values()
+    (step,) = [s for s in job["steps"] if s.get("name") == "Run the command"]
+    assert step["env"] == {"ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}"}
+
+
+@pytest.mark.parametrize(
+    ("answers", "refused"),
+    [
+        ({"host": "gitlab"}, "Calling Claude is GitHub only for now"),
+        ({"project_name": "anthropic"}, "hide the Anthropic SDK's own package"),
+    ],
+)
+def test_calling_claude_is_refused_where_it_was_not_tried_or_would_collide(
+    tmp_path: Path, answers: dict[str, str], refused: str
+) -> None:
+    given = {"project_name": "probe", "archetype": "cli", "calls_claude": "true", **answers}
+    assert refused in (_refusal(tmp_path, **given) or "")
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("archetype", CALLS_CLAUDE)
+def test_a_project_that_calls_claude_passes_its_own_checks_with_no_key(
+    tmp_path: Path, archetype: str
+) -> None:
+    """CI has no `ANTHROPIC_API_KEY`; with one in the environment the tests still
+    never see it."""
+    out = render(
+        tmp_path, project_name="my.app", archetype=archetype, owner="someone", calls_claude=True
+    )
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    for step in OWN_CHECKS:
+        done = subprocess.run(  # noqa: S603
+            step, cwd=out, env=env, capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, f"{' '.join(step)}\n{done.stdout}\n{done.stderr}"
+    done = subprocess.run(
+        ["uv", "run", "--quiet", "pytest", "-q"],  # noqa: S607
+        cwd=out,
+        env={**env, "ANTHROPIC_API_KEY": "sk-ant-not-a-real-key"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+#: Tests that make one of the SDK's clients, each inside `except Exception`,
+#: as code under test might: each must fail the project's test run.
+REAL_CLIENTS = {
+    "the real client": "anthropic.Anthropic()",
+    "the Bedrock client": 'anthropic.AnthropicBedrock(aws_region="us-east-1")',
+}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("name", sorted(REAL_CLIENTS))
+def test_a_test_that_makes_a_real_client_fails(tmp_path: Path, name: str) -> None:
+    out = render(tmp_path, calls_claude=True)
+    (out / "tests" / "test_forgot.py").write_text(
+        "import pytest\n\nimport anthropic\n\n\n"
+        "def test_forgot(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        '    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-a-real-key")\n'
+        "    try:\n"
+        f"        {REAL_CLIENTS[name]}\n"
+        "    except Exception:\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, env=env, check=True)  # noqa: S607
+    done = subprocess.run(
+        ["uv", "run", "--quiet", "pytest", "-q", "-p", "no:cacheprovider"],  # noqa: S607
+        cwd=out,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "a test made the real Anthropic client" in done.stdout, done.stdout
+
+
+@pytest.fixture(scope="module")
+def claude_releases(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """`BEFORE_CALLS_CLAUDE` as released and, on top of it, this tree as `v9.0.0`."""
+    tpl = tmp_path_factory.mktemp("claude-releases") / "tpl"
+    _clone_of_the_release(tpl, BEFORE_CALLS_CLAUDE)
+    for entry in tpl.iterdir():
+        if entry.name != ".git":
+            shutil.rmtree(entry) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-q", "--allow-empty", "-m", "this tree")
+    _git(tpl, "tag", "-a", "-m", "this tree", "v9.0.0")
+    return tpl
+
+
+#: The other questions this tree asks that `BEFORE_CALLS_CLAUDE` did not.
+ASKED_SINCE = {"cli": ["scheduled_run: false"]}
+#: Rendered files a change since `BEFORE_CALLS_CLAUDE` other than this question
+#: changes for every project of an archetype: a `backend`'s release how-to
+#: (#370).
+CLAUDE_CHANGED_SINCE: tuple[str, ...] = ("docs/how-to/publish-a-release.md",)
+
+
+@pytest.mark.parametrize(
+    ("archetype", "extra"),
+    [("cli", {}), ("dashboard", {}), ("dashboard", {"hosting": "render"}), ("backend", {})],
+)
+def test_an_existing_project_updates_with_every_file_unchanged(
+    tmp_path: Path, claude_releases: Path, archetype: str, extra: dict[str, str]
+) -> None:
+    """A project made at the last release, updated with its answers unchanged:
+    the answers file gains `calls_claude: false` and its new commit, nothing
+    conflicts, and every other file is byte for byte what it was."""
+    import copier
+
+    given = {"project_name": "probe", "license": "MIT", "archetype": archetype, **extra}
+    proj = _copy_at(claude_releases, tmp_path / "proj", BEFORE_CALLS_CLAUDE, **given)
+    assert "calls_claude" not in _answers(proj)
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    before = _tree(proj)
+    lines_before = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    lines_after = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
+    added = sorted(line for line in lines_after - lines_before if not line.startswith("_commit:"))
+    assert added == sorted(["calls_claude: false", *ASKED_SINCE.get(archetype, [])]), added
+    assert {line for line in lines_before - lines_after if not line.startswith("_commit:")} == set()
+    after = _tree(proj)
+
+    def kept(tree: dict[str, bytes]) -> dict[str, bytes]:
+        return {
+            name: body
+            for name, body in tree.items()
+            if name != ".copier-answers.yml" and name not in CLAUDE_CHANGED_SINCE
+        }
+
+    assert kept(after) == kept(before), sorted(
         k for k in before.keys() | after.keys() if before.get(k) != after.get(k)
     )

@@ -53,7 +53,9 @@ _exclude:
   # they are never written, so no stub is left behind. The checker in plinth
   # (`scripts/floor-check.py`) names the same archetypes; its test reads
   # this file over the network, so keep the condition on one line.
-  - "{% if archetype not in ['backend', 'data-ml', 'web'] %}/.env.example{% endif %}"
+  - "{% if archetype not in ['backend', 'data-ml', 'web'] and not (archetype in ['cli', 'dashboard'] and calls_claude | string | lower == 'true') %}/.env.example{% endif %}"
+  # A `cli` or `dashboard` that calls Claude has one too, for its API key
+  # (`calls_claude` below); the first list stays the image archetypes.
   # Its source is `{{ "" }}.env.example.jinja`, which renders to
   # `.env.example`: this repository's `.gitignore` ignores `.env.*`, and
   # copier, rendering a working tree with uncommitted changes,
@@ -88,13 +90,14 @@ _exclude:
   - "{% if archetype in ['library', 'web', 'dashboard'] %}tests/entry_point.expected{% endif %}"
   # The web archetype's Django project: its settings, routes, the ASGI
   # application the entry point serves, the pre-deploy step, and Django's
-  # command line.
+  # command line. Its `tests/conftest.py` is a source name that renders
+  # empty elsewhere, since a project that calls Claude has a conftest of its
+  # own (`calls_claude` below).
   - "{% if archetype != 'web' %}src/{{ package_name }}/settings.py{% endif %}"
   - "{% if archetype != 'web' %}src/{{ package_name }}/urls.py{% endif %}"
   - "{% if archetype != 'web' %}src/{{ package_name }}/asgi.py{% endif %}"
   - "{% if archetype != 'web' %}src/{{ package_name }}/predeploy.py{% endif %}"
   - "{% if archetype != 'web' %}/manage.py{% endif %}"
-  - "{% if archetype != 'web' %}tests/conftest.py{% endif %}"
   - "{% if archetype != 'web' %}src/{{ package_name }}/notes{% endif %}"
   - "{% if archetype != 'web' %}tests/migration_rows.json{% endif %}"
   # The web archetype's own user model, only where the project started with
@@ -397,6 +400,45 @@ scheduled_run:
     {%- elif scheduled_run | string | lower == 'true' and pkg == 'scheduled_run' -%}
     The package name '{{ pkg }}' would name the project's test
     tests/test_scheduled_run.py, and a scheduled run ships a test by that name.
+    Choose another repository name, for example '{{ project_name }}-app'.
+    {%- endif -%}
+
+# Whether the project calls Claude through the Anthropic API
+# (coolbress/plinth#1071): `true` adds the `anthropic` dependency; a
+# `tests/conftest.py` that fails any test which makes one of the SDK's
+# clients, so the tests and CI never need a key; `ANTHROPIC_API_KEY` in
+# `.env.example`; and the key's place where the project runs elsewhere: a
+# `dashboard` on Render names it in `render.yaml`, and a scheduled `cli`
+# reads it from a repository secret. `tests/conftest.py` is a source name
+# that renders empty without the answer.
+#
+# Asked, not `when: false`, for the reason `plinth_sha` is. Asked of a `cli`,
+# a `dashboard` and a `backend`; on any other archetype it is neither asked
+# nor recorded, and its files are left out whatever `--data` says. The
+# default is `false` for the projects that exist: one made before this
+# question takes it at its next update, and every file but
+# `.copier-answers.yml` renders as it did.
+#
+# GitHub only at first. A project named `anthropic` is refused `true`: its
+# package would hide the SDK's.
+calls_claude:
+  type: bool
+  when: "{{ archetype in ['cli', 'dashboard', 'backend'] }}"
+  help: |
+    Does this project call Claude, for a chat or an assistant or to answer
+    questions?
+    No (press Enter): it does not.
+    Yes: it gets the Anthropic SDK, and tests that cannot call the real
+    Claude, so they need no API key and cost nothing.
+    You make the key later, with a spend limit; never paste it into a chat.
+  default: false
+  validator: >-
+    {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
+    {%- if calls_claude | string | lower == 'true' and host == 'gitlab' -%}
+    Calling Claude is GitHub only for now: nothing was tried on GitLab.
+    Answer no, or choose GitHub.
+    {%- elif calls_claude | string | lower == 'true' and pkg == 'anthropic' -%}
+    The package name '{{ pkg }}' would hide the Anthropic SDK's own package, anthropic.
     Choose another repository name, for example '{{ project_name }}-app'.
     {%- endif -%}
 
