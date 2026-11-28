@@ -580,7 +580,9 @@ subscription. A background worker has no free instance
 cap. **The bot runs only while that worker runs:** suspended or deleted, it
 answers nothing.
 
-Once, in Render's dashboard: New > Blueprint, choose this repository. Render
+Connect a client first: without one the worker stops at start, and it is
+billed while it exists all the same. Then, once, in Render's
+dashboard: New > Blueprint, choose this repository. Render
 asks for `BOT_TOKEN`'s value ([`render.yaml`](render.yaml) names it with no
 value): paste the platform's token there. Then in the Blueprint's Settings
 set Auto Sync to No. After that a commit on the default branch is deployed
@@ -599,7 +601,8 @@ messages, and fails when a handler writes a file or logs a message's text.
 ## Privacy
 
 By default the bot stores nothing: no message history and no user list, and
-its logs carry sizes, timings and errors, never a message's text. Fill in
+its logs carry sizes, timings and errors, not a message's text, though the
+traceback of a handler that fails can. Fill in
 this notice before real people use it, and keep it true when that changes:
 
 > - **What the bot reads:** the messages sent to it, in the channels it is in.
@@ -660,7 +663,9 @@ into that host's secrets{% if archetype == 'dashboard' and hosting == 'render' %
 service's Environment (`render.yaml` names the key, and Render asks for its
 value when the Blueprint is created){% elif archetype == 'cli' and scheduled_run | string | lower == 'true' %}: for the scheduled run, a repository secret
 named `ANTHROPIC_API_KEY` (Settings > Secrets and variables > Actions), which
-`.github/workflows/schedule.yml` reads{% elif archetype == 'backend' %}: the container's environment
+`.github/workflows/schedule.yml` reads{% elif archetype == 'backend' and render_worker | string | lower == 'true' %}: on Render, the
+worker's Environment (`render.yaml` names the key, and Render asks for its
+value when the Blueprint is created){% elif archetype == 'backend' %}: the container's environment
 (`docker run --env-file .env` on this computer, the host's secret settings
 elsewhere){% else %}, never into the repository{% endif %}. The code reads it from the environment only.
 

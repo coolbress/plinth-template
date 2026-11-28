@@ -9856,6 +9856,9 @@ def test_a_worker_has_one_render_worker_its_token_a_secret_and_its_readme(tmp_pa
     both = render(tmp_path / "both", archetype="backend", render_worker=True, calls_claude=True)
     (service,) = yaml.safe_load((both / "render.yaml").read_text(encoding="utf-8"))["services"]
     assert [v["key"] for v in service["envVars"]] == ["BOT_TOKEN", "ANTHROPIC_API_KEY"]
+    assert "on Render, the worker's Environment (`render.yaml` names the key" in _flat(
+        both / "README.md"
+    )
 
 
 @pytest.mark.parametrize(

@@ -34,7 +34,9 @@ means `copier update` on an instance needs hands.
   what it costs (about US $7 a month, no free instance for a worker), that
   the bot runs only while the worker does, where the token goes, and carries
   a privacy notice the owner fills in, with each platform's rules linked and
-  a "not legal advice" line. A how-to per platform comes in the next part. GitHub
+  a "not legal advice" line. With `calls_claude` on as well, `render.yaml`
+  names `ANTHROPIC_API_KEY` too and the README's "Where the key goes" says
+  Render's Environment. A how-to per platform comes in the next part. GitHub
   only: on GitLab the answer yes is refused, and so is yes for a project
   named `bot`. **What an existing project gets** through
   `/plinth:template-update`: `render_worker: false` in `.copier-answers.yml`
