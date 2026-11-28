@@ -1,0 +1,31 @@
+"""No test calls the real Claude.
+
+Loaded before any test module: from here on, making `anthropic.Anthropic` or
+`anthropic.AsyncAnthropic` fails the test that does it, and the run never
+sees an `ANTHROPIC_API_KEY` this computer has. So the tests and CI need no
+key, cost nothing, and send nothing. A test passes a fake client instead, as
+`tests/test_claude.py` does.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import NoReturn
+
+import anthropic
+import pytest
+
+os.environ.pop("ANTHROPIC_API_KEY", None)
+
+
+def _refuse(*args: object, **kwargs: object) -> NoReturn:
+    # `pytest.fail` raises an exception `except Exception` does not catch, so
+    # code under test cannot swallow it.
+    pytest.fail(
+        "a test made the real Anthropic client: pass a fake one, as tests/test_claude.py does",
+        pytrace=False,
+    )
+
+
+anthropic.Anthropic.__init__ = _refuse  # type: ignore[method-assign]
+anthropic.AsyncAnthropic.__init__ = _refuse  # type: ignore[method-assign]

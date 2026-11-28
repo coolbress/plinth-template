@@ -61,6 +61,12 @@ jobs:
 {% endraw %}      # The command and where its output goes; `tests/test_scheduled_run.py`
       # runs the same line. Change them together.
       - name: Run the command
+{%- if calls_claude | string | lower == 'true' %}
+        env:
+          # A repository secret (Settings > Secrets and variables > Actions):
+          # README.md, "Calls Claude".
+          ANTHROPIC_API_KEY: {{ '${{' }} secrets.ANTHROPIC_API_KEY {{ '}}' }}
+{%- endif %}
         run: |
           set -euo pipefail
           mkdir -p data/processed

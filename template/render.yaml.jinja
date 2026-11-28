@@ -25,6 +25,12 @@ services:
     startCommand: uv run --no-sync streamlit run src/{{ package_name }}/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
     # Streamlit's own health route; it answers once the server is up.
     healthCheckPath: /_stcore/health
+{%- if calls_claude | string | lower == 'true' %}
+    envVars:
+      # Typed in Render's dashboard when the Blueprint is created, never here.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+{%- endif %}
 {% else %}# Render Blueprint: one web service and one Postgres, both on paid plans.
 # Create them once in Render's dashboard (New > Blueprint, this repository),
 # then set the Blueprint's Auto Sync to No in its Settings: Render applies a

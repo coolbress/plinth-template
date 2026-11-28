@@ -8,13 +8,50 @@ means `copier update` on an instance needs hands.
 
 ### Files and questions
 
+- `.env.example`
 - `.github/workflows/schedule.yml`
 - `README.md`
 - `data/README.md`
+- `docs/how-to/use-another-model-provider.md`
+- `pyproject.toml`
+- `render.yaml`
+- `src/<package>/claude.py`
+- `src/<package>/prompts/system.md`
+- `tests/conftest.py`
+- `tests/test_claude.py`
 - `tests/test_scheduled_run.py`
+- `uv.lock`
+- question `calls_claude`
 - question `scheduled_run`
 
 ### Added
+
+- **A `cli`, `dashboard` or `backend` can call Claude: the question
+  `calls_claude`, off by default** (coolbress/plinth#1071). Yes adds the
+  `anthropic` dependency and `src/<package>/claude.py`, the one place the
+  client is made (from `ANTHROPIC_API_KEY` in the environment) and the model
+  is named (`MODEL`), with the system prompt read from
+  `src/<package>/prompts/system.md`. The code logs sizes, timings, token
+  counts and errors, never a message's text. `tests/conftest.py` fails any
+  test that makes the real client and keeps the key out of the test run, so
+  the tests and CI need no key; `tests/test_claude.py` answers with a fake
+  client and fails when the model is named twice in the package or a message
+  reaches the logs. `.env.example` lists `ANTHROPIC_API_KEY` (a `cli` and a
+  `dashboard` get the file for it); a `dashboard` on Render names the key in
+  `render.yaml`, and a scheduled `cli` reads it from a repository secret. A
+  README section, "Calls Claude", says to make a workspace of its own for the
+  key and set its spend limit and the organization's first, never to paste
+  the key into a chat, where the key goes, what Anthropic keeps (read
+  2026-11-28), a notice for users, and when to ask someone qualified.
+  `docs/how-to/use-another-model-provider.md` says what moving changes,
+  starting with Google Gemini's unpaid tier. GitHub only: on GitLab the
+  answer yes is refused. A project named `claude` or `anthropic` is refused
+  yes. `tests/conftest.py` of a `web` project is unchanged; only its source
+  name moved. **What an existing project gets** through
+  `/plinth:template-update`: `calls_claude: false` in `.copier-answers.yml`
+  for a `cli`, `dashboard` or `backend`, nothing for any other archetype, and
+  no other file changes. Turning it on later is an answer change:
+  `copier update --data calls_claude=true`. No job, check or action changes.
 
 - **A `cli` can run on GitHub on a schedule: the question `scheduled_run`,
   off by default** (coolbress/plinth#1070). Asked of a `cli` only. Yes
