@@ -127,6 +127,56 @@ gh attestation verify oci://{{ image }}:0.2.0 --repo {{ owner if owner else '<yo
 
 The run summary prints this command with the SPDX version the file carries.
 
+## 6. Where to run it, and what that costs
+
+A hosting service runs the image you published and gives it an address.
+First, the image has to answer on one: as the template makes it, the
+service's `main()` logs that it started and stops, since no web framework is
+chosen for you. Before a host can run it as a web service, it has to listen
+for HTTP on the port in the `PORT` environment variable and answer a path a
+health check can call, such as `/healthz`. A bot that answers no web request
+is not a web service: it needs no port and no health check, and runs as a
+background worker, which Render describes at
+<https://render.com/docs/background-workers>.
+
+Three hosts that run a container from GHCR for a small project. Prices and
+limits as each host's pages said them on 2026-11-28; they change, so read
+the pricing page before you choose.
+
+| Host | Smallest always-on | Free option | Sleeps when idle | A private image from GHCR | Secrets |
+|---|---|---|---|---|---|
+| [Render](https://render.com/pricing) (web service) | $7 a month (512 MB, less than one CPU) | Yes: 750 hours a month per workspace | The free one, after 15 minutes without a request; the next request then takes about a minute | A registry credential with a token, set when the service is made | The service's **Environment** page |
+| [Fly.io](https://docs.fly.io/about/pricing) | About $3.69 a month (shared CPU, 512 MB) | $5 of usage a month on a personal organization; a card on file | By default: `fly launch` lets idle machines stop and keeps none running | Not documented: Fly's pages push the image to Fly's own registry instead | `fly secrets set NAME=value` |
+| [Railway](https://railway.com/pricing) | $5 a month (Hobby) plus usage past the $5 it includes | $1 of usage a month, for apps that can sleep when idle | The free plan, when idle | Only on the Pro plan ($20 a month) | The service's **Variables** tab |
+
+On every host, the secrets the service needs (a database's address, an API
+key) go in the host's own settings for the service, which hands them to the
+container as environment variables: never in the image, the repository
+or the chat.
+
+**For a first deploy, Render**: its guide to deploying an image documents
+fetching a private image from GHCR with a token, where Fly.io documents no
+such way and Railway asks for its $20 Pro plan. Whether Render's free
+instance takes an image was not confirmed here: if **Free** is not offered
+in step 5, the $7 instance is the smallest. The steps, from that guide
+(<https://render.com/docs/deploying-an-image>):
+
+1. Make a token that can only read your images: on GitHub, a personal
+   access token (classic) with only the `read:packages` scope. Skip this
+   for a public image.
+2. On Render: **+ New** > **Web Service** > under **Source Code**,
+   **Existing Image**.
+3. In **Image URL**, the version the release made:
+   `{{ image }}:0.2.0`.
+4. For a private image, add a **Credential**: registry **GitHub Container
+   Registry**, your GitHub account as the username, and the token from
+   step 1. Never paste the token into the chat.
+5. Choose a name, a region and the compute plan.
+6. **Deploy**.
+7. Under the service's **Environment**, add each secret it needs. Render
+   sets `PORT` (10000 unless you change it); the service listens on it.
+8. Under **Settings** > **Health Checks**, set the path the service answers.
+
 ## When a release fails
 
 Nothing is pushed until the checks before it have passed. The run says
