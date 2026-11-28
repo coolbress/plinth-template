@@ -1,0 +1,95 @@
+"""The bot's handler and loop with fake messages (`FakeClient`): no token, no
+network. A handler that opens a file to write, logs a message's text or prints
+it fails here; one that writes through `os.open` or a database does not."""
+
+from __future__ import annotations
+
+import io
+import logging
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from {{ package_name }}.bot import Message, MissingTokenError, answer, run, token
+
+#: Text no log line or file may carry.
+TEXT = "my card number is 4242 4242 4242 4242"
+
+
+class FakeClient:
+    """The messages a platform would deliver, and the replies sent back."""
+
+    def __init__(self, *texts: str) -> None:
+        self.inbox = [Message(text=t, channel="fake") for t in texts]
+        self.sent: list[tuple[Message, str]] = []
+
+    def messages(self) -> Iterable[Message]:
+        return iter(self.inbox)
+
+    def reply(self, to: Message, text: str) -> None:
+        self.sent.append((to, text))
+
+
+def test_the_handler_answers_a_message() -> None:
+    assert answer(Message(text="ping", channel="fake")) == "pong"
+    assert answer(Message(text="hello", channel="fake")) is None
+
+
+def test_run_hands_each_message_to_the_handler_and_sends_its_reply() -> None:
+    client = FakeClient("ping", "hello", "PING ")
+    run(client)
+    assert [(m.text, r) for m, r in client.sent] == [("ping", "pong"), ("PING ", "pong")]
+
+
+def test_a_handler_that_raises_does_not_stop_the_bot(caplog: pytest.LogCaptureFixture) -> None:
+    def broken(message: Message) -> str | None:
+        if message.text == TEXT:
+            raise ValueError("bad message")
+        return "ok"
+
+    client = FakeClient(TEXT, "next")
+    with caplog.at_level(logging.INFO):
+        run(client, broken)
+    assert [r for _, r in client.sent] == ["ok"]
+    assert "handler failed" in caplog.text
+
+
+def _logged(record: logging.LogRecord) -> str:
+    return " ".join(str(v) for v in (record.getMessage(), *record.__dict__.values()))
+
+
+def test_a_handler_stores_nothing_and_logs_no_message_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    opened: list[str] = []
+    real_open = io.open
+
+    def guarded(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if any(c in mode for c in "wax+"):
+            opened.append(str(file))
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(io, "open", guarded)
+    monkeypatch.setattr("builtins.open", guarded)
+    monkeypatch.chdir(tmp_path)
+    client = FakeClient(TEXT, "ping")
+    with caplog.at_level(logging.DEBUG):
+        run(client)
+    assert opened == [], f"a handler wrote {opened}"
+    assert list(tmp_path.iterdir()) == []
+    leaked = [r for r in caplog.records if TEXT in _logged(r)]
+    assert leaked == [], "a log line carries a message's text"
+    assert TEXT not in "".join(capsys.readouterr()), "a handler printed a message's text"
+
+
+def test_the_token_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("BOT_TOKEN", raising=False)
+    with pytest.raises(MissingTokenError):
+        token()
+    monkeypatch.setenv("BOT_TOKEN", "not-a-real-token")
+    assert token() == "not-a-real-token"
