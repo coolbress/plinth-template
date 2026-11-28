@@ -11,6 +11,7 @@ means `copier update` on an instance needs hands.
 - `.github/workflows/schedule.yml`
 - `README.md`
 - `data/README.md`
+- `docs/how-to/publish-a-release.md`
 - `tests/test_scheduled_run.py`
 - question `scheduled_run`
 
@@ -35,6 +36,19 @@ means `copier update` on an instance needs hands.
   for a `cli`, nothing for any other archetype, and no other file changes.
   Turning it on later is an answer change: `copier update --data
   scheduled_run=true`. No job, check or action changes.
+- **A `backend` project's publish page says where its image can run and
+  what that costs** (#362). `docs/how-to/publish-a-release.md` gains
+  "Where to run it, and what that costs": Render, Fly.io and Railway, each
+  with its smallest always-on price and its free option as read on
+  2026-11-28 and linked, whether it sleeps, and whether it fetches a private
+  image from GHCR. Render is recommended for a first deploy, because it
+  fetches a private image on any plan; its deploy is numbered steps naming
+  the image the release made. The page says the image first has to listen
+  on `PORT`, since the template chooses no web framework, and points a bot
+  to the Render background worker coolbress/plinth#1072 adds. **What an
+  existing project gets** through `/plinth:template-update`: that section on
+  a `backend`'s publish page, nothing for any other archetype. No job,
+  check or action changes.
 
 ### Fixed
 

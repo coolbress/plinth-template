@@ -2787,6 +2787,38 @@ def test_backend_release_summary_says_whether_the_sbom_is_signed(backend: Path) 
         summary.unlink(missing_ok=True)
 
 
+WHERE_TO_RUN = "## 6. Where to run it, and what that costs"
+
+
+def test_backend_how_to_says_where_the_image_runs_with_dated_prices(
+    backend: Path, rendered: Path, data_ml: Path
+) -> None:
+    """Three hosts with their dated prices and pricing links, Render recommended
+    with numbered steps naming the image the release made, a bot pointed at
+    coolbress/plinth#1072's worker (#362); absent for other archetypes."""
+    howto = (backend / RELEASE_HOWTO).read_text(encoding="utf-8")
+    section = howto.split(WHERE_TO_RUN, 1)[1].split("\n## ", 1)[0]
+    assert "on 2026-11-28" in section
+    assert "read\nthe pricing page before you choose" in section
+    for link in (
+        "https://render.com/pricing",
+        "https://docs.fly.io/about/pricing",
+        "https://railway.com/pricing",
+    ):
+        assert f"]({link})" in section
+    assert "**For a first deploy, Render**" in section
+    assert (
+        "3. In **Image URL**, the version the release made:\n   `ghcr.io/someone/probe:0.2.0`."
+        in section
+    )
+    assert "`read:packages`" in section
+    assert "never in the image, the repository\nor the chat" in section
+    assert "coolbress/plinth#1072" in section
+    for other in (rendered, data_ml):
+        page = other / RELEASE_HOWTO
+        assert not page.exists() or WHERE_TO_RUN not in page.read_text(encoding="utf-8")
+
+
 def test_backend_how_to_states_the_private_storage_limit(backend: Path) -> None:
     howto = (backend / RELEASE_HOWTO).read_text(encoding="utf-8")
     assert howto.startswith("# Publish a release as a container image\n")
