@@ -142,21 +142,22 @@ Three hosts that run a container from GHCR for a small project. Prices and
 limits as each host's pages said them on 2026-11-28; they change, so read
 the pricing page before you choose.
 
-| Host | Smallest always-on | Free option | Sleeps when idle | A private image from GHCR |
-|---|---|---|---|---|
-| [Render](https://render.com/pricing) (web service) | $7 a month (512 MB, less than one CPU) | Yes: 750 hours a month per workspace | The free one, after 15 minutes without a request; the first request then takes about a minute | Yes, on any plan: a registry credential with a token |
-| [Fly.io](https://docs.fly.io/about/pricing) | About $3.69 a month (shared CPU, 512 MB) | $5 of usage a month on a personal organization; a card on file | By default, a few minutes after the last request (`min_machines_running = 1` keeps one running) | Not documented: Fly's pages push the image to Fly's own registry instead |
-| [Railway](https://railway.com/pricing) | $5 a month (Hobby) plus usage past the $5 it includes | $1 of usage a month; it sleeps | The free plan, when idle | Only on the Pro plan ($20 a month) |
+| Host | Smallest always-on | Free option | Sleeps when idle | A private image from GHCR | Secrets |
+|---|---|---|---|---|---|
+| [Render](https://render.com/pricing) (web service) | $7 a month (512 MB, less than one CPU) | Yes: 750 hours a month per workspace | The free one, after 15 minutes without a request; the next request then takes about a minute | A registry credential with a token, set when the service is made | The service's **Environment** page |
+| [Fly.io](https://docs.fly.io/about/pricing) | About $3.69 a month (shared CPU, 512 MB) | $5 of usage a month on a personal organization; a card on file | By default: `fly launch` lets idle machines stop and keeps none running | Not documented: Fly's pages push the image to Fly's own registry instead | `fly secrets set NAME=value` |
+| [Railway](https://railway.com/pricing) | $5 a month (Hobby) plus usage past the $5 it includes | $1 of usage a month, for apps that can sleep when idle | The free plan, when idle | Only on the Pro plan ($20 a month) | The service's **Variables** tab |
 
 On every host, the secrets the service needs (a database's address, an API
-key) go in the host's own settings for the service, where it hands them to
-the container as environment variables: never in the image, the repository
-or the chat. The host keeps them; the image stays the same everywhere.
+key) go in the host's own settings for the service, which hands them to the
+container as environment variables: never in the image, the repository
+or the chat.
 
-**For a first deploy, Render**: it fetches a private image from GHCR on any
-plan, including the free one, and its free instance is enough to see the
-service answer. Move to the $7 instance when it must not sleep. The steps,
-from Render's guide to deploying an image
+**For a first deploy, Render**: its guide to deploying an image documents
+fetching a private image from GHCR with a token, where Fly.io documents no
+such way and Railway asks for its $20 Pro plan. Whether Render's free
+instance takes an image was not confirmed here: if **Free** is not offered
+in step 5, the $7 instance is the smallest. The steps, from that guide
 (<https://render.com/docs/deploying-an-image>):
 
 1. Make a token that can only read your images: on GitHub, a personal
@@ -169,17 +170,11 @@ from Render's guide to deploying an image
 4. For a private image, add a **Credential**: registry **GitHub Container
    Registry**, your GitHub account as the username, and the token from
    step 1. Never paste the token into the chat.
-5. Choose a name, a region and the compute plan (**Free** to start).
-6. Under the service's **Environment**, add each secret it needs.
-   Render sets `PORT` (10000 unless you change it); the service listens on
-   it.
-7. **Deploy**. When the deploy is live, open the address Render gives
-   (`https://<name>.onrender.com`) and the path you serve.
-8. Under **Settings** > **Health Checks**, set the path the service answers,
-   so Render waits for it before sending requests to a new version.
-
-For each later release, change the image's tag to the new version under the
-service's **Settings** (**Image URL**) and deploy again.
+5. Choose a name, a region and the compute plan.
+6. **Deploy**.
+7. Under the service's **Environment**, add each secret it needs. Render
+   sets `PORT` (10000 unless you change it); the service listens on it.
+8. Under **Settings** > **Health Checks**, set the path the service answers.
 
 ## When a release fails
 

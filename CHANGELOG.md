@@ -40,10 +40,10 @@ means `copier update` on an instance needs hands.
   what that costs** (#362). `docs/how-to/publish-a-release.md` gains
   "Where to run it, and what that costs": Render, Fly.io and Railway, each
   with its smallest always-on price and its free option as read on
-  2026-11-28 and linked, whether it sleeps, and whether it fetches a private
-  image from GHCR. Render is recommended for a first deploy, because it
-  fetches a private image on any plan; its deploy is numbered steps naming
-  the image the release made. The page says the image first has to listen
+  2026-11-28 and linked, whether it sleeps, how it fetches a private image
+  from GHCR and where its secrets go. Render is recommended for a first
+  deploy, because its guide documents fetching a private GHCR image with a
+  token; its deploy is numbered steps naming the image the release made. The page says the image first has to listen
   on `PORT`, since the template chooses no web framework, and points a bot
   to the Render background worker coolbress/plinth#1072 adds. **What an
   existing project gets** through `/plinth:template-update`: that section on
