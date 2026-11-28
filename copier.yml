@@ -34,7 +34,7 @@ _preserve_symlinks: true
 # the name: no `_exclude` line ever left their own test out, but the same
 # keeping applies to them.
 _skip_if_exists:
-  - "{% if package_name in ['access', 'built_wheel', 'claude', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'scheduled_run', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
+  - "{% if package_name in ['access', 'built_wheel', 'claude', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'scheduled_run', 'train', 'bot'] %}tests/test_{{ package_name }}.py{% endif %}"
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
@@ -456,6 +456,46 @@ calls_claude:
     The package name '{{ pkg }}' {% if pkg == 'claude' %}would name the project's test
     tests/test_claude.py, and a project that calls Claude ships a test by that name{% else %}would
     hide the Anthropic SDK's own package, anthropic{% endif %}.
+    Choose another repository name, for example '{{ project_name }}-app'.
+    {%- endif -%}
+
+# Whether a `backend` runs all the time as a background worker on Render
+# (coolbress/plinth#1072): a bot, or any service that answers no web
+# request. `true` adds `src/<package>/bot.py`, the worker's entry point,
+# whose handler sits apart from the platform's client (its source name
+# renders empty without the answer); `tests/test_bot.py`, which calls it
+# with fake messages and fails when it writes a file or logs a message's
+# text; and `BOT_TOKEN` in `.env.example`. Render's Blueprint and the README
+# lines on the cost, the token and a privacy notice come with the next part
+# of that issue. Without it a `backend` is a container image only, as
+# before.
+#
+# Asked, not `when: false`, for the reason `plinth_sha` is. Asked of a
+# `backend` only, not through `hosting`, which a `backend` is not asked: the
+# default `false` is for the projects that exist, one made before this
+# question takes it at its next update, and every file but
+# `.copier-answers.yml` renders as it did.
+#
+# GitHub only at first. A project named `bot` is refused `true`: its own test
+# and the shipped one would both be `tests/test_bot.py`.
+render_worker:
+  type: bool
+  when: "{{ archetype == 'backend' }}"
+  help: |
+    Does it run all the time on Render, as a bot or a worker?
+    No (press Enter): it is a container image only; where it runs is yours
+    to choose.
+    Yes: Render runs it as a background worker, about $7 a month, with no
+    free tier. A bot's token goes into Render, never into a chat or a commit.
+  default: false
+  validator: >-
+    {%- set pkg = project_name | regex_replace('[-. ]', '_') | lower -%}
+    {%- if render_worker | string | lower == 'true' and host == 'gitlab' -%}
+    A Render background worker is GitHub only for now: nothing was tried on
+    GitLab. Answer no, or choose GitHub.
+    {%- elif render_worker | string | lower == 'true' and pkg == 'bot' -%}
+    The package name 'bot' would name the project's test tests/test_bot.py,
+    and a Render worker ships a test by that name.
     Choose another repository name, for example '{{ project_name }}-app'.
     {%- endif -%}
 

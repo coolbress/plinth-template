@@ -1,0 +1,93 @@
+"""The worker's entry point: `python -m <package>.bot`, what Render's worker runs.
+
+Three parts kept apart: the platform's client, which connects and receives
+messages; the handler, `answer`, which turns one message into a reply or
+none; and `run`, which hands each message to the handler and sends the reply.
+A test calls the handler with a fake message (`tests/test_bot.py`): no token,
+no network. The token is read from `BOT_TOKEN` in the environment only.
+
+Nothing is stored, no message history and no user list, and the logs carry
+sizes, timings and errors, never a message's text. Storing data is a later
+choice, which brings keeping it safe, deleting it on request, and a notice.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import time
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from typing import Protocol
+
+from .__main__ import configure
+
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Message:
+    """One message as the handler sees it, whatever the platform."""
+
+    text: str
+    #: Where to reply: the platform's channel or chat id.
+    channel: str
+
+
+class Client(Protocol):
+    """What `run` uses of a platform's client; a fake in a test has the same."""
+
+    def messages(self) -> Iterable[Message]: ...
+
+    def reply(self, to: Message, text: str) -> None: ...
+
+
+Handler = Callable[[Message], str | None]
+
+
+class MissingTokenError(RuntimeError):
+    """`BOT_TOKEN` is not set."""
+
+
+def token() -> str:
+    """The platform's token, from the environment and nowhere else."""
+    value = os.environ.get("BOT_TOKEN")
+    if not value:
+        raise MissingTokenError("BOT_TOKEN is not set: in .env here, in the host's secrets elsewhere")
+    return value
+
+
+def answer(message: Message) -> str | None:
+    """The reply to `message`, or None for no reply. Replace the body with the bot's own."""
+    if message.text.strip().lower() == "ping":
+        return "pong"
+    return None
+
+
+def run(client: Client, handler: Handler = answer) -> None:
+    """Hand each message to `handler` and send its reply; one that raises is
+    logged without the message's text, and the next message is handled."""
+    for message in client.messages():
+        started = time.monotonic()
+        try:
+            reply = handler(message)
+        except Exception:
+            log.exception("handler failed", extra={"chars": len(message.text)})
+            continue
+        if reply:
+            client.reply(message, reply)
+        ms = round((time.monotonic() - started) * 1000)
+        log.info("handled", extra={"chars": len(message.text), "replied": bool(reply), "ms": ms})
+
+
+def main() -> int:
+    configure()
+    token()
+    # No platform's client is chosen here: connect one as its page in
+    # docs/how-to/ shows, and call `run(client)`.
+    log.error("no platform client connected: see docs/how-to/ for Discord, Slack or Telegram")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -6,6 +6,32 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+### Files and questions
+
+- `.env.example`
+- `src/<package>/bot.py`
+- `tests/test_bot.py`
+- question `render_worker`
+
+### Added
+
+- **A `backend` can run all the time as a bot or a worker: the question
+  `render_worker`, off by default, its first part** (coolbress/plinth#1072).
+  Yes adds `src/<package>/bot.py`, the worker's entry point
+  (`python -m <package>.bot`), whose handler `answer(message)` sits apart
+  from the platform's client and whose `run(client)` hands each message to
+  it; `tests/test_bot.py`, which calls the handler with fake messages, needs
+  no token, and fails when a handler writes a file or logs a message's text;
+  and `BOT_TOKEN` in `.env.example`, read from the environment only. No
+  platform's client is chosen: the worker logs that none is connected and
+  stops. Render's Blueprint, the README on the cost and the token, the
+  privacy notice and a how-to per platform come in the next parts. GitHub
+  only: on GitLab the answer yes is refused, and so is a project named
+  `bot`. **What an existing project gets** through
+  `/plinth:template-update`: `render_worker: false` in `.copier-answers.yml`
+  for a `backend`, nothing for any other archetype, and no other file
+  changes. No job, check or action changes.
+
 ## [1.53.0] - 2026-11-28
 
 **Two new questions, both off by default: `calls_claude`, which lets a `cli`, `dashboard` or `backend` call Claude through one module with a fake-client test and the README on the key, and `scheduled_run`, which runs a `cli` on GitHub on a schedule with its results as the run's artifact; a `backend`'s publish page says where its image can run and what that costs.** Both questions are GitHub only, and an existing project gets each one's answer as `false` in `.copier-answers.yml` and no other file from them, so `copier update` needs no hands (coolbress/plinth#1071, coolbress/plinth#1070, #362). The 1.52.0 entry on `## This project` gains what a project with its own such section does on a conflict (#358). No job or check changes, and no action is added: `schedule.yml` uses the `actions/checkout` and `actions/upload-artifact` commits `release.yml` already pins, so the Actions allowlist is unchanged. `AGENTS.md`, `CLAUDE.md` and `.claude/` do not change, so plinth's pin raise to this release owes no eval suite run. `plinth_sha`'s default moves from 50a45c3 (v2.45.0) to 5e0eac6 (v2.46.0), plinth's latest release, which this repository's own workflows call since #374, and `plinth_gitlab_integrity`'s default moves with it.

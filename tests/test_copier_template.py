@@ -9727,7 +9727,7 @@ def claude_releases(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 #: The other questions this tree asks that `BEFORE_CALLS_CLAUDE` did not.
-ASKED_SINCE = {"cli": ["scheduled_run: false"]}
+ASKED_SINCE = {"cli": ["scheduled_run: false"], "backend": ["render_worker: false"]}
 #: Rendered files a change since `BEFORE_CALLS_CLAUDE` other than this question
 #: changes for every project of an archetype: a `backend`'s release how-to
 #: (#370).
@@ -9773,3 +9773,167 @@ def test_an_existing_project_updates_with_every_file_unchanged(
     assert kept(after) == kept(before), sorted(
         k for k in before.keys() | after.keys() if before.get(k) != after.get(k)
     )
+
+
+# A `backend` that runs as a Render background worker (coolbress/plinth#1072).
+
+BEFORE_RENDER_WORKER = "v1.53.0"
+WORKER_FILES = ("src/probe/bot.py", "tests/test_bot.py")
+
+
+def test_the_worker_question_is_asked_of_a_backend_only_and_is_off_by_default() -> None:
+    question = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["render_worker"]
+    assert question["when"] == "{{ archetype == 'backend' }}"
+    assert question["default"] is False
+    assert question["type"] == "bool"
+    assert "never into a chat or a commit" in " ".join(question["help"].split())
+
+
+@pytest.mark.parametrize("archetype", ["cli", "library", "data-ml", "web", "dashboard"])
+def test_no_other_archetype_gets_the_worker_even_when_asked_for_it(
+    tmp_path: Path, archetype: str
+) -> None:
+    out = render(tmp_path, archetype=archetype, render_worker=True)
+    assert "render_worker" not in _answers(out)
+    for name in WORKER_FILES:
+        assert not (out / name).exists(), name
+    env = out / ".env.example"
+    assert not env.exists() or "BOT_TOKEN" not in env.read_text(encoding="utf-8")
+
+
+def test_without_the_answer_a_backend_renders_what_it_did_before_the_question(
+    tmp_path: Path,
+) -> None:
+    unasked = render(tmp_path / "unasked", archetype="backend")
+    off = render(tmp_path / "off", archetype="backend", render_worker=False)
+    assert _tree(unasked) == _tree(off)
+    assert _answers(off)["render_worker"] is False
+    for name in WORKER_FILES:
+        assert not (off / name).exists(), name
+
+
+def test_a_worker_has_its_entry_point_its_test_and_its_token(tmp_path: Path) -> None:
+    out = render(tmp_path, archetype="backend", render_worker=True)
+    for name in WORKER_FILES:
+        assert (out / name).is_file(), name
+    assert 'os.environ.get("BOT_TOKEN")' in (out / "src" / "probe" / "bot.py").read_text(
+        encoding="utf-8"
+    )
+    env = (out / ".env.example").read_text(encoding="utf-8")
+    assert re.findall(r"^([A-Z_]+)=", env, re.MULTILINE) == ["BOT_TOKEN"]
+    assert "never into a chat" in " ".join(env.split())
+
+
+@pytest.mark.parametrize(
+    ("answers", "refused"),
+    [
+        ({"host": "gitlab"}, "A Render background worker is GitHub only for now"),
+        ({"project_name": "bot"}, "a Render worker ships a test by that name"),
+    ],
+)
+def test_a_worker_is_refused_where_it_was_not_tried_or_would_collide(
+    tmp_path: Path, answers: dict[str, str], refused: str
+) -> None:
+    given = {"project_name": "probe", "archetype": "backend", "render_worker": "true", **answers}
+    assert refused in (_refusal(tmp_path, **given) or "")
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+def test_a_worker_passes_its_own_checks_with_no_token(tmp_path: Path) -> None:
+    out = render(
+        tmp_path, project_name="my.app", archetype="backend", owner="someone", render_worker=True
+    )
+    env = {k: v for k, v in os.environ.items() if k != "BOT_TOKEN"}
+    for step in OWN_CHECKS:
+        done = subprocess.run(  # noqa: S603
+            step, cwd=out, env=env, capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, f"{' '.join(step)}\n{done.stdout}\n{done.stderr}"
+
+
+#: Each a change to the rendered handler that must make the project's own
+#: tests fail, with the test that fails.
+WORKER_BREAKS = {
+    "the handler raises": (
+        '    if message.text.strip().lower() == "ping":\n',
+        '    raise RuntimeError("broken")\n',
+        "test_the_handler_answers_a_message",
+    ),
+    "the handler writes a file": (
+        '    if message.text.strip().lower() == "ping":\n',
+        '    open("seen.txt", "a").write(message.text)\n',
+        "test_a_handler_stores_nothing_and_logs_no_message_text",
+    ),
+    "the handler logs the message's text": (
+        '    if message.text.strip().lower() == "ping":\n',
+        '    log.info("got", extra={"text": message.text})\n',
+        "test_a_handler_stores_nothing_and_logs_no_message_text",
+    ),
+}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("name", sorted(WORKER_BREAKS))
+def test_the_projects_own_tests_catch_a_break_of_the_worker_rules(
+    tmp_path: Path, name: str
+) -> None:
+    out = render(tmp_path, archetype="backend", render_worker=True)
+    marker, line, expected = WORKER_BREAKS[name]
+    bot = out / "src" / "probe" / "bot.py"
+    body = bot.read_text(encoding="utf-8")
+    assert marker in body
+    bot.write_text(body.replace(marker, line + marker, 1), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k != "BOT_TOKEN"}
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, env=env, check=True)  # noqa: S607
+    done = subprocess.run(
+        ["uv", "run", "--quiet", "pytest", "-q", "-p", "no:cacheprovider"],  # noqa: S607
+        cwd=out,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert expected in done.stdout, done.stdout
+
+
+def test_an_existing_backend_updates_with_every_file_unchanged(tmp_path: Path) -> None:
+    """A `backend` made at the last release, updated to this tree with its
+    answers unchanged: the answers file gains `render_worker: false` and its
+    new commit, and every other file is byte for byte what it was."""
+    import copier
+
+    tpl = tmp_path / "tpl"
+    _clone_of_the_release(tpl, BEFORE_RENDER_WORKER)
+    for entry in tpl.iterdir():
+        if entry.name != ".git":
+            shutil.rmtree(entry) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
+    shutil.copytree(
+        TEMPLATE_ROOT,
+        tpl,
+        symlinks=True,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".venv", "dist", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"
+        ),
+    )
+    _git(tpl, "add", "-A")
+    _git(tpl, "commit", "-q", "--allow-empty", "-m", "this tree")
+    _git(tpl, "tag", "-a", "-m", "this tree", "v9.0.0")
+    given = {"project_name": "probe", "license": "MIT", "archetype": "backend"}
+    proj = _copy_at(tpl, tmp_path / "proj", BEFORE_RENDER_WORKER, **given)
+    assert "render_worker" not in _answers(proj)
+    _git(proj, "init", "-q", "-b", "main", ".")
+    _git(proj, "add", "-A")
+    _git(proj, "commit", "-qm", "the render")
+    before = _tree(proj)
+    lines_before = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
+    copier.run_update(
+        str(proj), defaults=True, overwrite=True, quiet=True, unsafe=False, vcs_ref="v9.0.0"
+    )
+    lines_after = set((proj / ".copier-answers.yml").read_text(encoding="utf-8").splitlines())
+    added = sorted(line for line in lines_after - lines_before if not line.startswith("_commit:"))
+    assert added == ["render_worker: false"], added
+    after = _tree(proj)
+    kept = {k: v for k, v in after.items() if k != ".copier-answers.yml"}
+    assert kept == {k: v for k, v in before.items() if k != ".copier-answers.yml"}
