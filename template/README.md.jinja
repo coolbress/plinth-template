@@ -562,6 +562,80 @@ workflow installs the project without its development tools
 (`uv sync --no-dev`), and the test runs with them: a package the command
 imports goes in with `uv add`, never `uv add --dev`.
 
+{% endif %}{% if archetype in ['cli', 'dashboard', 'backend'] and calls_claude | string | lower == 'true' %}## Calls Claude
+
+[`src/{{ package_name }}/claude.py`](src/{{ package_name }}/claude.py) is the one
+place this project calls Claude. `ask(text, client)` sends one message with
+the system prompt in
+[`src/{{ package_name }}/prompts/system.md`](src/{{ package_name }}/prompts/system.md)
+and returns the answer; `make_client()` makes the client from
+`ANTHROPIC_API_KEY`. The model is `MODEL` in that file, named nowhere else.
+{%- if archetype == 'cli' %} In
+the command: `print(ask(args.name, make_client()))`.
+{%- elif archetype == 'dashboard' %} On
+the page, Streamlit's chat elements (`st.chat_input`, `st.chat_message`) take
+the message and show the answer; make the client once with
+`st.cache_resource`.
+{%- else %} In
+the service, make the client once at start and pass it to each handler.
+{%- endif %}
+
+**Before the first real call, make the key and cap what it can spend.** In
+the [Claude Console](https://platform.claude.com/):
+
+1. Make a workspace of its own for this project and set that workspace's
+   monthly spend limit.
+2. Set the organization's monthly spend limit too, under Settings > Spend
+   limits. A spend limit on the default workspace "might not count or stop
+   some usage" in it, and the organization's limit covers all of it
+   ([Claude API rate limits](https://platform.claude.com/docs/en/api/rate-limits),
+   read 2026-11-28). Once a limit is reached, calls fail until the month ends
+   or you raise it.
+3. Create the API key in that workspace. Never paste the key into a chat,
+   with Claude Code or anyone else, and never commit it.
+
+**Where the key goes.** On this computer, copy `.env.example` to `.env`, put
+the key after `ANTHROPIC_API_KEY=` there (git ignores `.env`), and run with
+`uv run --env-file .env ...`. Where the project runs elsewhere, the key goes
+into that host's secrets{% if archetype == 'dashboard' and hosting == 'render' %}: on Render, the
+service's Environment (`render.yaml` names the key, and Render asks for its
+value when the Blueprint is created){% elif archetype == 'cli' and scheduled_run | string | lower == 'true' %}: for the scheduled run, a repository secret
+named `ANTHROPIC_API_KEY` (Settings > Secrets and variables > Actions), which
+`.github/workflows/schedule.yml` reads{% elif archetype == 'backend' %}: the container's environment
+(`docker run --env-file .env` on this computer, the host's secret settings
+elsewhere){% else %}, never into the repository{% endif %}. The code reads it from the environment only.
+
+**The tests need no key.** [`tests/conftest.py`](tests/conftest.py) fails any
+test that makes the real client and keeps `ANTHROPIC_API_KEY` out of the test
+run, so CI has no key and needs none. A test passes a fake client instead, as
+`FakeClient` in [`tests/test_claude.py`](tests/test_claude.py) does.
+
+**What Anthropic keeps** (its terms, read 2026-11-28): API inputs and outputs
+are not used to train its models
+([commercial terms](https://www.anthropic.com/legal/commercial-terms)) and
+are deleted within 30 days, except when a service with longer retention such
+as the Files API is used, when agreed otherwise, to enforce the Usage Policy,
+or as the law requires
+([retention](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data)).
+This code logs sizes, timings and errors, never the text of a message or an
+answer. The SDK itself logs whole requests, message text included, at debug
+level (`ANTHROPIC_LOG=debug`, or the root logger at `DEBUG`): keep both off
+where real users' messages pass.
+
+**A notice you can show your users:**
+
+> Messages you send here go to Anthropic to get an answer. Anthropic keeps
+> them for up to 30 days under its terms. This app does not store them.
+
+**This is not legal advice.** Ask someone qualified before the project has
+real users, users in the EU, or users in Korea whose text goes to a US API.
+The GDPR does not apply to purely personal use, and that exemption ends when
+the data is used for a professional or commercial activity or made public
+([Irish Data Protection Commission](https://dataprotection.ie/en/faqs/general/what-household-exemption)).
+
+Moving to another provider changes some of this:
+[`docs/how-to/use-another-model-provider.md`](docs/how-to/use-another-model-provider.md).
+
 {% endif %}{% if archetype in ['cli', 'library'] and host != 'gitlab' and license == 'Proprietary' %}## Releasing
 
 A version tag (`v0.1.0`) builds this package and makes a GitHub Release that

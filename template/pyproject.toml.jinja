@@ -47,7 +47,7 @@ dependencies = [
 {%- elif archetype == 'dashboard' %}
 dependencies = [
 {%- if calls_claude | string | lower == 'true' %}
-    # Claude, through the Anthropic API.
+    # Claude, called from `src/{{ package_name }}/claude.py` only.
     "anthropic>=2.14",
 {%- endif %}
     # The page, its table and its chart; `AppTest` runs it in the tests.
@@ -55,7 +55,7 @@ dependencies = [
 ]
 {%- elif archetype in ['cli', 'dashboard', 'backend'] and calls_claude | string | lower == 'true' %}
 dependencies = [
-    # Claude, through the Anthropic API.
+    # Claude, called from `src/{{ package_name }}/claude.py` only.
     "anthropic>=2.14",
 ]
 {%- else %}
