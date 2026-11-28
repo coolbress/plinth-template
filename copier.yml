@@ -140,7 +140,9 @@ _exclude:
   - "{% if archetype == 'web' or archetype == 'dashboard' or host == 'gitlab' %}docs/how-to/publish-a-release.md{% endif %}"
   # The directory stays: `undo-a-merged-change.md` is in every render (#199).
   # Render's Blueprint, only where the app runs on Render (`hosting` below).
-  - "{% if (archetype != 'web' and archetype != 'dashboard') or hosting != 'render' %}/render.yaml{% endif %}"
+  # A `backend` that runs as a Render background worker has one too, with
+  # one worker (`render_worker` below).
+  - "{% if ((archetype != 'web' and archetype != 'dashboard') or hosting != 'render') and not (archetype == 'backend' and render_worker | string | lower == 'true') %}/render.yaml{% endif %}"
   # The owner's shared community-health files, when they publish them. GitHub
   # applies `owner/.github`'s copy to a repository that has none of its own, so
   # writing ours would silently replace the owner's convention. The door answers
@@ -465,10 +467,11 @@ calls_claude:
 # whose handler sits apart from the platform's client (its source name
 # renders empty without the answer); `tests/test_bot.py`, which calls it
 # with fake messages and fails when it opens a file to write, or logs or
-# prints a message's text; and `BOT_TOKEN` in `.env.example`. Render's
-# Blueprint and the README lines on the cost, the token and a privacy notice
-# come with the next part of that issue. Without it a `backend` is a
-# container image only, as before.
+# prints a message's text; `BOT_TOKEN` in `.env.example`; `render.yaml`
+# with one worker built from the Dockerfile, the token a secret with no
+# value; and README lines on the cost, the token and a privacy notice the
+# owner fills in. Without it a `backend` is a container image only, as
+# before.
 #
 # Asked, not `when: false`, for the reason `plinth_sha` is. Asked of a
 # `backend` only, not through `hosting`, which a `backend` is not asked: the
