@@ -13,9 +13,13 @@ means `copier update` on an instance needs hands.
 - `README.md`
 - `data/README.md`
 - `docs/how-to/publish-a-release.md`
+- `docs/how-to/use-another-model-provider.md`
 - `pyproject.toml`
 - `render.yaml`
+- `src/<package>/claude.py`
+- `src/<package>/prompts/system.md`
 - `tests/conftest.py`
+- `tests/test_claude.py`
 - `tests/test_scheduled_run.py`
 - `uv.lock`
 - question `calls_claude`
@@ -24,20 +28,34 @@ means `copier update` on an instance needs hands.
 ### Added
 
 - **A `cli`, `dashboard` or `backend` can call Claude: the question
-  `calls_claude`, off by default, its first part** (coolbress/plinth#1071).
-  Yes adds the `anthropic` dependency and a `tests/conftest.py` that fails
-  any test which makes one of the SDK's clients (`Anthropic`, its async twin,
-  and the Bedrock, Vertex and Foundry ones), even inside `except Exception`,
-  and keeps `ANTHROPIC_API_KEY` out of the test run, so the tests and CI need
-  no key. `.env.example` lists the key (a `cli` and a `dashboard` get the file
-  for it); a `dashboard` on Render names it in `render.yaml`, and a scheduled
-  `cli` reads it from a repository secret. GitHub only: on GitLab the answer
-  yes is refused, and so is a project named `anthropic`. `tests/conftest.py`
-  of a `web` project is unchanged; only its source name moved. **What an
-  existing project gets** through `/plinth:template-update`: `calls_claude:
-  false` in `.copier-answers.yml` for a `cli`, `dashboard` or `backend`,
-  nothing for any other archetype, and no other file changes. No job, check
-  or action changes.
+  `calls_claude`, off by default** (coolbress/plinth#1071). Yes adds the
+  `anthropic` dependency and `src/<package>/claude.py`, the one place the
+  client is made (from `ANTHROPIC_API_KEY` in the environment) and the model
+  is named (`MODEL`), with the system prompt read from
+  `src/<package>/prompts/system.md`; it logs sizes, timings, token counts
+  and errors, never a message's text. `tests/conftest.py` fails any test
+  that makes one of the SDK's clients (`Anthropic`, its async twin, and the
+  Bedrock, Vertex and Foundry ones), even inside `except Exception`, and
+  keeps the key out of the test run, so the tests and CI need no key;
+  `tests/test_claude.py` answers with a fake client and fails when the model
+  is named twice in the package or a message reaches the logs.
+  `.env.example` lists the key (a `cli` and a `dashboard` get the file for
+  it); a `dashboard` on Render names it in `render.yaml`, and a scheduled
+  `cli` reads it from a repository secret. A README section, "Calls Claude",
+  says to make a workspace of its own for the key and set its spend limit and
+  the organization's first, never to paste the key into a chat, where the key
+  goes, what Anthropic keeps (read 2026-11-28) and that the SDK logs whole
+  requests at debug level, a notice for users, and when to ask someone
+  qualified. `docs/how-to/use-another-model-provider.md` says what moving
+  changes, starting with Google Gemini's unpaid tier. GitHub only: on GitLab
+  the answer yes is refused, and so is a project named `claude` or
+  `anthropic`. `tests/conftest.py` of a `web` project is unchanged; only its
+  source name moved. **What an existing project gets** through
+  `/plinth:template-update`: `calls_claude: false` in `.copier-answers.yml`
+  for a `cli`, `dashboard` or `backend`, nothing for any other archetype, and
+  no other file changes. Turning it on later is an answer change:
+  `copier update --data calls_claude=true`. No job, check or action
+  changes.
 
 - **A `cli` can run on GitHub on a schedule: the question `scheduled_run`,
   off by default** (coolbress/plinth#1070). Asked of a `cli` only. Yes

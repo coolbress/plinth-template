@@ -9448,6 +9448,45 @@ def test_an_existing_cli_project_updates_with_its_schedule_files_unchanged(
 CALLS_CLAUDE = ("cli", "dashboard", "backend")
 #: The release a project made before the question was rendered from.
 BEFORE_CALLS_CLAUDE = "v1.52.0"
+#: What the option renders beside the SDK, the guard and the key.
+CLAUDE_FILES = (
+    "src/probe/claude.py",
+    "src/probe/prompts/system.md",
+    "tests/test_claude.py",
+    "docs/how-to/use-another-model-provider.md",
+)
+#: The README's lines on the key and its limits, and the pages they are read from.
+CLAUDE_KEY_LINES = (
+    "Make a workspace of its own for this project and set that workspace's monthly spend limit.",
+    "Set the organization's monthly spend limit too",
+    'A spend limit on the default workspace "might not count or stop some usage" in it,'
+    " and the organization's limit covers all of it",
+    "https://platform.claude.com/docs/en/api/rate-limits",
+    "Never paste the key into a chat",
+)
+#: The README's dated line on what Anthropic keeps, its notice for users and
+#: its "not legal advice" line.
+CLAUDE_TERMS_LINES = (
+    "**What Anthropic keeps** (its terms, read 2026-11-28)",
+    "are not used to train its models",
+    "are deleted within 30 days",
+    "https://www.anthropic.com/legal/commercial-terms",
+    "https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data",
+    "> Messages you send here go to Anthropic to get an answer. Anthropic keeps"
+    " > them for up to 30 days under its terms. This app does not store them.",
+    "**This is not legal advice.** Ask someone qualified before the project has real users,"
+    " users in the EU, or users in Korea whose text goes to a US API.",
+    "https://dataprotection.ie/en/faqs/general/what-household-exemption",
+    "The SDK itself logs whole requests, message text included, at debug level",
+)
+#: What the how-to says Gemini's unpaid tier changes, from its terms.
+GEMINI_LINES = (
+    "your inputs may be used to improve products",
+    "Human reviewers may read, annotate and process your inputs and outputs.",
+    "Personal information must not be sent",
+    "It may not serve users in the European Economic Area, the UK or Switzerland",
+    "https://aistudio.google.com/docs/terms",
+)
 
 
 def test_the_claude_question_is_asked_of_three_archetypes_and_is_off_by_default() -> None:
@@ -9465,6 +9504,9 @@ def test_no_other_archetype_calls_claude_even_when_asked_for_it(
     """Not asked, not recorded, and nothing of it rendered whatever `--data` says."""
     out = render(tmp_path, archetype=archetype, calls_claude=True)
     assert "calls_claude" not in _answers(out)
+    for name in CLAUDE_FILES:
+        assert not (out / name).exists(), name
+    assert "## Calls Claude" not in (out / "README.md").read_text(encoding="utf-8")
     assert "anthropic" not in (out / "pyproject.toml").read_text(encoding="utf-8")
     env = out / ".env.example"
     assert not env.exists() or "ANTHROPIC_API_KEY" not in env.read_text(encoding="utf-8")
@@ -9482,7 +9524,8 @@ def test_without_the_answer_a_project_renders_what_it_did_before_the_question(
     off = render(tmp_path / "off", archetype=archetype, calls_claude=False)
     assert _tree(unasked) == _tree(off)
     assert _answers(off)["calls_claude"] is False
-    assert not (off / "tests" / "conftest.py").exists()
+    for name in ("tests/conftest.py", *CLAUDE_FILES):
+        assert not (off / name).exists(), name
 
 
 @pytest.mark.parametrize("archetype", CALLS_CLAUDE)
@@ -9501,6 +9544,25 @@ def test_a_project_that_calls_claude_has_the_sdk_its_guard_and_its_key(
     assert "never paste it" in " ".join(env.split())
 
 
+@pytest.mark.parametrize("archetype", CALLS_CLAUDE)
+def test_a_project_that_calls_claude_has_its_module_prompt_test_readme_and_how_to(
+    tmp_path: Path, archetype: str
+) -> None:
+    out = render(tmp_path, archetype=archetype, calls_claude=True)
+    for name in CLAUDE_FILES:
+        assert (out / name).is_file(), name
+    module = (out / "src" / "probe" / "claude.py").read_text(encoding="utf-8")
+    assert module.count('MODEL = "claude-') == 1
+    assert 'os.environ.get("ANTHROPIC_API_KEY")' in module
+    readme = _flat(out / "README.md")
+    for line in (*CLAUDE_KEY_LINES, *CLAUDE_TERMS_LINES):
+        assert line in readme, line
+    how_to = _flat(out / "docs" / "how-to" / "use-another-model-provider.md")
+    for line in GEMINI_LINES:
+        assert line in how_to, line
+    assert "use-another-model-provider.md" in readme
+
+
 def test_the_key_goes_to_the_place_the_project_runs(tmp_path: Path) -> None:
     """A dashboard on Render: `render.yaml` names the key for Render to ask; a
     scheduled `cli`: the workflow reads it from a repository secret."""
@@ -9512,12 +9574,14 @@ def test_the_key_goes_to_the_place_the_project_runs(tmp_path: Path) -> None:
     (job,) = workflow["jobs"].values()
     (step,) = [s for s in job["steps"] if s.get("name") == "Run the command"]
     assert step["env"] == {"ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}"}
+    assert "repository secret named `ANTHROPIC_API_KEY`" in _flat(cli / "README.md")
 
 
 @pytest.mark.parametrize(
     ("answers", "refused"),
     [
         ({"host": "gitlab"}, "Calling Claude is GitHub only for now"),
+        ({"project_name": "claude"}, "ships a test by that name"),
         ({"project_name": "anthropic"}, "hide the Anthropic SDK's own package"),
     ],
 )
@@ -9589,6 +9653,54 @@ def test_a_test_that_makes_a_real_client_fails(tmp_path: Path, name: str) -> Non
     )
     assert done.returncode == 1, done.stdout + done.stderr
     assert "a test made the real Anthropic client" in done.stdout, done.stdout
+
+
+#: Each a change to a rendered `cli`'s package that must make its own tests
+#: fail, with the test that fails: a handler that logs the user's text, and
+#: the model named a second time.
+CLAUDE_BREAKS = {
+    "a handler logs the user's text": (
+        "src/probe/claude.py",
+        'log.info("asked", extra={"text": text})\n',
+        "test_no_message_or_answer_text_reaches_the_logs",
+    ),
+    "the model is named twice": (
+        "src/probe/other.py",
+        'FALLBACK = "{model}"\n',
+        "test_the_model_is_named_once_in_the_package",
+    ),
+}
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not installed")
+@pytest.mark.parametrize("name", sorted(CLAUDE_BREAKS))
+def test_the_projects_own_tests_catch_a_break_of_the_claude_rules(
+    tmp_path: Path, name: str
+) -> None:
+    out = render(tmp_path, calls_claude=True)
+    path, text, expected = CLAUDE_BREAKS[name]
+    module = (out / "src" / "probe" / "claude.py").read_text(encoding="utf-8")
+    model = re.search(r'MODEL = "([^"]+)"', module)
+    assert model
+    if path.endswith("claude.py"):
+        # The line goes at the top of `ask`, where the user's text is.
+        marker = "    started = time.monotonic()\n"
+        assert marker in module
+        (out / path).write_text(module.replace(marker, "    " + text + marker, 1), encoding="utf-8")
+    else:
+        (out / path).write_text(text.format(model=model.group(1)), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, env=env, check=True)  # noqa: S607
+    done = subprocess.run(
+        ["uv", "run", "--quiet", "pytest", "-q", "-p", "no:cacheprovider"],  # noqa: S607
+        cwd=out,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert expected in done.stdout, done.stdout
 
 
 @pytest.fixture(scope="module")

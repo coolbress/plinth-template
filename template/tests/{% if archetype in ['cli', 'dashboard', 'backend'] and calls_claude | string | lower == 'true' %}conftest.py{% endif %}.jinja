@@ -4,7 +4,8 @@ Loaded before any test module: from here on, making any of the SDK's
 clients (`anthropic.Anthropic`, its async twin, and the Bedrock, Vertex and
 Foundry ones) fails the test that does it, and the run never
 sees an `ANTHROPIC_API_KEY` this computer has. So the tests and CI need no
-key, cost nothing, and send nothing. A test passes a fake client instead.
+key, cost nothing, and send nothing. A test passes a fake client instead, as
+`tests/test_claude.py` does.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ def _refuse(*args: object, **kwargs: object) -> NoReturn:
     # `pytest.fail` raises an exception `except Exception` does not catch, so
     # code under test cannot swallow it.
     pytest.fail(
-        "a test made the real Anthropic client: pass a fake one instead",
+        "a test made the real Anthropic client: pass a fake one, as tests/test_claude.py does",
         pytrace=False,
     )
 

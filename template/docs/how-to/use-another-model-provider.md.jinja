@@ -1,0 +1,43 @@
+# Use another model provider
+
+This project calls Claude through the Anthropic API. Moving to another
+provider's model changes a few files, and it can change what happens to the
+messages your users send. Read the second part before the first.
+
+## What changes in the code
+
+- [`src/{{ package_name }}/claude.py`](../../src/{{ package_name }}/claude.py):
+  the client `make_client()` makes, `MODEL`, and the call in `ask()`. Keep
+  the shape: the client made in that one place and passed in, the model named
+  once, the prompt read from `prompts/system.md`, and no message text in the
+  logs.
+- The dependency: `uv add` the provider's SDK, then `uv remove anthropic`.
+- [`tests/conftest.py`](../../tests/conftest.py): refuse the new provider's
+  client in tests the same way, so the tests and CI still need no key.
+- [`tests/test_claude.py`](../../tests/test_claude.py): the fake answers in
+  the new provider's shape.
+- `.env.example` and the host's secrets: the new provider's key name.
+- README.md, "Calls Claude": the key, its spend limit, what the provider
+  keeps, and the notice for your users are Anthropic's. Write them again for
+  the new provider from its own terms.
+
+`.copier-answers.yml` still says `calls_claude: true`, so a template update
+keeps updating these files. Expect to resolve the differences by hand.
+
+## What changes in the terms: Google Gemini's unpaid tier
+
+Google's Gemini API has an unpaid tier, and its terms differ from Anthropic's
+API terms (the [Gemini API terms](https://aistudio.google.com/docs/terms),
+read 2026-11-28). On the unpaid tier:
+
+- Google uses what you send and the answers to provide and improve its
+  products: your inputs may be used to improve products.
+- Human reviewers may read, annotate and process your inputs and outputs.
+- Personal information must not be sent: the terms say not to submit
+  sensitive, confidential or personal information.
+- It may not serve users in the European Economic Area, the UK or
+  Switzerland: only the paid services may be offered to them.
+
+So the unpaid tier suits trying a model on text you made up. Once real users
+type into the project, the notice in the README is no longer true there; use
+a paid tier, and read its terms first.
