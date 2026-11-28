@@ -135,8 +135,9 @@ service's `main()` logs that it started and stops, since no web framework is
 chosen for you. Before a host can run it as a web service, it has to listen
 for HTTP on the port in the `PORT` environment variable and answer a path a
 health check can call, such as `/healthz`. A bot that answers no web request
-is not a web service: it runs as a background worker, which
-coolbress/plinth#1072 adds for Render.
+is not a web service: it needs no port and no health check, and runs as a
+background worker, which Render describes at
+<https://render.com/docs/background-workers>.
 
 Three hosts that run a container from GHCR for a small project. Prices and
 limits as each host's pages said them on 2026-11-28; they change, so read

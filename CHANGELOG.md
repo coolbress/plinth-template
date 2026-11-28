@@ -43,12 +43,12 @@ means `copier update` on an instance needs hands.
   2026-11-28 and linked, whether it sleeps, how it fetches a private image
   from GHCR and where its secrets go. Render is recommended for a first
   deploy, because its guide documents fetching a private GHCR image with a
-  token; its deploy is numbered steps naming the image the release made. The page says the image first has to listen
-  on `PORT`, since the template chooses no web framework, and points a bot
-  to the Render background worker coolbress/plinth#1072 adds. **What an
-  existing project gets** through `/plinth:template-update`: that section on
-  a `backend`'s publish page, nothing for any other archetype. No job,
-  check or action changes.
+  token; its deploy is numbered steps naming the image the release made.
+  The page says the image first has to listen on `PORT`, since the template
+  chooses no web framework, and points a bot to Render's background workers.
+  **What an existing project gets** through `/plinth:template-update`: that
+  section on a `backend`'s publish page, nothing for any other archetype. No
+  job, check or action changes.
 
 ### Fixed
 
