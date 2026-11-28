@@ -31,7 +31,7 @@ _preserve_symlinks: true
 # shipped tests' but `tree_hygiene`, which every archetype refuses; the
 # template's own test fails when the two disagree. Measured with copier 9.19.1.
 _skip_if_exists:
-  - "{% if package_name in ['access', 'built_wheel', 'claude', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'scheduled_run', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
+  - "{% if package_name in ['access', 'built_wheel', 'dashboard_page', 'entry_point', 'pages', 'passwords', 'scheduled_run', 'train'] %}tests/test_{{ package_name }}.py{% endif %}"
 
 # Only `template/` is rendered. The root `copier.yml`, `src/`, `tests/` and
 # the template's own CI are never candidates, so nothing here needs excluding.
@@ -116,12 +116,6 @@ _exclude:
   # A `cli` that runs on a schedule (`scheduled_run` below): its workflow
   # writes there and uploads it (coolbress/plinth#1070). The workflow's and
   # its test's source names render empty without the answer.
-  # A project that calls Claude (`calls_claude` below): the prompts the code
-  # sends, in files under the package (coolbress/plinth#1071). The module,
-  # its test and the conftest that refuses the real client in tests are
-  # source names that render empty without the answer.
-  - "{% if not (archetype in ['cli', 'dashboard', 'backend'] and calls_claude | string | lower == 'true') %}src/{{ package_name }}/prompts{% endif %}"
-  - "{% if not (archetype in ['cli', 'dashboard', 'backend'] and calls_claude | string | lower == 'true') %}docs/how-to/use-another-model-provider.md{% endif %}"
   # Publishing on a version tag, and the person's steps around it: a `cli` or
   # `library` publishes its package to PyPI (coolbress/plinth#703), a
   # `backend` its image to GHCR (coolbress/plinth#706), a `data-ml` its
@@ -410,15 +404,13 @@ scheduled_run:
     {%- endif -%}
 
 # Whether the project calls Claude through the Anthropic API
-# (coolbress/plinth#1071): `true` adds the `anthropic` dependency and
-# `src/<package>/claude.py`, the one place the client is made and the model is
-# named; the system prompt in `src/<package>/prompts/system.md`; a
-# `tests/conftest.py` that fails any test which makes the real client, so the
-# tests and CI never need a key; `tests/test_claude.py`, which answers with a
-# fake client; `ANTHROPIC_API_KEY` in `.env.example`; README lines on the
-# key, its spend limits and what the provider keeps; and a how-to on moving
-# to another provider. The code logs sizes, timings and errors, never a
-# message's text.
+# (coolbress/plinth#1071): `true` adds the `anthropic` dependency; a
+# `tests/conftest.py` that fails any test which makes one of the SDK's
+# clients, so the tests and CI never need a key; `ANTHROPIC_API_KEY` in
+# `.env.example`; and the key's place where the project runs elsewhere: a
+# `dashboard` on Render names it in `render.yaml`, and a scheduled `cli`
+# reads it from a repository secret. `tests/conftest.py` is a source name
+# that renders empty without the answer.
 #
 # Asked, not `when: false`, for the reason `plinth_sha` is. Asked of a `cli`,
 # a `dashboard` and a `backend`; on any other archetype it is neither asked
@@ -427,9 +419,8 @@ scheduled_run:
 # question takes it at its next update, and every file but
 # `.copier-answers.yml` renders as it did.
 #
-# GitHub only at first. A project named `claude` is refused `true`: its own
-# test and the shipped one would both be `tests/test_claude.py`; one named
-# `anthropic` is refused too, since its package would hide the SDK's.
+# GitHub only at first. A project named `anthropic` is refused `true`: its
+# package would hide the SDK's.
 calls_claude:
   type: bool
   when: "{{ archetype in ['cli', 'dashboard', 'backend'] }}"
@@ -437,8 +428,8 @@ calls_claude:
     Does this project call Claude, for a chat or an assistant or to answer
     questions?
     No (press Enter): it does not.
-    Yes: it gets the Anthropic SDK and the one place that calls it, with
-    tests that use a fake Claude, so they need no API key and cost nothing.
+    Yes: it gets the Anthropic SDK, and tests that cannot call the real
+    Claude, so they need no API key and cost nothing.
     You make the key later, with a spend limit; never paste it into a chat.
   default: false
   validator: >-
@@ -446,10 +437,8 @@ calls_claude:
     {%- if calls_claude | string | lower == 'true' and host == 'gitlab' -%}
     Calling Claude is GitHub only for now: nothing was tried on GitLab.
     Answer no, or choose GitHub.
-    {%- elif calls_claude | string | lower == 'true' and pkg in ['claude', 'anthropic'] -%}
-    The package name '{{ pkg }}' {% if pkg == 'claude' %}would name the project's test
-    tests/test_claude.py, and a project that calls Claude ships a test by that name{% else %}would
-    hide the Anthropic SDK's own package, anthropic{% endif %}.
+    {%- elif calls_claude | string | lower == 'true' and pkg == 'anthropic' -%}
+    The package name '{{ pkg }}' would hide the Anthropic SDK's own package, anthropic.
     Choose another repository name, for example '{{ project_name }}-app'.
     {%- endif -%}
 
