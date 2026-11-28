@@ -6,6 +6,10 @@ means `copier update` on an instance needs hands.
 
 ## [Unreleased]
 
+## [1.53.0] - 2026-11-28
+
+**Two new questions, both off by default: `calls_claude`, which lets a `cli`, `dashboard` or `backend` call Claude through one module with a fake-client test and the README on the key, and `scheduled_run`, which runs a `cli` on GitHub on a schedule with its results as the run's artifact; a `backend`'s publish page says where its image can run and what that costs.** Both questions are GitHub only, and an existing project gets each one's answer as `false` in `.copier-answers.yml` and no other file from them, so `copier update` needs no hands (coolbress/plinth#1071, coolbress/plinth#1070, #362). The 1.52.0 entry on `## This project` gains what a project with its own such section does on a conflict (#358). No job or check changes, and no action is added: `schedule.yml` uses the `actions/checkout` and `actions/upload-artifact` commits `release.yml` already pins, so the Actions allowlist is unchanged. `AGENTS.md`, `CLAUDE.md` and `.claude/` do not change, so plinth's pin raise to this release owes no eval suite run. `plinth_sha`'s default moves from 50a45c3 (v2.45.0) to 5e0eac6 (v2.46.0), plinth's latest release, which this repository's own workflows call since #374, and `plinth_gitlab_integrity`'s default moves with it.
+
 ### Files and questions
 
 - `.env.example`
@@ -91,6 +95,15 @@ means `copier update` on an instance needs hands.
   **What an existing project gets** through `/plinth:template-update`: that
   section on a `backend`'s publish page, nothing for any other archetype. No
   job, check or action changes.
+
+### Changed
+
+- **`plinth_sha`'s default is 5e0eac6 (plinth v2.46.0), and
+  `plinth_gitlab_integrity`'s is `DLZLcYE1OgILYeY0BQahyBAaDqdTliN5Va2irZ087Og=`,
+  the checksum of `gitlab/python-ci.yml` at that commit.** A project created
+  at this release calls plinth v2.46.0's reusable workflows, and a GitLab one
+  includes its pipeline. An existing project keeps its own pin and checksum
+  on `copier update`.
 
 ### Fixed
 
