@@ -9442,6 +9442,7 @@ CLAUDE_TERMS_LINES = (
     "**This is not legal advice.** Ask someone qualified before the project has real users,"
     " users in the EU, or users in Korea whose text goes to a US API.",
     "https://dataprotection.ie/en/faqs/general/what-household-exemption",
+    "The SDK itself logs whole requests, message text included, at debug level",
 )
 #: What the how-to says Gemini's unpaid tier changes, from its terms.
 GEMINI_LINES = (
@@ -9568,7 +9569,7 @@ def test_a_project_that_calls_claude_passes_its_own_checks_with_no_key(
     )
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     _own_checks(out, env)
-    done = subprocess.run(  # noqa: S603
+    done = subprocess.run(
         ["uv", "run", "--quiet", "pytest", "-q"],  # noqa: S607
         cwd=out,
         env={**env, "ANTHROPIC_API_KEY": "sk-ant-not-a-real-key"},
@@ -9580,7 +9581,7 @@ def test_a_project_that_calls_claude_passes_its_own_checks_with_no_key(
 
 
 #: Each a change to a rendered `cli` that must make its own tests fail: a test
-#: that makes the real client (once caught by `except Exception`), a handler
+#: that makes the real client or the Bedrock one (caught by `except Exception`), a handler
 #: that logs the user's text, and the model named a second time.
 CLAUDE_BREAKS = {
     "a test makes the real client": (
@@ -9590,6 +9591,16 @@ CLAUDE_BREAKS = {
         '    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-a-real-key")\n'
         "    try:\n"
         '        claude.ask("hi", claude.make_client())\n'
+        "    except Exception:\n"
+        "        pass\n",
+        "a test made the real Anthropic client",
+    ),
+    "a test makes the Bedrock client": (
+        "tests/test_forgot.py",
+        "import anthropic\n\n\n"
+        "def test_forgot() -> None:\n"
+        "    try:\n"
+        '        anthropic.AnthropicBedrock(aws_region="us-east-1")\n'
         "    except Exception:\n"
         "        pass\n",
         "a test made the real Anthropic client",
@@ -9627,7 +9638,7 @@ def test_the_projects_own_tests_catch_a_break_of_the_claude_rules(
         target.write_text(text.format(model=model.group(1)), encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     subprocess.run(["uv", "sync", "--locked", "--quiet"], cwd=out, env=env, check=True)  # noqa: S607
-    done = subprocess.run(  # noqa: S603
+    done = subprocess.run(
         ["uv", "run", "--quiet", "pytest", "-q", "-p", "no:cacheprovider"],  # noqa: S607
         cwd=out,
         env=env,

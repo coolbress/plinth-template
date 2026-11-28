@@ -618,7 +618,9 @@ as the Files API is used, when agreed otherwise, to enforce the Usage Policy,
 or as the law requires
 ([retention](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data)).
 This code logs sizes, timings and errors, never the text of a message or an
-answer.
+answer. The SDK itself logs whole requests, message text included, at debug
+level (`ANTHROPIC_LOG=debug`, or the root logger at `DEBUG`): keep both off
+where real users' messages pass.
 
 **A notice you can show your users:**
 

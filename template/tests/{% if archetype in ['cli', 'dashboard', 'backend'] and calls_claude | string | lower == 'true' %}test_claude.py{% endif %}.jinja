@@ -64,7 +64,10 @@ def test_a_refusal_is_an_error_not_an_empty_answer() -> None:
 
 
 def test_no_message_or_answer_text_reaches_the_logs(caplog: pytest.LogCaptureFixture) -> None:
-    """Sizes and timings only: a log line that prints a message keeps it."""
+    """Sizes and timings only: a log line that prints a message keeps it.
+
+    This checks `ask`. A handler of your own that takes the user's text gets
+    the same test: call it with a fake client and look through `caplog`."""
     caplog.set_level(logging.DEBUG)
     claude.ask("my address is 1 Private Lane", FakeClient("noted: 1 Private Lane"))
     assert caplog.records, "ask logged nothing"
