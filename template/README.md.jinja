@@ -562,6 +562,65 @@ workflow installs the project without its development tools
 (`uv sync --no-dev`), and the test runs with them: a package the command
 imports goes in with `uv add`, never `uv add --dev`.
 
+{% endif %}{% if archetype == 'backend' and render_worker | string | lower == 'true' %}## Runs as a Render background worker
+
+[`src/{{ package_name }}/bot.py`](src/{{ package_name }}/bot.py) is what Render
+runs (`python -m {{ package_name }}.bot`). It keeps three parts apart: the
+platform's client, which connects and receives messages; the handler,
+`answer(message)`, which returns the reply or none; and `run(client)`, which
+hands each message to the handler and sends the reply. No platform's client
+is chosen here: connect Discord's, Slack's or Telegram's, as its page in
+[`docs/how-to/`](docs/how-to/) shows, and call `run(client)`. Until then the
+worker logs that none is connected and stops.
+
+**What it costs.** About US $7 a month (Render's `0.5c-512mb` instance, its
+price on 2026-11-29 at <https://render.com/pricing>), besides the Claude
+subscription. A background worker has no free instance
+([Render free](https://render.com/docs/free)), and Render has no spending
+cap. **The bot runs only while that worker runs:** suspended or deleted, it
+answers nothing.
+
+Once, in Render's dashboard: New > Blueprint, choose this repository. Render
+asks for `BOT_TOKEN`'s value ([`render.yaml`](render.yaml) names it with no
+value): paste the platform's token there. Then in the Blueprint's Settings
+set Auto Sync to No. After that a commit on the default branch is deployed
+only once its checks pass. A change to `render.yaml` waits for you: press
+Manual Sync after it is merged and green.
+
+**The token** comes from the platform and goes into Render's Environment for
+the worker, never into a chat, with Claude Code or anyone else, and never
+into a commit. To try the bot on this computer, put it after `BOT_TOKEN=` in
+`.env` (git ignores it). The code reads it from the environment only.
+
+**The tests need no token.**
+[`tests/test_bot.py`](tests/test_bot.py) calls the handler with fake
+messages, and fails when a handler writes a file or logs a message's text.
+
+## Privacy
+
+By default the bot stores nothing: no message history and no user list, and
+its logs carry sizes, timings and errors, never a message's text. Fill in
+this notice before real people use it, and keep it true when that changes:
+
+> - **What the bot reads:** the messages sent to it, in the channels it is in.
+> - **What it stores:** nothing.
+> - **Where messages are sent:** nowhere but the reply, unless you add a
+>   service such as an AI model provider; name it here.
+> - **For how long:** not kept.
+> - **Whom to ask for deletion:** your contact.
+
+Storing anything changes each line: how long it is kept, how a person asks
+for it to be deleted, and who can read it. Each platform has rules of its
+own: [Telegram](https://telegram.org/privacy-tpa) applies its standard policy
+to a bot whose developer publishes none, and asks that deletion requests be
+answered within 30 days; [Slack](https://docs.slack.dev/developer-policy/)
+forbids using its data to train an LLM; read
+[Discord's developer policy](https://docs.discord.com/developers/policies-and-agreements/developer-policy)
+for its own.
+
+**This is not legal advice.** Ask someone qualified before the bot has real
+users, users in the EU, or anything stored about them.
+
 {% endif %}{% if archetype in ['cli', 'dashboard', 'backend'] and calls_claude | string | lower == 'true' %}## Calls Claude
 
 [`src/{{ package_name }}/claude.py`](src/{{ package_name }}/claude.py) is the one

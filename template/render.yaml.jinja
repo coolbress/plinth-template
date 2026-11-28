@@ -1,4 +1,31 @@
-{% if archetype == 'dashboard' %}# Render Blueprint: one web service on a paid plan, the Streamlit page. No
+{% if archetype == 'backend' %}# Render Blueprint: one background worker on a paid plan, built from the
+# Dockerfile. A worker answers no web requests and runs all the time; the bot
+# runs only while it does. Create it once in Render's dashboard (New >
+# Blueprint, this repository), then set the Blueprint's Auto Sync to No in its
+# Settings: Render applies a push that changes this file at once, redeploying
+# without waiting for the checks that `autoDeployTrigger` waits for. Sync it by
+# hand (Manual Sync) after such a change is merged and its checks have passed
+# on the default branch. No Render API key and no token lives in this file or
+# the agent's session. Spec: https://render.com/docs/blueprint-spec
+services:
+  - type: worker
+    name: "{{ project_name }}"
+    runtime: docker
+    # About US $7 a month (0.5 CPU, 512 MB). A worker has no free tier.
+    plan: 0.5c-512mb
+    # Deploy a commit to the default branch only after its checks pass.
+    autoDeployTrigger: checksPass
+    dockerCommand: python -m {{ package_name }}.bot
+    envVars:
+      # The platform's token: typed in Render's dashboard when the Blueprint is
+      # created, never here.
+      - key: BOT_TOKEN
+        sync: false
+{%- if calls_claude | string | lower == 'true' %}
+      - key: ANTHROPIC_API_KEY
+        sync: false
+{%- endif %}
+{% elif archetype == 'dashboard' %}# Render Blueprint: one web service on a paid plan, the Streamlit page. No
 # database, and no login: anyone with the service's address can read the page.
 # Create it once in Render's dashboard (New > Blueprint, this repository),
 # then set the Blueprint's Auto Sync to No in its Settings: Render applies a

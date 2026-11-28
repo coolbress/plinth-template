@@ -9779,6 +9779,18 @@ def test_an_existing_project_updates_with_every_file_unchanged(
 
 BEFORE_RENDER_WORKER = "v1.53.0"
 WORKER_FILES = ("src/probe/bot.py", "tests/test_bot.py")
+#: The privacy notice's headings, and the platforms' rules it links.
+PRIVACY_LINES = (
+    "**What the bot reads:**",
+    "**What it stores:** nothing.",
+    "**Where messages are sent:**",
+    "**For how long:**",
+    "**Whom to ask for deletion:**",
+    "**This is not legal advice.**",
+    "(https://telegram.org/privacy-tpa)",
+    "(https://docs.slack.dev/developer-policy/)",
+    "(https://docs.discord.com/developers/policies-and-agreements/developer-policy)",
+)
 
 
 def test_the_worker_question_is_asked_of_a_backend_only_and_is_off_by_default() -> None:
@@ -9799,6 +9811,9 @@ def test_no_other_archetype_gets_the_worker_even_when_asked_for_it(
         assert not (out / name).exists(), name
     env = out / ".env.example"
     assert not env.exists() or "BOT_TOKEN" not in env.read_text(encoding="utf-8")
+    blueprint = out / "render.yaml"
+    assert not blueprint.exists() or "type: worker" not in blueprint.read_text(encoding="utf-8")
+    assert "## Runs as a Render" not in (out / "README.md").read_text(encoding="utf-8")
 
 
 def test_without_the_answer_a_backend_renders_what_it_did_before_the_question(
@@ -9819,6 +9834,28 @@ def test_a_worker_has_its_entry_point_its_test_and_its_token(tmp_path: Path) -> 
     env = (out / ".env.example").read_text(encoding="utf-8")
     assert re.findall(r"^([A-Z_]+)=", env, re.MULTILINE) == ["BOT_TOKEN"]
     assert "never into a chat" in " ".join(env.split())
+
+
+def test_a_worker_has_one_render_worker_its_token_a_secret_and_its_readme(tmp_path: Path) -> None:
+    out = render(tmp_path, archetype="backend", render_worker=True)
+    (service,) = yaml.safe_load((out / "render.yaml").read_text(encoding="utf-8"))["services"]
+    assert service["type"] == "worker"
+    assert service["runtime"] == "docker"
+    assert service["dockerCommand"] == "python -m probe.bot"
+    assert service["autoDeployTrigger"] == "checksPass"
+    assert service["envVars"] == [{"key": "BOT_TOKEN", "sync": False}]
+    readme = _flat(out / "README.md")
+    for line in (
+        "About US $7 a month",
+        "A background worker has no free instance",
+        "The bot runs only while that worker runs:",
+        "never into a chat",
+        *PRIVACY_LINES,
+    ):
+        assert line in readme, line
+    both = render(tmp_path / "both", archetype="backend", render_worker=True, calls_claude=True)
+    (service,) = yaml.safe_load((both / "render.yaml").read_text(encoding="utf-8"))["services"]
+    assert [v["key"] for v in service["envVars"]] == ["BOT_TOKEN", "ANTHROPIC_API_KEY"]
 
 
 @pytest.mark.parametrize(

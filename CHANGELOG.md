@@ -9,6 +9,8 @@ means `copier update` on an instance needs hands.
 ### Files and questions
 
 - `.env.example`
+- `README.md`
+- `render.yaml`
 - `src/<package>/bot.py`
 - `tests/test_bot.py`
 - question `render_worker`
@@ -16,7 +18,7 @@ means `copier update` on an instance needs hands.
 ### Added
 
 - **A `backend` can run all the time as a bot or a worker: the question
-  `render_worker`, off by default, its first part** (coolbress/plinth#1072).
+  `render_worker`, off by default** (coolbress/plinth#1072).
   Yes adds `src/<package>/bot.py`, the worker's entry point
   (`python -m <package>.bot`), whose handler `answer(message)` sits apart
   from the platform's client and whose `run(client)` hands each message to
@@ -25,8 +27,14 @@ means `copier update` on an instance needs hands.
   prints a message's text;
   and `BOT_TOKEN` in `.env.example`, read from the environment only. No
   platform's client is chosen: the worker stops, without a token on the
-  token and with one logging that no client is connected. Render's Blueprint, the README on the cost and the token, the
-  privacy notice and a how-to per platform come in the next parts. GitHub
+  token and with one logging that no client is connected. `render.yaml`
+  declares one Render background worker built from the Dockerfile, the token
+  as a secret with no value (Render asks for it when the Blueprint is
+  created), and a commit deployed only once its checks pass. The README says
+  what it costs (about US $7 a month, no free instance for a worker), that
+  the bot runs only while the worker does, where the token goes, and carries
+  a privacy notice the owner fills in, with each platform's rules linked and
+  a "not legal advice" line. A how-to per platform comes in the next part. GitHub
   only: on GitLab the answer yes is refused, and so is yes for a project
   named `bot`. **What an existing project gets** through
   `/plinth:template-update`: `render_worker: false` in `.copier-answers.yml`
